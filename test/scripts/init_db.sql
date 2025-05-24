@@ -1,6 +1,6 @@
 CREATE DATABASE quota_manager;
 
--- 保持原始表结构不变
+-- Keep original table structure unchanged
 CREATE TABLE IF NOT EXISTS user_info (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255),
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS user_info (
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 保持 SERIAL 类型（不替换为 GENERATED AS IDENTITY）
+-- Keep SERIAL type (do not replace with GENERATED AS IDENTITY)
 CREATE TABLE IF NOT EXISTS quota_strategy (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
@@ -26,11 +26,12 @@ CREATE TABLE IF NOT EXISTS quota_strategy (
     model VARCHAR(255) NOT NULL,
     periodic_expr VARCHAR(255),
     condition TEXT,
+    status BOOLEAN DEFAULT true NOT NULL,  -- Status field: true=enabled, false=disabled
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 保持原始外键语法
+-- Keep original foreign key syntax
 CREATE TABLE IF NOT EXISTS quota_execute (
     id SERIAL PRIMARY KEY,
     strategy_id INTEGER NOT NULL,
@@ -42,7 +43,10 @@ CREATE TABLE IF NOT EXISTS quota_execute (
     FOREIGN KEY (strategy_id) REFERENCES quota_strategy(id)
 );
 
--- 保持原始索引语法（PG 9.5+ 支持 IF NOT EXISTS）
+-- Keep original index syntax (PG 9.5+ supports IF NOT EXISTS)
 CREATE INDEX IF NOT EXISTS idx_quota_execute_strategy_id ON quota_execute(strategy_id);
 CREATE INDEX IF NOT EXISTS idx_quota_execute_user_id ON quota_execute(user_id);
 CREATE INDEX IF NOT EXISTS idx_quota_execute_batch_number ON quota_execute(batch_number);
+
+-- Add index for strategy status field to improve query performance
+CREATE INDEX IF NOT EXISTS idx_quota_strategy_status ON quota_strategy(status);

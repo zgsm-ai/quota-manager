@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// QuotaStrategy 策略表结构
+// QuotaStrategy strategy table structure
 type QuotaStrategy struct {
 	ID           int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name         string    `gorm:"uniqueIndex;not null" json:"name"`
@@ -16,22 +16,23 @@ type QuotaStrategy struct {
 	Model        string    `gorm:"not null" json:"model"`
 	PeriodicExpr string    `gorm:"column:periodic_expr" json:"periodic_expr"`
 	Condition    string    `json:"condition"`
+	Status       bool      `gorm:"not null;default:true" json:"status"` // true=enabled, false=disabled
 	CreateTime   time.Time `gorm:"autoCreateTime" json:"create_time"`
 	UpdateTime   time.Time `gorm:"autoUpdateTime" json:"update_time"`
 }
 
-// QuotaExecute 执行状态表
+// QuotaExecute execution status table
 type QuotaExecute struct {
 	ID          int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	StrategyID  int       `gorm:"not null;index" json:"strategy_id"`
-	User        string    `gorm:"not null;index" json:"user"`
+	User        string    `gorm:"column:user_id;not null;index" json:"user"`
 	BatchNumber string    `gorm:"not null;index" json:"batch_number"`
 	Status      string    `gorm:"not null" json:"status"`
 	CreateTime  time.Time `gorm:"autoCreateTime" json:"create_time"`
 	UpdateTime  time.Time `gorm:"autoUpdateTime" json:"update_time"`
 }
 
-// UserInfo 用户信息表
+// UserInfo user information table
 type UserInfo struct {
 	ID             string    `gorm:"primaryKey" json:"id"`
 	Name           string    `json:"name"`
@@ -47,7 +48,7 @@ type UserInfo struct {
 	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`
 }
 
-// TableName 设置表名
+// TableName sets the table name
 func (QuotaStrategy) TableName() string {
 	return "quota_strategy"
 }
@@ -60,7 +61,22 @@ func (UserInfo) TableName() string {
 	return "user_info"
 }
 
-// AutoMigrate 自动迁移数据库表
+// AutoMigrate automatically migrates database tables
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(&QuotaStrategy{}, &QuotaExecute{}, &UserInfo{})
+}
+
+// IsEnabled checks if the strategy is enabled
+func (s *QuotaStrategy) IsEnabled() bool {
+	return s.Status
+}
+
+// Enable enables the strategy
+func (s *QuotaStrategy) Enable() {
+	s.Status = true
+}
+
+// Disable disables the strategy
+func (s *QuotaStrategy) Disable() {
+	s.Status = false
 }

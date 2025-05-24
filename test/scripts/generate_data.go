@@ -11,25 +11,25 @@ import (
 )
 
 func main() {
-	// 加载配置
+	// Load configuration
 	cfg, err := config.LoadConfig("../config.yaml")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 连接数据库
+	// Connect to database
 	db, err := database.NewDB(&cfg.Database)
 	if err != nil {
 		log.Fatalf("Failed to connect database: %v", err)
 	}
 	defer db.Close()
 
-	// 生成用户数据
+	// Generate user data
 	if err := generateUsers(db); err != nil {
 		log.Fatalf("Failed to generate users: %v", err)
 	}
 
-	// 生成策略数据
+	// Generate strategy data
 	if err := generateStrategies(db); err != nil {
 		log.Fatalf("Failed to generate strategies: %v", err)
 	}
@@ -43,7 +43,7 @@ func generateUsers(db *database.DB) error {
 	users := []models.UserInfo{
 		{
 			ID:             "user001",
-			Name:           "张三",
+			Name:           "John Doe",
 			GithubUsername: "zhangsan",
 			Email:          "zhangsan@example.com",
 			Phone:          "13800138001",
@@ -55,7 +55,7 @@ func generateUsers(db *database.DB) error {
 		},
 		{
 			ID:             "user002",
-			Name:           "李四",
+			Name:           "Jane Smith",
 			GithubUsername: "lisi",
 			Email:          "lisi@example.com",
 			Phone:          "13800138002",
@@ -67,7 +67,7 @@ func generateUsers(db *database.DB) error {
 		},
 		{
 			ID:             "user003",
-			Name:           "王五",
+			Name:           "Bob Wilson",
 			GithubUsername: "wangwu",
 			Email:          "wangwu@example.com",
 			Phone:          "13800138003",
@@ -79,7 +79,7 @@ func generateUsers(db *database.DB) error {
 		},
 		{
 			ID:             "user004",
-			Name:           "赵六",
+			Name:           "Alice Brown",
 			GithubUsername: "zhaoliu",
 			Email:          "zhaoliu@example.com",
 			Phone:          "13800138004",
@@ -91,7 +91,7 @@ func generateUsers(db *database.DB) error {
 		},
 		{
 			ID:             "user005",
-			Name:           "孙七",
+			Name:           "Charlie Davis",
 			GithubUsername: "sunqi",
 			Email:          "sunqi@example.com",
 			Phone:          "13800138005",
@@ -103,11 +103,11 @@ func generateUsers(db *database.DB) error {
 		},
 	}
 
-	// 生成更多随机用户
+	// Generate more random users
 	for i := 6; i <= 20; i++ {
 		user := models.UserInfo{
 			ID:             fmt.Sprintf("user%03d", i),
-			Name:           fmt.Sprintf("用户%d", i),
+			Name:           fmt.Sprintf("User%d", i),
 			GithubUsername: fmt.Sprintf("user%d", i),
 			Email:          fmt.Sprintf("user%d@example.com", i),
 			Phone:          fmt.Sprintf("138%08d", rand.Intn(100000000)),
@@ -116,12 +116,12 @@ func generateUsers(db *database.DB) error {
 			AccessTime:     time.Now().Add(-time.Duration(rand.Intn(168)) * time.Hour),
 		}
 
-		// 随机分配组织
+		// Randomly assign organization
 		if rand.Float32() < 0.7 {
 			user.Org = fmt.Sprintf("org%03d", rand.Intn(5)+1)
 		}
 
-		// 随机分配GitHub star
+		// Randomly assign GitHub star
 		if rand.Float32() < 0.6 {
 			stars := []string{"zgsm", "openai/gpt-4", "microsoft/vscode", "facebook/react", "google/tensorflow"}
 			starCount := rand.Intn(3) + 1
@@ -135,7 +135,7 @@ func generateUsers(db *database.DB) error {
 		users = append(users, user)
 	}
 
-	// 批量插入用户数据
+	// Batch insert user data
 	for _, user := range users {
 		if err := db.Create(&user).Error; err != nil {
 			fmt.Printf("Warning: Failed to create user %s: %v\n", user.ID, err)
@@ -152,70 +152,79 @@ func generateStrategies(db *database.DB) error {
 	strategies := []models.QuotaStrategy{
 		{
 			Name:         "recharge-star-everyday",
-			Title:        "给点star用户每日充值",
+			Title:        "Daily Recharge for Starred Users",
 			Type:         "periodic",
 			Amount:       5,
 			Model:        "claude-3-5-sonnet-latest",
-			PeriodicExpr: "0 8 * * *", // 每天8点
+			PeriodicExpr: "0 8 * * *", // Every day at 8 AM
 			Condition:    `github-star("zgsm")`,
+			Status:       true, // Enabled status
 		},
 		{
 			Name:      "recharge-star-once",
-			Title:     "给star用户一次性充值",
+			Title:     "One-time Recharge for Starred Users",
 			Type:      "single",
 			Amount:    20,
 			Model:     "claude-3-5-sonnet-latest",
 			Condition: `github-star("zgsm")`,
+			Status:    true, // Enabled status
 		},
 		{
 			Name:         "vip-daily-bonus",
-			Title:        "VIP用户每日奖励",
+			Title:        "Daily VIP User Reward",
 			Type:         "periodic",
 			Amount:       10,
 			Model:        "gpt-4",
-			PeriodicExpr: "0 9 * * *", // 每天9点
+			PeriodicExpr: "0 9 * * *", // Every day at 9 AM
 			Condition:    `is-vip(1)`,
+			Status:       true, // Enabled status
 		},
 		{
 			Name:      "new-user-welcome",
-			Title:     "新用户欢迎奖励",
+			Title:     "New User Welcome Reward",
 			Type:      "single",
 			Amount:    50,
 			Model:     "gpt-3.5-turbo",
 			Condition: `register-before("2024-06-01 00:00:00")`,
+			Status:    false, // Disabled status (test)
 		},
 		{
 			Name:         "org-weekly-bonus",
-			Title:        "组织用户周奖励",
+			Title:        "Organization User Weekly Reward",
 			Type:         "periodic",
 			Amount:       15,
 			Model:        "claude-3-5-sonnet-latest",
-			PeriodicExpr: "0 10 * * 1", // 每周一10点
+			PeriodicExpr: "0 10 * * 1", // Every Monday at 10 AM
 			Condition:    `belong-to("org001")`,
+			Status:       true, // Enabled status
 		},
 		{
 			Name:      "active-user-bonus",
-			Title:     "活跃用户奖励",
+			Title:     "Active User Reward",
 			Type:      "single",
 			Amount:    30,
 			Model:     "gpt-4",
 			Condition: `and(access-after("2024-05-01 00:00:00"), is-vip(2))`,
+			Status:    true, // Enabled status
 		},
 		{
 			Name:         "low-quota-refill",
-			Title:        "低配额自动补充",
+			Title:        "Low Quota Automatic Refill",
 			Type:         "periodic",
 			Amount:       25,
 			Model:        "gpt-3.5-turbo",
-			PeriodicExpr: "0 */6 * * *", // 每6小时
+			PeriodicExpr: "0 */6 * * *", // Every 6 hours
 			Condition:    `quota-le("gpt-3.5-turbo", 10)`,
+			Status:       false, // Disabled status (requires configuration to enable)
 		},
 	}
 
-	// 批量插入策略数据
+	// Batch insert strategy data
 	for _, strategy := range strategies {
 		if err := db.Create(&strategy).Error; err != nil {
 			fmt.Printf("Warning: Failed to create strategy %s: %v\n", strategy.Name, err)
+		} else {
+			fmt.Printf("Created strategy: %s (status: %t)\n", strategy.Name, strategy.Status)
 		}
 	}
 

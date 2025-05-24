@@ -1,124 +1,138 @@
 # Quota Manager
 
-基于 Go 语言和 Gin 框架的配额管理系统，用于管理用户配额充值策略。
+A quota management system based on Go language and Gin framework, used for managing user quota recharge strategies.
 
-## 功能特性
+## Features
 
-- **策略管理**: 支持单次充值和定时充值两种策略类型
-- **条件匹配**: 支持复杂的函数式条件表达式
-- **定时任务**: 基于 cron 表达式的定时策略执行
-- **AiGateway 集成**: 与外部 AiGateway 服务集成进行配额操作
-- **数据库支持**: 使用 PostgreSQL 存储数据
-- **RESTful API**: 提供完整的策略管理 API
+- **Strategy Management**: Supports both one-time and periodic recharge strategy types
+- **Strategy Status Control**: Supports enabling/disabling strategies, only enabled strategies will be executed
+- **Condition Matching**: Supports complex functional condition expressions
+- **Scheduled Tasks**: Scheduled strategy execution based on cron expressions
+- **AiGateway Integration**: Integration with external AiGateway service for quota operations
+- **Database Support**: Uses PostgreSQL for data storage
+- **RESTful API**: Provides complete strategy management API
 
-## 项目结构
+## Project Structure
 
 ```
 quota-manager/
-├── cmd/                    # 应用程序入口
+├── cmd/                    # Application entry point
 │   └── main.go
-├── internal/               # 内部包
-│   ├── config/            # 配置管理
-│   ├── database/          # 数据库连接
-│   ├── models/            # 数据模型
-│   ├── services/          # 业务逻辑
-│   ├── handlers/          # HTTP 处理器
-│   └── condition/         # 条件表达式解析
-├── pkg/                   # 公共包
-│   ├── aigateway/         # AiGateway 客户端
-│   └── logger/            # 日志记录
-├── scripts/               # 脚本文件
-│   ├── init_db.sql        # 数据库初始化
-│   ├── generate_data.go   # 数据生成
-│   └── start.sh           # 启动脚本
-├── config.yaml            # 配置文件
-├── go.mod                 # Go 模块文件
-└── README.md              # 项目说明
+├── internal/               # Internal packages
+│   ├── config/            # Configuration management
+│   ├── database/          # Database connection
+│   ├── models/            # Data models
+│   ├── services/          # Business logic
+│   ├── handlers/          # HTTP handlers
+│   └── condition/         # Condition expression parsing
+├── pkg/                   # Public packages
+│   ├── aigateway/         # AiGateway client
+│   └── logger/            # Logging
+├── scripts/               # Script files
+│   ├── init_db.sql        # Database initialization
+│   ├── generate_data.go   # Data generation
+│   └── start.sh           # Startup script
+├── config.yaml            # Configuration file
+├── go.mod                 # Go module file
+└── README.md              # Project documentation
 ```
 
-## 数据库表结构
+## Database Schema
 
-### 策略表 (quota_strategy)
-- `id`: 策略ID
-- `name`: 策略名称（唯一）
-- `title`: 策略标题
-- `type`: 策略类型（periodic/single）
-- `amount`: 充值数量
-- `model`: 模型名称
-- `periodic_expr`: 定时表达式
-- `condition`: 条件表达式
-- `create_time`: 创建时间
-- `update_time`: 更新时间
+### Strategy Table (quota_strategy)
+- `id`: Strategy ID
+- `name`: Strategy name (unique)
+- `title`: Strategy title
+- `type`: Strategy type (periodic/single)
+- `amount`: Recharge amount
+- `model`: Model name
+- `periodic_expr`: Periodic expression
+- `condition`: Condition expression
+- `status`: Strategy status (BOOLEAN: true=enabled, false=disabled)
+- `create_time`: Creation time
+- `update_time`: Update time
 
-### 执行状态表 (quota_execute)
-- `id`: 执行ID
-- `strategy_id`: 策略ID
-- `user`: 用户ID
-- `batch_number`: 批次号
-- `status`: 执行状态
-- `create_time`: 创建时间
-- `update_time`: 更新时间
+### Execution Status Table (quota_execute)
+- `id`: Execution ID
+- `strategy_id`: Strategy ID
+- `user`: User ID
+- `batch_number`: Batch number
+- `status`: Execution status
+- `create_time`: Creation time
+- `update_time`: Update time
 
-### 用户信息表 (user_info)
-- `id`: 用户ID
-- `name`: 用户名
-- `github_username`: GitHub用户名
-- `email`: 邮箱
-- `phone`: 手机号
-- `github_star`: GitHub star项目列表
-- `vip`: VIP等级
-- `org`: 组织ID
-- `register_time`: 注册时间
-- `access_time`: 最后访问时间
-- `create_time`: 创建时间
-- `update_time`: 更新时间
+### User Information Table (user_info)
+- `id`: User ID
+- `name`: Username
+- `github_username`: GitHub username
+- `email`: Email
+- `phone`: Phone number
+- `github_star`: GitHub star project list
+- `vip`: VIP level
+- `org`: Organization ID
+- `register_time`: Registration time
+- `access_time`: Last access time
+- `create_time`: Creation time
+- `update_time`: Update time
 
-## 条件表达式
+## Strategy Status Management
 
-支持以下条件函数：
+### Status Types
+- `true`: Enabled status, strategy will be executed normally
+- `false`: Disabled status, strategy will not be executed
 
-- `match-user(user)`: 匹配特定用户
-- `register-before(timestamp)`: 注册时间早于指定时间
-- `access-after(timestamp)`: 最后访问时间晚于指定时间
-- `github-star(project)`: 是否给指定项目点过star
-- `quota-le(model, amount)`: 配额余量小于等于指定数量
-- `is-vip(level)`: VIP等级大于等于指定级别
-- `belong-to(org)`: 属于指定组织
-- `and(condition1, condition2)`: 逻辑与
-- `or(condition1, condition2)`: 逻辑或
-- `not(condition)`: 逻辑非
+### Status Control
+- Only strategies with status `true` will be executed during scheduled scans
+- Initial status can be specified when creating a strategy, defaults to `true` (enabled)
+- Strategies can be dynamically enabled or disabled via API
+- Supports filtering strategy list by status
 
-### 条件表达式示例
+## Condition Expressions
+
+Supports the following condition functions:
+
+- `match-user(user)`: Match specific user
+- `register-before(timestamp)`: Registration time before specified time
+- `access-after(timestamp)`: Last access time after specified time
+- `github-star(project)`: Whether starred the specified project
+- `quota-le(model, amount)`: Quota balance less than or equal to specified amount
+- `is-vip(level)`: VIP level greater than or equal to specified level
+- `belong-to(org)`: Belongs to specified organization
+- `and(condition1, condition2)`: Logical AND
+- `or(condition1, condition2)`: Logical OR
+- `not(condition)`: Logical NOT
+
+### Condition Expression Examples
 
 ```
-# 给点过zgsm项目star的用户充值
+# Recharge users who starred the zgsm project
 github-star("zgsm")
 
-# 给VIP用户且最近活跃的用户充值
+# Recharge VIP users who are recently active
 and(is-vip(1), access-after("2024-05-01 00:00:00"))
 
-# 给早期注册用户或VIP用户充值
+# Recharge early registered users or VIP users
 or(register-before("2023-01-01 00:00:00"), is-vip(2))
 ```
 
-## 快速开始
+## Quick Start
 
-### 环境要求
+### Requirements
 
 - Go 1.21+
 - PostgreSQL 12+
 
-### 安装和运行
+### Installation and Running
 
-1. **克隆项目**
+1. **Clone Project**
    ```bash
    git clone <repository-url>
    cd quota-manager
    ```
 
-2. **配置数据库**
+2. **Configure Database**
 
-   修改 `config.yaml` 中的数据库配置：
+   Modify database configuration in `config.yaml`:
    ```yaml
    database:
      host: "localhost"
@@ -129,153 +143,168 @@ or(register-before("2023-01-01 00:00:00"), is-vip(2))
      sslmode: "disable"
    ```
 
-3. **使用启动脚本**
+3. **Use Startup Script**
    ```bash
    chmod +x scripts/start.sh
    ./scripts/start.sh
    ```
 
-4. **手动启动**
+4. **Manual Startup**
 
-   如果不使用启动脚本，可以手动执行以下步骤：
+   If not using the startup script, you can manually execute the following steps:
 
    ```bash
-   # 下载依赖
+   # Download dependencies
    go mod tidy
 
-   # 初始化数据库
+   # Initialize database
    psql -U postgres -f scripts/init_db.sql
 
-   # 生成测试数据
+   # Generate test data
    cd scripts && go run generate_data.go && cd ..
 
-   # 启动 AiGateway 模拟服务
+   # Start AiGateway mock service
    cd ../aigateway-mock && go run main.go &
 
-   # 启动主服务
+   # Start main service
    cd ../quota-manager && go run cmd/main.go
    ```
 
-## API 接口
+## API Endpoints
 
-### 策略管理
+### Strategy Management
 
-- `POST /api/v1/strategies` - 创建策略
-- `GET /api/v1/strategies` - 获取策略列表
-- `GET /api/v1/strategies/:id` - 获取单个策略
-- `PUT /api/v1/strategies/:id` - 更新策略
-- `DELETE /api/v1/strategies/:id` - 删除策略
-- `POST /api/v1/strategies/scan` - 手动触发策略扫描
+- `POST /api/v1/strategies` - Create strategy
+- `GET /api/v1/strategies` - Get strategy list
+  - Supports query parameter `?status=enabled` or `?status=true` to get enabled strategies
+  - Supports query parameter `?status=disabled` or `?status=false` to get disabled strategies
+- `GET /api/v1/strategies/:id` - Get single strategy
+- `PUT /api/v1/strategies/:id` - Update strategy
+- `DELETE /api/v1/strategies/:id` - Delete strategy
+- `POST /api/v1/strategies/:id/enable` - Enable strategy
+- `POST /api/v1/strategies/:id/disable` - Disable strategy
+- `POST /api/v1/strategies/scan` - Manually trigger strategy scan
 
-### 健康检查
+### Health Check
 
-- `GET /health` - 服务健康检查
+- `GET /health` - Service health check
 
-### 创建策略示例
+### Create Strategy Example
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/strategies \
   -H "Content-Type: application/json" \
   -d '{
     "name": "test-strategy",
-    "title": "测试策略",
+    "title": "Test Strategy",
     "type": "single",
     "amount": 10,
     "model": "gpt-3.5-turbo",
-    "condition": "github-star(\"zgsm\")"
+    "condition": "github-star(\"zgsm\")",
+    "status": true
   }'
 ```
 
-## AiGateway 模拟服务
+### Strategy Status Management Examples
 
-项目包含一个 AiGateway 模拟服务，提供以下接口：
+```bash
+# Enable strategy
+curl -X POST http://localhost:8080/api/v1/strategies/1/enable
 
-- `POST /v1/chat/completions/quota/refresh` - 刷新配额
-- `GET /v1/chat/completions/quota` - 查询配额
-- `POST /v1/chat/completions/quota/delta` - 增减配额
+# Disable strategy
+curl -X POST http://localhost:8080/api/v1/strategies/1/disable
 
-模拟服务运行在端口 1002。
+# Get enabled strategies (supports multiple parameters)
+curl http://localhost:8080/api/v1/strategies?status=enabled
+curl http://localhost:8080/api/v1/strategies?status=true
 
-## 配置说明
+# Get disabled strategies (supports multiple parameters)
+curl http://localhost:8080/api/v1/strategies?status=disabled
+curl http://localhost:8080/api/v1/strategies?status=false
 
-### 配置文件 (config.yaml)
+# Update strategy status
+curl -X PUT http://localhost:8080/api/v1/strategies/1 \
+  -H "Content-Type: application/json" \
+  -d '{"status": false}'
+```
+
+## AiGateway Mock Service
+
+The project includes an AiGateway mock service that provides the following endpoints:
+
+- `POST /v1/chat/completions/quota/refresh` - Refresh quota
+- `GET /v1/chat/completions/quota` - Query quota
+- `POST /v1/chat/completions/quota/delta` - Increase/decrease quota
+
+The mock service runs on port 1002.
+
+## Configuration
+
+### Configuration File (config.yaml)
 
 ```yaml
 database:
-  host: "pg"              # 数据库主机
-  port: 1001              # 数据库端口
-  user: "postgres"        # 数据库用户
-  password: "password"    # 数据库密码
-  dbname: "quota_manager" # 数据库名
-  sslmode: "disable"      # SSL模式
-
-aigateway:
-  host: "aigateway"       # AiGateway主机
-  port: 1002              # AiGateway端口
-  admin_path: "/v1/chat/completions"  # 管理路径
-  credential: "credential3"           # 认证凭据
-
-server:
-  port: 8080              # 服务端口
-  mode: "debug"           # 运行模式
-
-scheduler:
-  scan_interval: "0 0 * * * *"  # 扫描间隔（每小时）
+  host: "pg"              # Database host
+  port: 1001              # Database port
+  user: "postgres"        # Database user
+  password: "password"    # Database password
 ```
 
-## 开发说明
+## Development Notes
 
-### 添加新的条件函数
+### Adding New Condition Functions
 
-1. 在 `internal/condition/parser.go` 中添加新的表达式结构
-2. 实现 `Evaluate` 方法
-3. 在 `buildFunction` 方法中添加解析逻辑
+1. Add new expression structure in `internal/condition/parser.go`
+2. Implement `Evaluate` method
+3. Add parsing logic in `buildFunction` method
 
-### 扩展策略类型
+### Extending Strategy Types
 
-1. 在 `internal/services/strategy.go` 中的 `ExecStrategy` 方法添加新类型处理
-2. 更新数据模型和验证逻辑
+1. Add new type handling in `ExecStrategy` method in `internal/services/strategy.go`
+2. Update data model and validation logic
 
-## 测试
+## Testing
 
-项目包含了完整的测试数据生成脚本，会创建：
+The project includes complete test data generation script that creates:
 
-- 20个测试用户（包含不同VIP等级、组织、GitHub star等）
-- 7个测试策略（包含各种条件和类型）
+- 20 test users (including different VIP levels, organizations, GitHub stars, etc.)
+- 7 test strategies (including various conditions and types, some enabled, some disabled)
 
-## 日志
+## Logging
 
-系统使用 zap 日志库，日志格式为 JSON，包含以下信息：
+System uses zap logging library, logging format is JSON, containing the following information:
 
-- 策略执行状态
-- 用户充值记录
-- 错误信息
-- 系统状态
+- Strategy execution status
+- Strategy status change
+- User recharge record
+- Error information
+- System status
 
-## 故障排除
+## Troubleshooting
 
-### 常见问题
+### Common Issues
 
-1. **数据库连接失败**
-   - 检查 PostgreSQL 服务是否运行
-   - 验证配置文件中的数据库连接信息
+1. **Database Connection Failure**
+   - Check if PostgreSQL service is running
+   - Verify database connection information in config.yaml
 
-2. **AiGateway 连接失败**
-   - 确保 AiGateway 模拟服务正在运行
-   - 检查端口是否被占用
+2. **AiGateway Connection Failure**
+   - Ensure AiGateway mock service is running
+   - Check if port is occupied
 
-3. **策略不执行**
-   - 检查 cron 表达式是否正确
-   - 验证条件表达式语法
-   - 查看日志了解详细错误信息
+3. **Strategy Not Executing**
+   - Check if strategy status is `true` (enabled)
+   - Check if cron expression is correct
+   - Verify condition expression syntax
+   - Check logs for detailed error information
 
-### 调试模式
+### Debug Mode
 
-设置环境变量启用调试模式：
+Set environment variable to enable debug mode:
 ```bash
 export GIN_MODE=debug
 ```
 
-## 许可证
+## License
 
 MIT License

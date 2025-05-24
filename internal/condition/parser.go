@@ -18,7 +18,7 @@ type Evaluator interface {
 	Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error)
 }
 
-// AndExpr 逻辑与表达式
+// AndExpr logical AND expression
 type AndExpr struct {
 	Left, Right Evaluator
 }
@@ -31,7 +31,7 @@ func (a *AndExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bo
 	return a.Right.Evaluate(user, gateway)
 }
 
-// OrExpr 逻辑或表达式
+// OrExpr logical OR expression
 type OrExpr struct {
 	Left, Right Evaluator
 }
@@ -47,7 +47,7 @@ func (o *OrExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (boo
 	return o.Right.Evaluate(user, gateway)
 }
 
-// NotExpr 逻辑非表达式
+// NotExpr logical NOT expression
 type NotExpr struct {
 	Expr Evaluator
 }
@@ -57,7 +57,7 @@ func (n *NotExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bo
 	return !result, err
 }
 
-// MatchUserExpr 匹配用户表达式
+// MatchUserExpr match user expression
 type MatchUserExpr struct {
 	UserID string
 }
@@ -66,7 +66,7 @@ func (m *MatchUserExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Clien
 	return user.ID == m.UserID, nil
 }
 
-// RegisterBeforeExpr 注册时间早于表达式
+// RegisterBeforeExpr registration time before expression
 type RegisterBeforeExpr struct {
 	Timestamp time.Time
 }
@@ -75,7 +75,7 @@ func (r *RegisterBeforeExpr) Evaluate(user *models.UserInfo, gateway *aigateway.
 	return user.RegisterTime.Before(r.Timestamp), nil
 }
 
-// AccessAfterExpr 访问时间晚于表达式
+// AccessAfterExpr access time after expression
 type AccessAfterExpr struct {
 	Timestamp time.Time
 }
@@ -84,7 +84,7 @@ func (a *AccessAfterExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Cli
 	return user.AccessTime.After(a.Timestamp), nil
 }
 
-// GithubStarExpr GitHub star表达式
+// GithubStarExpr GitHub star expression
 type GithubStarExpr struct {
 	Project string
 }
@@ -102,7 +102,7 @@ func (g *GithubStarExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Clie
 	return false, nil
 }
 
-// QuotaLEExpr 配额小于等于表达式
+// QuotaLEExpr quota less than or equal expression
 type QuotaLEExpr struct {
 	Model  string
 	Amount int
@@ -116,7 +116,7 @@ func (q *QuotaLEExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client)
 	return resp.Quota <= q.Amount, nil
 }
 
-// IsVipExpr VIP等级表达式
+// IsVipExpr VIP level expression
 type IsVipExpr struct {
 	Level int
 }
@@ -125,7 +125,7 @@ func (i *IsVipExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (
 	return user.VIP >= i.Level, nil
 }
 
-// BelongToExpr 属于组织表达式
+// BelongToExpr belongs to organization expression
 type BelongToExpr struct {
 	Org string
 }
@@ -134,7 +134,7 @@ func (b *BelongToExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client
 	return user.Org == b.Org, nil
 }
 
-// RechargeExpr 已充值表达式
+// RechargeExpr already recharged expression
 type RechargeExpr struct {
 	StrategyName string
 	DB           interface {
@@ -164,7 +164,7 @@ func tokenize(condition string) []string {
 	inQuotes := false
 	inParens := 0
 
-	for i, r := range condition {
+	for _, r := range condition {
 		switch r {
 		case '"':
 			inQuotes = !inQuotes
@@ -220,7 +220,7 @@ func tokenize(condition string) []string {
 
 func (p *Parser) Parse() (Evaluator, error) {
 	if len(p.tokens) == 0 {
-		return &MatchUserExpr{UserID: ""}, nil // 空条件返回true
+		return &MatchUserExpr{UserID: ""}, nil // Empty condition returns true
 	}
 	return p.parseOr()
 }
@@ -399,10 +399,10 @@ func (p *Parser) currentToken() string {
 	return p.tokens[p.pos]
 }
 
-// CalcCondition 计算条件表达式
+// CalcCondition calculate condition expression
 func CalcCondition(user *models.UserInfo, condition string, gateway *aigateway.Client) (bool, error) {
 	if condition == "" {
-		return true, nil // 空条件表示无条件执行
+		return true, nil // Empty condition means unconditional execution
 	}
 
 	parser := NewParser(condition)

@@ -34,15 +34,15 @@ func NewClient(baseURL, adminPath, credential string) *Client {
 	}
 }
 
-// RefreshQuota 刷新用户配额
+// RefreshQuota refreshes user quota
 func (c *Client) RefreshQuota(consumer string, quota int) error {
-	url := fmt.Sprintf("%s%s/quota/refresh", c.BaseURL, c.AdminPath)
+	apiUrl := fmt.Sprintf("%s%s/quota/refresh", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
 	data.Set("consumer", consumer)
 	data.Set("quota", strconv.Itoa(quota))
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -63,11 +63,11 @@ func (c *Client) RefreshQuota(consumer string, quota int) error {
 	return nil
 }
 
-// QueryQuota 查询用户配额
+// QueryQuota queries user quota
 func (c *Client) QueryQuota(consumer string) (*QuotaResponse, error) {
-	url := fmt.Sprintf("%s%s/quota?consumer=%s", c.BaseURL, c.AdminPath, consumer)
+	apiUrl := fmt.Sprintf("%s%s/quota?consumer=%s", c.BaseURL, c.AdminPath, consumer)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -97,15 +97,15 @@ func (c *Client) QueryQuota(consumer string) (*QuotaResponse, error) {
 	return &quotaResp, nil
 }
 
-// DeltaQuota 增减用户配额
+// DeltaQuota increases or decreases user quota
 func (c *Client) DeltaQuota(consumer string, value int) error {
-	url := fmt.Sprintf("%s%s/quota/delta", c.BaseURL, c.AdminPath)
+	apiUrl := fmt.Sprintf("%s%s/quota/delta", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
 	data.Set("consumer", consumer)
 	data.Set("value", strconv.Itoa(value))
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

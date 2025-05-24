@@ -24,7 +24,7 @@ func NewDB(cfg *config.DatabaseConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
-	// 设置连接池
+	// Set connection pool
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
@@ -33,7 +33,7 @@ func NewDB(cfg *config.DatabaseConfig) (*DB, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 
-	// 自动迁移
+	// Auto migrate
 	if err := models.AutoMigrate(db); err != nil {
 		return nil, fmt.Errorf("failed to auto migrate: %w", err)
 	}

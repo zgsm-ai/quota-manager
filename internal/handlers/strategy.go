@@ -17,13 +17,15 @@ func NewStrategyHandler(service *services.StrategyService) *StrategyHandler {
 	return &StrategyHandler{service: service}
 }
 
-// CreateStrategy 创建策略
+// CreateStrategy creates a new strategy
 func (h *StrategyHandler) CreateStrategy(c *gin.Context) {
 	var strategy models.QuotaStrategy
 	if err := c.ShouldBindJSON(&strategy); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// status is bool type, no additional validation needed, JSON parsing will handle it automatically
 
 	if err := h.service.CreateStrategy(&strategy); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -33,18 +35,35 @@ func (h *StrategyHandler) CreateStrategy(c *gin.Context) {
 	c.JSON(http.StatusCreated, strategy)
 }
 
-// GetStrategies 获取策略列表
+// GetStrategies gets the strategy list
 func (h *StrategyHandler) GetStrategies(c *gin.Context) {
-	strategies, err := h.service.GetStrategies()
+	// Support filtering by status through query parameters
+	status := c.Query("status")
+
+	var strategies []models.QuotaStrategy
+	var err error
+
+	switch status {
+	case "enabled", "true":
+		strategies, err = h.service.GetEnabledStrategies()
+	case "disabled", "false":
+		strategies, err = h.service.GetDisabledStrategies()
+	default:
+		strategies, err = h.service.GetStrategies()
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, strategies)
+	c.JSON(http.StatusOK, gin.H{
+		"strategies": strategies,
+		"total":      len(strategies),
+	})
 }
 
-// GetStrategy 获取单个策略
+// GetStrategy gets a single strategy
 func (h *StrategyHandler) GetStrategy(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -62,7 +81,7 @@ func (h *StrategyHandler) GetStrategy(c *gin.Context) {
 	c.JSON(http.StatusOK, strategy)
 }
 
-// UpdateStrategy 更新策略
+// UpdateStrategy updates a strategy
 func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -77,6 +96,8 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 		return
 	}
 
+	// status is bool type, JSON parsing will handle it automatically, no additional validation needed
+
 	if err := h.service.UpdateStrategy(id, updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -85,7 +106,41 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "strategy updated successfully"})
 }
 
-// DeleteStrategy 删除策略
+// EnableStrategy enables a strategy
+func (h *StrategyHandler) EnableStrategy(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid strategy id"})
+		return
+	}
+
+	if err := h.service.EnableStrategy(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "strategy enabled successfully"})
+}
+
+// DisableStrategy disables a strategy
+func (h *StrategyHandler) DisableStrategy(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid strategy id"})
+		return
+	}
+
+	if err := h.service.DisableStrategy(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "strategy disabled successfully"})
+}
+
+// DeleteStrategy deletes a strategy
 func (h *StrategyHandler) DeleteStrategy(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -102,7 +157,7 @@ func (h *StrategyHandler) DeleteStrategy(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "strategy deleted successfully"})
 }
 
-// TriggerScan 手动触发策略扫描
+// TriggerScan manually triggers strategy scan
 func (h *StrategyHandler) TriggerScan(c *gin.Context) {
 	go h.service.TraverseStrategy()
 	c.JSON(http.StatusOK, gin.H{"message": "strategy scan triggered"})
