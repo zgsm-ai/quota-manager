@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: quota_manager_db
+    environment:
+      POSTGRES_DB: quota_manager
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "1001:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    networks:
+      - quota_network
+
+  aigateway-mock:
+    build:
+      context: ../aigateway-mock
+      dockerfile: Dockerfile
+    container_name: aigateway_mock
+    ports:
+      - "1002:1002"
+    networks:
+      - quota_network
+    depends_on:
+      - postgres
+
+  quota-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quota_manager
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - AIGATEWAY_HOST=aigateway-mock
+      - AIGATEWAY_PORT=1002
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    networks:
+      - quota_network
+    depends_on:
+      - postgres
+      - aigateway-mock
+
+volumes:
+  postgres_data:
+
+networks:
+  quota_network:
+    driver: bridge

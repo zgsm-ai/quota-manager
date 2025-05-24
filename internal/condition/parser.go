@@ -1,0 +1,415 @@
+package condition
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+	"quota-manager/internal/models"
+	"quota-manager/pkg/aigateway"
+)
+
+type Parser struct {
+	tokens []string
+	pos    int
+}
+
+type Evaluator interface {
+	Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error)
+}
+
+// AndExpr 逻辑与表达式
+type AndExpr struct {
+	Left, Right Evaluator
+}
+
+func (a *AndExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	left, err := a.Left.Evaluate(user, gateway)
+	if err != nil || !left {
+		return false, err
+	}
+	return a.Right.Evaluate(user, gateway)
+}
+
+// OrExpr 逻辑或表达式
+type OrExpr struct {
+	Left, Right Evaluator
+}
+
+func (o *OrExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	left, err := o.Left.Evaluate(user, gateway)
+	if err != nil {
+		return false, err
+	}
+	if left {
+		return true, nil
+	}
+	return o.Right.Evaluate(user, gateway)
+}
+
+// NotExpr 逻辑非表达式
+type NotExpr struct {
+	Expr Evaluator
+}
+
+func (n *NotExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	result, err := n.Expr.Evaluate(user, gateway)
+	return !result, err
+}
+
+// MatchUserExpr 匹配用户表达式
+type MatchUserExpr struct {
+	UserID string
+}
+
+func (m *MatchUserExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	return user.ID == m.UserID, nil
+}
+
+// RegisterBeforeExpr 注册时间早于表达式
+type RegisterBeforeExpr struct {
+	Timestamp time.Time
+}
+
+func (r *RegisterBeforeExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	return user.RegisterTime.Before(r.Timestamp), nil
+}
+
+// AccessAfterExpr 访问时间晚于表达式
+type AccessAfterExpr struct {
+	Timestamp time.Time
+}
+
+func (a *AccessAfterExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	return user.AccessTime.After(a.Timestamp), nil
+}
+
+// GithubStarExpr GitHub star表达式
+type GithubStarExpr struct {
+	Project string
+}
+
+func (g *GithubStarExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	if user.GithubStar == "" {
+		return false, nil
+	}
+	stars := strings.Split(user.GithubStar, ",")
+	for _, star := range stars {
+		if strings.TrimSpace(star) == g.Project {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// QuotaLEExpr 配额小于等于表达式
+type QuotaLEExpr struct {
+	Model  string
+	Amount int
+}
+
+func (q *QuotaLEExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	resp, err := gateway.QueryQuota(user.ID)
+	if err != nil {
+		return false, err
+	}
+	return resp.Quota <= q.Amount, nil
+}
+
+// IsVipExpr VIP等级表达式
+type IsVipExpr struct {
+	Level int
+}
+
+func (i *IsVipExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	return user.VIP >= i.Level, nil
+}
+
+// BelongToExpr 属于组织表达式
+type BelongToExpr struct {
+	Org string
+}
+
+func (b *BelongToExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	return user.Org == b.Org, nil
+}
+
+// RechargeExpr 已充值表达式
+type RechargeExpr struct {
+	StrategyName string
+	DB           interface {
+		Where(query interface{}, args ...interface{}) interface {
+			First(dest interface{}) interface { Error() error }
+		}
+	}
+}
+
+func (r *RechargeExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+	var execute models.QuotaExecute
+	err := r.DB.Where("user = ? AND status = 'completed'", user.ID).First(&execute).Error()
+	return err == nil, nil
+}
+
+func NewParser(condition string) *Parser {
+	if condition == "" {
+		return &Parser{tokens: []string{}, pos: 0}
+	}
+	tokens := tokenize(condition)
+	return &Parser{tokens: tokens, pos: 0}
+}
+
+func tokenize(condition string) []string {
+	var tokens []string
+	var current strings.Builder
+	inQuotes := false
+	inParens := 0
+
+	for i, r := range condition {
+		switch r {
+		case '"':
+			inQuotes = !inQuotes
+			current.WriteRune(r)
+		case '(':
+			if !inQuotes {
+				if current.Len() > 0 {
+					tokens = append(tokens, current.String())
+					current.Reset()
+				}
+				tokens = append(tokens, "(")
+				inParens++
+			} else {
+				current.WriteRune(r)
+			}
+		case ')':
+			if !inQuotes {
+				if current.Len() > 0 {
+					tokens = append(tokens, current.String())
+					current.Reset()
+				}
+				tokens = append(tokens, ")")
+				inParens--
+			} else {
+				current.WriteRune(r)
+			}
+		case ',', ' ':
+			if !inQuotes && inParens == 0 {
+				if current.Len() > 0 {
+					tokens = append(tokens, current.String())
+					current.Reset()
+				}
+			} else if !inQuotes && inParens > 0 && r == ',' {
+				if current.Len() > 0 {
+					tokens = append(tokens, current.String())
+					current.Reset()
+				}
+				tokens = append(tokens, ",")
+			} else if r != ' ' || inQuotes {
+				current.WriteRune(r)
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
+}
+
+func (p *Parser) Parse() (Evaluator, error) {
+	if len(p.tokens) == 0 {
+		return &MatchUserExpr{UserID: ""}, nil // 空条件返回true
+	}
+	return p.parseOr()
+}
+
+func (p *Parser) parseOr() (Evaluator, error) {
+	left, err := p.parseAnd()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.pos < len(p.tokens) && p.tokens[p.pos] == "or" {
+		p.pos++ // consume 'or'
+		right, err := p.parseAnd()
+		if err != nil {
+			return nil, err
+		}
+		left = &OrExpr{Left: left, Right: right}
+	}
+
+	return left, nil
+}
+
+func (p *Parser) parseAnd() (Evaluator, error) {
+	left, err := p.parseUnary()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.pos < len(p.tokens) && p.tokens[p.pos] == "and" {
+		p.pos++ // consume 'and'
+		right, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		left = &AndExpr{Left: left, Right: right}
+	}
+
+	return left, nil
+}
+
+func (p *Parser) parseUnary() (Evaluator, error) {
+	if p.pos >= len(p.tokens) {
+		return nil, fmt.Errorf("unexpected end of expression")
+	}
+
+	token := p.tokens[p.pos]
+
+	if token == "not" {
+		p.pos++ // consume 'not'
+		if p.pos >= len(p.tokens) || p.tokens[p.pos] != "(" {
+			return nil, fmt.Errorf("expected '(' after 'not'")
+		}
+		expr, err := p.parseFunction()
+		if err != nil {
+			return nil, err
+		}
+		return &NotExpr{Expr: expr}, nil
+	}
+
+	return p.parseFunction()
+}
+
+func (p *Parser) parseFunction() (Evaluator, error) {
+	if p.pos >= len(p.tokens) {
+		return nil, fmt.Errorf("unexpected end of expression")
+	}
+
+	if p.tokens[p.pos] == "(" {
+		p.pos++ // consume '('
+		expr, err := p.parseOr()
+		if err != nil {
+			return nil, err
+		}
+		if p.pos >= len(p.tokens) || p.tokens[p.pos] != ")" {
+			return nil, fmt.Errorf("expected ')' but got %s", p.currentToken())
+		}
+		p.pos++ // consume ')'
+		return expr, nil
+	}
+
+	funcName := p.tokens[p.pos]
+	p.pos++ // consume function name
+
+	if p.pos >= len(p.tokens) || p.tokens[p.pos] != "(" {
+		return nil, fmt.Errorf("expected '(' after function name")
+	}
+	p.pos++ // consume '('
+
+	var args []string
+	for p.pos < len(p.tokens) && p.tokens[p.pos] != ")" {
+		if p.tokens[p.pos] == "," {
+			p.pos++
+			continue
+		}
+		args = append(args, p.tokens[p.pos])
+		p.pos++
+	}
+
+	if p.pos >= len(p.tokens) {
+		return nil, fmt.Errorf("expected ')' to close function")
+	}
+	p.pos++ // consume ')'
+
+	return p.buildFunction(funcName, args)
+}
+
+func (p *Parser) buildFunction(funcName string, args []string) (Evaluator, error) {
+	switch funcName {
+	case "match-user":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("match-user expects 1 argument, got %d", len(args))
+		}
+		return &MatchUserExpr{UserID: strings.Trim(args[0], "\"")}, nil
+
+	case "register-before":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("register-before expects 1 argument, got %d", len(args))
+		}
+		timestamp, err := time.Parse("2006-01-02 15:04:05", strings.Trim(args[0], "\""))
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp format: %w", err)
+		}
+		return &RegisterBeforeExpr{Timestamp: timestamp}, nil
+
+	case "access-after":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("access-after expects 1 argument, got %d", len(args))
+		}
+		timestamp, err := time.Parse("2006-01-02 15:04:05", strings.Trim(args[0], "\""))
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp format: %w", err)
+		}
+		return &AccessAfterExpr{Timestamp: timestamp}, nil
+
+	case "github-star":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("github-star expects 1 argument, got %d", len(args))
+		}
+		return &GithubStarExpr{Project: strings.Trim(args[0], "\"")}, nil
+
+	case "quota-le":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("quota-le expects 2 arguments, got %d", len(args))
+		}
+		amount, err := strconv.Atoi(args[1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid amount: %w", err)
+		}
+		return &QuotaLEExpr{Model: strings.Trim(args[0], "\""), Amount: amount}, nil
+
+	case "is-vip":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("is-vip expects 1 argument, got %d", len(args))
+		}
+		level, err := strconv.Atoi(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("invalid vip level: %w", err)
+		}
+		return &IsVipExpr{Level: level}, nil
+
+	case "belong-to":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("belong-to expects 1 argument, got %d", len(args))
+		}
+		return &BelongToExpr{Org: strings.Trim(args[0], "\"")}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown function: %s", funcName)
+	}
+}
+
+func (p *Parser) currentToken() string {
+	if p.pos >= len(p.tokens) {
+		return "EOF"
+	}
+	return p.tokens[p.pos]
+}
+
+// CalcCondition 计算条件表达式
+func CalcCondition(user *models.UserInfo, condition string, gateway *aigateway.Client) (bool, error) {
+	if condition == "" {
+		return true, nil // 空条件表示无条件执行
+	}
+
+	parser := NewParser(condition)
+	evaluator, err := parser.Parse()
+	if err != nil {
+		return false, fmt.Errorf("failed to parse condition: %w", err)
+	}
+
+	return evaluator.Evaluate(user, gateway)
+}
