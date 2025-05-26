@@ -2,11 +2,11 @@ package condition
 
 import (
 	"fmt"
+	"quota-manager/internal/models"
+	"quota-manager/pkg/aigateway"
 	"strconv"
 	"strings"
 	"time"
-	"quota-manager/internal/models"
-	"quota-manager/pkg/aigateway"
 )
 
 type Parser struct {
@@ -72,7 +72,7 @@ type RegisterBeforeExpr struct {
 }
 
 func (r *RegisterBeforeExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
-	return user.RegisterTime.Before(r.Timestamp), nil
+	return !user.RegisterTime.After(r.Timestamp), nil
 }
 
 // AccessAfterExpr access time after expression
@@ -139,7 +139,7 @@ type RechargeExpr struct {
 	StrategyName string
 	DB           interface {
 		Where(query interface{}, args ...interface{}) interface {
-			First(dest interface{}) interface { Error() error }
+			First(dest interface{}) interface{ Error() error }
 		}
 	}
 }

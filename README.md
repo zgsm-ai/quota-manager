@@ -273,12 +273,52 @@ database:
 
 ## Testing
 
+### 数据生成脚本
+
 The project includes complete test data generation script located in `test/scripts/generate_data.go` that creates:
 
 - 20 test users (including different VIP levels, organizations, GitHub stars, etc.)
 - 7 test strategies (including various conditions and types, some enabled, some disabled)
 
+### API测试脚本
+
 Additionally, there is an API testing script `test/scripts/test_api.sh` for testing the API endpoints.
+
+### 集成测试
+
+项目提供了完整的集成测试套件位于 `test/` 目录，包含以下功能：
+
+#### 测试覆盖范围
+- **条件表达式测试**: 覆盖所有支持的条件函数和嵌套逻辑
+- **策略类型测试**: 单次充值和定时充值策略
+- **策略状态测试**: 启用/禁用状态控制
+- **AiGateway集成测试**: 正常请求和失败处理
+- **批量处理测试**: 多用户批量操作验证
+
+#### 运行集成测试
+
+```bash
+# 进入测试目录
+cd test
+
+# 使用脚本运行（推荐）
+chmod +x run_tests.sh
+./run_tests.sh
+
+# 或手动运行
+go run integration_main.go
+```
+
+#### 环境配置
+
+测试支持以下环境变量配置：
+- `POSTGRES_HOST`: 数据库主机 (默认: localhost)
+- `POSTGRES_PORT`: 数据库端口 (默认: 5432)
+- `POSTGRES_USER`: 数据库用户 (默认: postgres)
+- `POSTGRES_PASSWORD`: 数据库密码 (默认: password)
+- `POSTGRES_DB`: 数据库名称 (默认: quota_manager)
+
+详细的测试说明请参阅 [test/README.md](test/README.md)。
 
 ## Logging
 

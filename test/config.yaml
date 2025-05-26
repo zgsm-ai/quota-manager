@@ -1,0 +1,20 @@
+database:
+  host: "127.0.0.1"
+  port: 5432
+  user: "keycloak"
+  password: "sf2025~SHENMA"
+  dbname: "quota_manager"
+  sslmode: "disable"
+
+aigateway:
+  host: "127.0.0.1"
+  port: 1002
+  admin_path: "/v1/chat/completions"
+  credential: "credential3"
+
+server:
+  port: 8099
+  mode: "debug"
+
+scheduler:
+  scan_interval: "0 0 * * * *" # Scan every hour
