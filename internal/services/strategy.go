@@ -2,12 +2,12 @@ package services
 
 import (
 	"fmt"
-	"time"
 	"quota-manager/internal/condition"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
+	"time"
 
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
@@ -138,9 +138,16 @@ func (s *StrategyService) shouldExecutePeriodic(strategy *models.QuotaStrategy) 
 
 // ExecStrategy executes a strategy
 func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []models.UserInfo) {
-	// Again, check strategy status to ensure only executing enabled strategies
-	if !strategy.IsEnabled() {
-		logger.Warn("Skipping disabled strategy", zap.String("strategy", strategy.Name))
+	// 从数据库中获取最新的策略状态
+	var latestStrategy models.QuotaStrategy
+	if err := s.db.First(&latestStrategy, strategy.ID).Error; err != nil {
+		logger.Error("Failed to get latest strategy status", zap.Error(err))
+		return
+	}
+
+	// 使用最新的策略状态进行检查
+	if !latestStrategy.IsEnabled() {
+		logger.Warn("Skipping disabled strategy", zap.String("strategy", latestStrategy.Name))
 		return
 	}
 
@@ -148,18 +155,18 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 
 	for _, user := range users {
 		// For single strategy, check if it has already been executed
-		if strategy.Type == "single" {
-			if s.hasExecuted(strategy.ID, user.ID) {
+		if latestStrategy.Type == "single" {
+			if s.hasExecuted(latestStrategy.ID, user.ID) {
 				continue
 			}
 		}
 
 		// Check condition
-		match, err := condition.CalcCondition(&user, strategy.Condition, s.gateway)
+		match, err := condition.CalcCondition(&user, latestStrategy.Condition, s.gateway)
 		if err != nil {
 			logger.Error("Failed to calculate condition",
 				zap.String("user", user.ID),
-				zap.String("strategy", strategy.Name),
+				zap.String("strategy", latestStrategy.Name),
 				zap.Error(err))
 			continue
 		}
@@ -169,10 +176,10 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 		}
 
 		// Execute recharge
-		if err := s.executeRecharge(strategy, &user, batchNumber); err != nil {
+		if err := s.executeRecharge(&latestStrategy, &user, batchNumber); err != nil {
 			logger.Error("Failed to execute recharge",
 				zap.String("user", user.ID),
-				zap.String("strategy", strategy.Name),
+				zap.String("strategy", latestStrategy.Name),
 				zap.Error(err))
 		}
 	}
@@ -181,8 +188,27 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 // hasExecuted checks if single strategy has been executed
 func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 	var count int64
+
+	// 首先检查是否有已完成的记录
 	err := s.db.Model(&models.QuotaExecute{}).
-		Where("strategy_id = ? AND user = ? AND status = ?", strategyID, userID, "completed").
+		Where("strategy_id = ? AND user_id = ? AND status = ?",
+			strategyID, userID, "completed").
+		Count(&count).Error
+
+	if err != nil {
+		logger.Error("Failed to check execution status", zap.Error(err))
+		return false
+	}
+
+	if count > 0 {
+		return true
+	}
+
+	// 如果没有已完成的记录，检查当前批次中的处理中记录
+	currentBatch := s.generateBatchNumber()
+	err = s.db.Model(&models.QuotaExecute{}).
+		Where("strategy_id = ? AND user_id = ? AND status = ? AND batch_number = ?",
+			strategyID, userID, "processing", currentBatch).
 		Count(&count).Error
 
 	if err != nil {
@@ -195,9 +221,19 @@ func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 
 // executeRecharge executes recharge
 func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *models.UserInfo, batchNumber string) error {
+	// 再次检查策略状态
+	var latestStrategy models.QuotaStrategy
+	if err := s.db.First(&latestStrategy, strategy.ID).Error; err != nil {
+		return fmt.Errorf("failed to get latest strategy status: %w", err)
+	}
+
+	if !latestStrategy.IsEnabled() {
+		return fmt.Errorf("strategy is disabled")
+	}
+
 	// 1. Record execution status as processing
 	execute := &models.QuotaExecute{
-		StrategyID:  strategy.ID,
+		StrategyID:  latestStrategy.ID,
 		User:        user.ID,
 		BatchNumber: batchNumber,
 		Status:      "processing",
@@ -208,7 +244,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 	}
 
 	// 2. Call AiGateway for recharge
-	err := s.gateway.DeltaQuota(user.ID, strategy.Amount)
+	err := s.gateway.DeltaQuota(user.ID, latestStrategy.Amount)
 	if err != nil {
 		// Update execution status to failed
 		s.db.Model(execute).Update("status", "failed")
@@ -222,9 +258,9 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 
 	logger.Info("Recharge completed",
 		zap.String("user", user.ID),
-		zap.String("strategy", strategy.Name),
-		zap.Int("amount", strategy.Amount),
-		zap.String("model", strategy.Model))
+		zap.String("strategy", latestStrategy.Name),
+		zap.Int("amount", latestStrategy.Amount),
+		zap.String("model", latestStrategy.Model))
 
 	return nil
 }
@@ -237,13 +273,14 @@ func (s *StrategyService) generateBatchNumber() string {
 
 // CreateStrategy creates a strategy
 func (s *StrategyService) CreateStrategy(strategy *models.QuotaStrategy) error {
-	// Note: bool type zero value is false, need to explicitly check if status is set
-	// If status is not explicitly set, default to enabled
-
+	// 使用 GORM 的默认值机制
+	// Status 字段已在模型中定义了 default:true
 	if err := s.db.Create(strategy).Error; err != nil {
 		return fmt.Errorf("failed to create strategy: %w", err)
 	}
-	return nil
+
+	// 重新从数据库加载策略以获取默认值
+	return s.db.First(strategy, strategy.ID).Error
 }
 
 // GetStrategies gets strategy list

@@ -309,6 +309,46 @@ func (p *Parser) parseFunction() (Evaluator, error) {
 	}
 	p.pos++ // consume '('
 
+	// 特殊处理逻辑运算符函数
+	if funcName == "and" || funcName == "or" || funcName == "not" {
+		var args []Evaluator
+		for p.pos < len(p.tokens) && p.tokens[p.pos] != ")" {
+			if p.tokens[p.pos] == "," {
+				p.pos++
+				continue
+			}
+			arg, err := p.parseOr()
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+		}
+
+		if p.pos >= len(p.tokens) {
+			return nil, fmt.Errorf("expected ')' to close function")
+		}
+		p.pos++ // consume ')'
+
+		switch funcName {
+		case "and":
+			if len(args) != 2 {
+				return nil, fmt.Errorf("and function expects 2 arguments, got %d", len(args))
+			}
+			return &AndExpr{Left: args[0], Right: args[1]}, nil
+		case "or":
+			if len(args) != 2 {
+				return nil, fmt.Errorf("or function expects 2 arguments, got %d", len(args))
+			}
+			return &OrExpr{Left: args[0], Right: args[1]}, nil
+		case "not":
+			if len(args) != 1 {
+				return nil, fmt.Errorf("not function expects 1 argument, got %d", len(args))
+			}
+			return &NotExpr{Expr: args[0]}, nil
+		}
+	}
+
+	// 处理普通函数
 	var args []string
 	for p.pos < len(p.tokens) && p.tokens[p.pos] != ")" {
 		if p.tokens[p.pos] == "," {

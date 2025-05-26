@@ -231,14 +231,14 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"条件表达式-is-vip测试", testIsVipCondition},
 		{"条件表达式-belong-to测试", testBelongToCondition},
 		{"条件表达式-and嵌套测试", testAndCondition},
-		// {"条件表达式-or嵌套测试", testOrCondition},
-		// {"条件表达式-not嵌套测试", testNotCondition},
-		// {"条件表达式-复杂嵌套测试", testComplexCondition},
-		// {"单次充值策略测试", testSingleTypeStrategy},
-		// {"定时充值策略测试", testPeriodicTypeStrategy},
-		// {"策略状态控制测试", testStrategyStatusControl},
-		// {"AiGateway请求失败测试", testAiGatewayFailure},
-		// {"批量用户处理测试", testBatchUserProcessing},
+		{"条件表达式-or嵌套测试", testOrCondition},
+		{"条件表达式-not嵌套测试", testNotCondition},
+		{"条件表达式-复杂嵌套测试", testComplexCondition},
+		{"单次充值策略测试", testSingleTypeStrategy},
+		{"定时充值策略测试", testPeriodicTypeStrategy},
+		{"策略状态控制测试", testStrategyStatusControl},
+		{"AiGateway请求失败测试", testAiGatewayFailure},
+		{"批量用户处理测试", testBatchUserProcessing},
 	}
 
 	for _, tc := range testCases {
@@ -1241,11 +1241,15 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 		Type:      "single",
 		Amount:    80,
 		Model:     "test-model",
-		Condition: "",    // 空条件
-		Status:    false, // 禁用状态
+		Condition: "", // 空条件
 	}
+	// 先创建策略
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+	}
+	// 然后禁用它
+	if err := ctx.StrategyService.DisableStrategy(strategy.ID); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("禁用策略失败: %v", err)}
 	}
 
 	// 执行禁用的策略
@@ -1261,9 +1265,8 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 	}
 
 	// 启用策略
-	strategy.Status = true
-	if err := ctx.DB.Save(strategy).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("更新策略状态失败: %v", err)}
+	if err := ctx.StrategyService.EnableStrategy(strategy.ID); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("启用策略失败: %v", err)}
 	}
 
 	// 再次执行策略
