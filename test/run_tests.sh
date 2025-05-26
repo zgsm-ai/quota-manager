@@ -41,7 +41,7 @@ if [ $? -ne 0 ]; then
     PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -c "CREATE DATABASE $POSTGRES_DB;" 2>/dev/null
 
     # 初始化数据库表结构
-    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB -f scripts/init_db.sql
+    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB -f ../scripts/init_db.sql
 
     if [ $? -ne 0 ]; then
         echo "数据库初始化失败，请检查配置"

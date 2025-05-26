@@ -29,17 +29,10 @@ quota-manager/
 │   ├── aigateway/         # AiGateway client
 │   └── logger/            # Logging
 ├── scripts/               # Script files
-│   └── start.sh           # Startup script
-├── test/                  # Test related files
-│   ├── scripts/           # Test scripts
-│   │   ├── init_db.sql    # Database initialization
-│   │   ├── generate_data.go # Data generation
-│   │   └── test_api.sh    # API testing script
-│   └── aigateway-mock/    # AiGateway mock service
-│       ├── main.go        # Mock service main file
-│       ├── go.mod         # Mock service dependencies
-│       ├── go.sum         # Mock service dependency checksums
-│       └── Dockerfile     # Mock service Docker file
+│   ├── start.sh           # Startup script
+│   ├── init_db.sql        # Database initialization
+│   ├── generate_data.go   # Data generation
+│   └── test_api.sh        # API testing script
 ├── config.yaml            # Configuration file
 ├── go.mod                 # Go module file
 └── README.md              # Project documentation
@@ -166,13 +159,13 @@ or(register-before("2023-01-01 00:00:00"), is-vip(2))
    go mod tidy
 
    # Initialize database
-   psql -U postgres -f test/scripts/init_db.sql
+   psql -U postgres -f scripts/init_db.sql
 
    # Generate test data
-   cd test/scripts && go run generate_data.go && cd ../..
+   cd scripts && go run generate_data.go && cd ..
 
    # Start AiGateway mock service
-   cd test/aigateway-mock && go run main.go &
+   cd scripts/aigateway-mock && go run main.go &
 
    # Start main service
    cd ../../ && go run cmd/main.go
@@ -238,7 +231,7 @@ curl -X PUT http://localhost:8080/api/v1/strategies/1 \
 
 ## AiGateway Mock Service
 
-The project includes an AiGateway mock service located in the `test/aigateway-mock/` directory that provides the following endpoints:
+The project includes an AiGateway mock service located in the `scripts/aigateway-mock/` directory that provides the following endpoints:
 
 - `POST /v1/chat/completions/quota/refresh` - Refresh quota
 - `GET /v1/chat/completions/quota` - Query quota
@@ -275,14 +268,14 @@ database:
 
 ### 数据生成脚本
 
-The project includes complete test data generation script located in `test/scripts/generate_data.go` that creates:
+The project includes complete test data generation script located in `scripts/generate_data.go` that creates:
 
 - 20 test users (including different VIP levels, organizations, GitHub stars, etc.)
 - 7 test strategies (including various conditions and types, some enabled, some disabled)
 
 ### API测试脚本
 
-Additionally, there is an API testing script `test/scripts/test_api.sh` for testing the API endpoints.
+Additionally, there is an API testing script `scripts/test_api.sh` for testing the API endpoints.
 
 ### 集成测试
 
