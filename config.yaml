@@ -1,5 +1,5 @@
 database:
-  host: "172.27.176.93"
+  host: "127.0.0.1"
   port: 5432
   user: "keycloak"
   password: "sf2025~SHENMA"

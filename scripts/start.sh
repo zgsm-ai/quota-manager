@@ -38,24 +38,24 @@ go mod tidy
 
 # Initialize database
 echo "Initializing database..."
-if [ -f "scripts/init_db.sql" ]; then
-    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -f scripts/init_db.sql
+if [ -f "test/scripts/init_db.sql" ]; then
+    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -f test/scripts/init_db.sql
 fi
 
 # Generate test data
 echo "Generating test data..."
-cd scripts
+cd test/scripts
 go run generate_data.go
-cd ..
+cd ../..
 
 # Start AiGateway mock service
 echo "Starting AiGateway mock service..."
-cd ../aigateway-mock
+cd test/aigateway-mock
 go mod tidy
 nohup go run main.go > aigateway.log 2>&1 &
 AIGATEWAY_PID=$!
 echo "AiGateway mock service started with PID: $AIGATEWAY_PID"
-cd ../quota-manager
+cd ../..
 
 # Start main service
 echo "Starting Quota Manager service..."
