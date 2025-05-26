@@ -3,11 +3,21 @@ package condition
 import (
 	"fmt"
 	"quota-manager/internal/models"
-	"quota-manager/pkg/aigateway"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// QuotaQuerier interface for querying quota information
+type QuotaQuerier interface {
+	QueryQuota(userID string) (int, error)
+}
+
+// EvaluationContext contains all dependencies needed for condition evaluation
+type EvaluationContext struct {
+	QuotaQuerier QuotaQuerier
+	// Can add more dependencies here in the future (e.g., database, cache, etc.)
+}
 
 type Parser struct {
 	tokens []string
@@ -15,7 +25,7 @@ type Parser struct {
 }
 
 type Evaluator interface {
-	Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error)
+	Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error)
 }
 
 // AndExpr logical AND expression
@@ -23,12 +33,12 @@ type AndExpr struct {
 	Left, Right Evaluator
 }
 
-func (a *AndExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
-	left, err := a.Left.Evaluate(user, gateway)
+func (a *AndExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	left, err := a.Left.Evaluate(user, ctx)
 	if err != nil || !left {
 		return false, err
 	}
-	return a.Right.Evaluate(user, gateway)
+	return a.Right.Evaluate(user, ctx)
 }
 
 // OrExpr logical OR expression
@@ -36,15 +46,15 @@ type OrExpr struct {
 	Left, Right Evaluator
 }
 
-func (o *OrExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
-	left, err := o.Left.Evaluate(user, gateway)
+func (o *OrExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	left, err := o.Left.Evaluate(user, ctx)
 	if err != nil {
 		return false, err
 	}
 	if left {
 		return true, nil
 	}
-	return o.Right.Evaluate(user, gateway)
+	return o.Right.Evaluate(user, ctx)
 }
 
 // NotExpr logical NOT expression
@@ -52,8 +62,8 @@ type NotExpr struct {
 	Expr Evaluator
 }
 
-func (n *NotExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
-	result, err := n.Expr.Evaluate(user, gateway)
+func (n *NotExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	result, err := n.Expr.Evaluate(user, ctx)
 	return !result, err
 }
 
@@ -62,7 +72,7 @@ type MatchUserExpr struct {
 	UserID string
 }
 
-func (m *MatchUserExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+func (m *MatchUserExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
 	return user.ID == m.UserID, nil
 }
 
@@ -71,7 +81,7 @@ type RegisterBeforeExpr struct {
 	Timestamp time.Time
 }
 
-func (r *RegisterBeforeExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+func (r *RegisterBeforeExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
 	return !user.RegisterTime.After(r.Timestamp), nil
 }
 
@@ -80,7 +90,7 @@ type AccessAfterExpr struct {
 	Timestamp time.Time
 }
 
-func (a *AccessAfterExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+func (a *AccessAfterExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
 	return user.AccessTime.After(a.Timestamp), nil
 }
 
@@ -89,7 +99,7 @@ type GithubStarExpr struct {
 	Project string
 }
 
-func (g *GithubStarExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+func (g *GithubStarExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
 	if user.GithubStar == "" {
 		return false, nil
 	}
@@ -108,12 +118,16 @@ type QuotaLEExpr struct {
 	Amount int
 }
 
-func (q *QuotaLEExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
-	resp, err := gateway.QueryQuota(user.ID)
+func (q *QuotaLEExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	if ctx.QuotaQuerier == nil {
+		return false, fmt.Errorf("quota querier not available")
+	}
+
+	quota, err := ctx.QuotaQuerier.QueryQuota(user.ID)
 	if err != nil {
 		return false, err
 	}
-	return resp.Quota <= q.Amount, nil
+	return quota <= q.Amount, nil
 }
 
 // IsVipExpr VIP level expression
@@ -121,7 +135,7 @@ type IsVipExpr struct {
 	Level int
 }
 
-func (i *IsVipExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+func (i *IsVipExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
 	return user.VIP >= i.Level, nil
 }
 
@@ -130,7 +144,7 @@ type BelongToExpr struct {
 	Org string
 }
 
-func (b *BelongToExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+func (b *BelongToExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
 	return user.Org == b.Org, nil
 }
 
@@ -144,7 +158,7 @@ type RechargeExpr struct {
 	}
 }
 
-func (r *RechargeExpr) Evaluate(user *models.UserInfo, gateway *aigateway.Client) (bool, error) {
+func (r *RechargeExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
 	var execute models.QuotaExecute
 	err := r.DB.Where("user = ? AND status = 'completed'", user.ID).First(&execute).Error()
 	return err == nil, nil
@@ -440,7 +454,7 @@ func (p *Parser) currentToken() string {
 }
 
 // CalcCondition calculate condition expression
-func CalcCondition(user *models.UserInfo, condition string, gateway *aigateway.Client) (bool, error) {
+func CalcCondition(user *models.UserInfo, condition string, ctx *EvaluationContext) (bool, error) {
 	if condition == "" {
 		return true, nil // Empty condition means unconditional execution
 	}
@@ -451,5 +465,5 @@ func CalcCondition(user *models.UserInfo, condition string, gateway *aigateway.C
 		return false, fmt.Errorf("failed to parse condition: %w", err)
 	}
 
-	return evaluator.Evaluate(user, gateway)
+	return evaluator.Evaluate(user, ctx)
 }

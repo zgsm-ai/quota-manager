@@ -15,16 +15,18 @@ import (
 )
 
 type StrategyService struct {
-	db      *database.DB
-	gateway *aigateway.Client
-	cron    *cron.Cron
+	db           *database.DB
+	gateway      *aigateway.Client
+	quotaQuerier condition.QuotaQuerier
+	cron         *cron.Cron
 }
 
 func NewStrategyService(db *database.DB, gateway *aigateway.Client) *StrategyService {
 	return &StrategyService{
-		db:      db,
-		gateway: gateway,
-		cron:    cron.New(),
+		db:           db,
+		gateway:      gateway,
+		quotaQuerier: condition.NewAiGatewayQuotaQuerier(gateway),
+		cron:         cron.New(),
 	}
 }
 
@@ -162,7 +164,10 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 		}
 
 		// Check condition
-		match, err := condition.CalcCondition(&user, latestStrategy.Condition, s.gateway)
+		ctx := &condition.EvaluationContext{
+			QuotaQuerier: s.quotaQuerier,
+		}
+		match, err := condition.CalcCondition(&user, latestStrategy.Condition, ctx)
 		if err != nil {
 			logger.Error("Failed to calculate condition",
 				zap.String("user", user.ID),

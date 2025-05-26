@@ -125,3 +125,13 @@ func (c *Client) DeltaQuota(consumer string, value int) error {
 
 	return nil
 }
+
+// QueryQuotaValue implements the QuotaQuerier interface
+// Returns only the quota value as an integer
+func (c *Client) QueryQuotaValue(userID string) (int, error) {
+	resp, err := c.QueryQuota(userID)
+	if err != nil {
+		return 0, err
+	}
+	return resp.Quota, nil
+}
