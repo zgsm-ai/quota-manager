@@ -1,176 +1,176 @@
-# 配额管理器集成测试
+# Quota Manager Integration Tests
 
-这个目录包含配额管理器的完整集成测试套件。
+This directory contains the complete integration test suite for the Quota Manager.
 
-## 测试覆盖范围
+## Test Coverage
 
-### 条件表达式测试
-- ✅ 空条件表达式
-- ✅ `match-user(user)` - 匹配特定用户
-- ✅ `register-before(timestamp)` - 注册时间早于指定时间
-- ✅ `access-after(timestamp)` - 最后访问时间晚于指定时间
-- ✅ `github-star(project)` - 是否星标指定项目
-- ✅ `quota-le(model, amount)` - 配额余额小于等于指定数量
-- ✅ `is-vip(level)` - VIP等级大于等于指定级别
-- ✅ `belong-to(org)` - 属于指定组织
-- ✅ `and(condition1, condition2)` - 逻辑与
-- ✅ `or(condition1, condition2)` - 逻辑或
-- ✅ `not(condition)` - 逻辑非
-- ✅ 复杂嵌套条件表达式
+### Condition Expression Tests
+- ✅ Empty condition expression
+- ✅ `match-user(user)` - Match specific user
+- ✅ `register-before(timestamp)` - Registration time before specified time
+- ✅ `access-after(timestamp)` - Last access time after specified time
+- ✅ `github-star(project)` - Whether starred the specified project
+- ✅ `quota-le(model, amount)` - Quota balance less than or equal to specified amount
+- ✅ `is-vip(level)` - VIP level greater than or equal to specified level
+- ✅ `belong-to(org)` - Belongs to specified organization
+- ✅ `and(condition1, condition2)` - Logical AND
+- ✅ `or(condition1, condition2)` - Logical OR
+- ✅ `not(condition)` - Logical NOT
+- ✅ Complex nested condition expressions
 
-### 策略类型测试
-- ✅ 单次充值策略（single） - 每个用户只执行一次
-- ✅ 定时充值策略（periodic） - 可重复执行
+### Strategy Type Tests
+- ✅ Single recharge strategy (single) - Execute once per user
+- ✅ Periodic recharge strategy (periodic) - Can be executed repeatedly
 
-### 策略状态测试
-- ✅ 启用状态策略执行
-- ✅ 禁用状态策略不执行
-- ✅ 动态启用/禁用策略
+### Strategy Status Tests
+- ✅ Enabled strategy execution
+- ✅ Disabled strategy non-execution
+- ✅ Dynamic enable/disable strategy
 
-### AiGateway集成测试
-- ✅ 正常请求处理
-- ✅ 请求失败处理和错误状态记录
+### AiGateway Integration Tests
+- ✅ Normal request handling
+- ✅ Request failure handling and error status recording
 
-### 批量处理测试
-- ✅ 多用户批量处理
-- ✅ 条件筛选和执行验证
+### Batch Processing Tests
+- ✅ Multi-user batch processing
+- ✅ Condition filtering and execution verification
 
-## 快速开始
+## Quick Start
 
-### 先决条件
+### Prerequisites
 
 1. **Go 1.21+**
 2. **PostgreSQL 12+**
-3. **数据库配置** - 确保PostgreSQL正在运行并且可以连接
+3. **Database Configuration** - Ensure PostgreSQL is running and accessible
 
-### 运行测试
+### Running Tests
 
-1. **使用脚本运行（推荐）**
+1. **Using Script (Recommended)**
    ```bash
    cd test
    chmod +x run_tests.sh
    ./run_tests.sh
    ```
 
-2. **手动运行**
+2. **Manual Run**
    ```bash
-   # 设置环境变量（可选）
+   # Set environment variables (optional)
    export POSTGRES_HOST=localhost
    export POSTGRES_PORT=5432
    export POSTGRES_USER=postgres
    export POSTGRES_PASSWORD=password
    export POSTGRES_DB=quota_manager
 
-   # 进入测试目录
+   # Enter test directory
    cd test
 
-   # 运行测试
+   # Run tests
    go run integration_main.go
    ```
 
-### 环境变量配置
+### Environment Variable Configuration
 
-| 变量 | 默认值 | 描述 |
-|-----|--------|------|
-| POSTGRES_HOST | localhost | PostgreSQL主机地址 |
-| POSTGRES_PORT | 5432 | PostgreSQL端口 |
-| POSTGRES_USER | postgres | 数据库用户名 |
-| POSTGRES_PASSWORD | password | 数据库密码 |
-| POSTGRES_DB | quota_manager | 数据库名称 |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| POSTGRES_HOST | localhost | PostgreSQL host address |
+| POSTGRES_PORT | 5432 | PostgreSQL port |
+| POSTGRES_USER | postgres | Database username |
+| POSTGRES_PASSWORD | password | Database password |
+| POSTGRES_DB | quota_manager | Database name |
 
-## 测试架构
+## Test Architecture
 
-### 测试上下文（TestContext）
-- **DB**: 数据库连接
-- **StrategyService**: 策略服务实例
-- **Gateway**: AiGateway客户端
-- **MockServer**: 成功的模拟服务器
-- **FailServer**: 失败的模拟服务器
+### Test Context (TestContext)
+- **DB**: Database connection
+- **StrategyService**: Strategy service instance
+- **Gateway**: AiGateway client
+- **MockServer**: Successful mock server
+- **FailServer**: Failure mock server
 
-### 模拟服务
-测试使用内置的HTTP模拟服务器来模拟AiGateway的行为：
-- **成功服务器**: 模拟正常的API响应
-- **失败服务器**: 模拟API失败情况
+### Mock Services
+Tests use built-in HTTP mock servers to simulate AiGateway behavior:
+- **Success Server**: Simulates normal API responses
+- **Failure Server**: Simulates API failure scenarios
 
-### 测试数据管理
-- 每个测试开始前清空数据库
-- 创建特定的测试用户和策略
-- 独立的配额存储模拟
+### Test Data Management
+- Clear database before each test
+- Create specific test users and strategies
+- Independent quota storage simulation
 
-## 测试流程
+## Test Process
 
-每个测试用例遵循以下流程：
+Each test case follows this process:
 
-1. **清空数据** - 确保测试环境干净
-2. **配置测试数据** - 创建必要的用户和策略
-3. **触发策略执行** - 调用策略服务执行策略
-4. **检查执行结果** - 验证数据库记录和状态
+1. **Clear Data** - Ensure clean test environment
+2. **Configure Test Data** - Create necessary users and strategies
+3. **Trigger Strategy Execution** - Call strategy service to execute strategy
+4. **Check Execution Results** - Verify database records and status
 
-## 输出示例
+## Output Example
 
 ```
-=== 配额管理器集成测试 ===
-运行测试: 清空数据测试
-✅ 清空数据测试 - 通过 (0.05s)
-运行测试: 条件表达式-空条件测试
-✅ 条件表达式-空条件测试 - 通过 (0.03s)
-运行测试: 条件表达式-match-user测试
-✅ 条件表达式-match-user测试 - 通过 (0.02s)
+=== Quota Manager Integration Tests ===
+Running test: Clear Data Test
+✅ Clear Data Test - Passed (0.05s)
+Running test: Condition Expression-Empty Condition Test
+✅ Condition Expression-Empty Condition Test - Passed (0.03s)
+Running test: Condition Expression-Match User Test
+✅ Condition Expression-Match User Test - Passed (0.02s)
 ...
 
-=== 测试结果摘要 ===
-总测试数: 18
-通过测试: 18
-失败测试: 0
-总耗时: 2.45s
-成功率: 100.0%
+=== Test Results Summary ===
+Total tests: 18
+Passed tests: 18
+Failed tests: 0
+Total duration: 2.45s
+Success rate: 100.0%
 
-🎉 所有测试都通过了！
+🎉 All tests passed!
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 常见问题
+### Common Issues
 
-1. **数据库连接失败**
-   - 检查PostgreSQL是否运行
-   - 验证环境变量设置
-   - 检查数据库用户权限
+1. **Database Connection Failure**
+   - Check if PostgreSQL is running
+   - Verify environment variable settings
+   - Check database user permissions
 
-2. **端口占用**
-   - 测试使用动态端口分配，通常不会有冲突
-   - 如果出现问题，重启测试即可
+2. **Port Conflicts**
+   - Tests use dynamic port allocation, usually no conflicts
+   - If issues occur, restart the test
 
-3. **依赖问题**
-   - 运行 `go mod tidy` 更新依赖
-   - 检查Go版本是否满足要求
+3. **Dependency Issues**
+   - Run `go mod tidy` to update dependencies
+   - Check if Go version meets requirements
 
-### 调试模式
+### Debug Mode
 
-可以在测试代码中添加更多日志输出来调试问题：
+Add more log output in test code to debug issues:
 
 ```go
-// 在测试函数中添加调试信息
-fmt.Printf("调试信息: %+v\n", result)
+// Add debug information in test functions
+fmt.Printf("Debug info: %+v\n", result)
 ```
 
-## 扩展测试
+## Extending Tests
 
-### 添加新的条件表达式测试
+### Adding New Condition Expression Tests
 
-1. 在 `integration_main.go` 中添加新的测试函数
-2. 按照现有模式创建测试数据
-3. 执行策略并验证结果
-4. 在 `runAllTests` 中注册新测试
+1. Add new test function in `integration_main.go`
+2. Create test data following existing patterns
+3. Execute strategy and verify results
+4. Register new test in `runAllTests`
 
-### 添加新的策略类型测试
+### Adding New Strategy Type Tests
 
-1. 创建相应的测试策略
-2. 验证特定的执行逻辑
-3. 检查数据库状态变化
+1. Create corresponding test strategy
+2. Verify specific execution logic
+3. Check database state changes
 
-## 性能考虑
+## Performance Considerations
 
-- 测试使用短间隔的定时策略（每分钟）以减少测试时间
-- 批量测试限制用户数量（10个）以保持测试速度
-- 模拟服务器在内存中运行，避免网络延迟
+- Tests use short-interval periodic strategies (every minute) to reduce test time
+- Batch tests limit user count (10) to maintain test speed
+- Mock servers run in memory to avoid network latency

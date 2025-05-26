@@ -138,14 +138,14 @@ func (s *StrategyService) shouldExecutePeriodic(strategy *models.QuotaStrategy) 
 
 // ExecStrategy executes a strategy
 func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []models.UserInfo) {
-	// 从数据库中获取最新的策略状态
+	// Get the latest strategy status from the database
 	var latestStrategy models.QuotaStrategy
 	if err := s.db.First(&latestStrategy, strategy.ID).Error; err != nil {
 		logger.Error("Failed to get latest strategy status", zap.Error(err))
 		return
 	}
 
-	// 使用最新的策略状态进行检查
+	// Use the latest strategy status for checking
 	if !latestStrategy.IsEnabled() {
 		logger.Warn("Skipping disabled strategy", zap.String("strategy", latestStrategy.Name))
 		return
@@ -189,7 +189,7 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 	var count int64
 
-	// 首先检查是否有已完成的记录
+	// First check if there is a completed record
 	err := s.db.Model(&models.QuotaExecute{}).
 		Where("strategy_id = ? AND user_id = ? AND status = ?",
 			strategyID, userID, "completed").
@@ -204,7 +204,7 @@ func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 		return true
 	}
 
-	// 如果没有已完成的记录，检查当前批次中的处理中记录
+	// If there is no completed record, check for processing records in the current batch
 	currentBatch := s.generateBatchNumber()
 	err = s.db.Model(&models.QuotaExecute{}).
 		Where("strategy_id = ? AND user_id = ? AND status = ? AND batch_number = ?",
@@ -221,7 +221,7 @@ func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 
 // executeRecharge executes recharge
 func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *models.UserInfo, batchNumber string) error {
-	// 再次检查策略状态
+	// Check strategy status again
 	var latestStrategy models.QuotaStrategy
 	if err := s.db.First(&latestStrategy, strategy.ID).Error; err != nil {
 		return fmt.Errorf("failed to get latest strategy status: %w", err)
@@ -273,13 +273,13 @@ func (s *StrategyService) generateBatchNumber() string {
 
 // CreateStrategy creates a strategy
 func (s *StrategyService) CreateStrategy(strategy *models.QuotaStrategy) error {
-	// 使用 GORM 的默认值机制
-	// Status 字段已在模型中定义了 default:true
+	// Use GORM's default value mechanism
+	// The Status field is already defined as default:true in the model
 	if err := s.db.Create(strategy).Error; err != nil {
 		return fmt.Errorf("failed to create strategy: %w", err)
 	}
 
-	// 重新从数据库加载策略以获取默认值
+	// Reload the strategy from the database to get the default value
 	return s.db.First(strategy, strategy.ID).Error
 }
 

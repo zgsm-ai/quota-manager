@@ -309,7 +309,7 @@ func (p *Parser) parseFunction() (Evaluator, error) {
 	}
 	p.pos++ // consume '('
 
-	// 特殊处理逻辑运算符函数
+	// Special handling for logical operator functions
 	if funcName == "and" || funcName == "or" || funcName == "not" {
 		var args []Evaluator
 		for p.pos < len(p.tokens) && p.tokens[p.pos] != ")" {
@@ -348,7 +348,7 @@ func (p *Parser) parseFunction() (Evaluator, error) {
 		}
 	}
 
-	// 处理普通函数
+	// Handle regular functions
 	var args []string
 	for p.pos < len(p.tokens) && p.tokens[p.pos] != ")" {
 		if p.tokens[p.pos] == "," {

@@ -17,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TestContext 测试上下文
+// TestContext test context
 type TestContext struct {
 	DB              *database.DB
 	StrategyService *services.StrategyService
@@ -26,7 +26,7 @@ type TestContext struct {
 	FailServer      *httptest.Server
 }
 
-// TestResult 测试结果
+// TestResult test result
 type TestResult struct {
 	TestName string
 	Passed   bool
@@ -34,7 +34,7 @@ type TestResult struct {
 	Duration time.Duration
 }
 
-// MockQuotaStore 模拟配额存储
+// MockQuotaStore mock quota storage
 type MockQuotaStore struct {
 	data map[string]int
 }
@@ -58,54 +58,54 @@ func (m *MockQuotaStore) DeltaQuota(consumer string, delta int) int {
 var mockStore = &MockQuotaStore{data: make(map[string]int)}
 
 func main() {
-	fmt.Println("=== 配额管理器集成测试 ===")
+	fmt.Println("=== Quota Manager Integration Tests ===")
 
-	// 初始化测试环境
+	// Initialize test environment
 	ctx, err := setupTestEnvironment()
 	if err != nil {
 		log.Fatalf("Failed to setup test environment: %v", err)
 	}
 	defer cleanupTestEnvironment(ctx)
 
-	// 运行所有测试
+	// Run all tests
 	results := runAllTests(ctx)
 
-	// 输出测试结果
+	// Print test results
 	printTestResults(results)
 }
 
-// setupTestEnvironment 设置测试环境
+// setupTestEnvironment setup test environment
 func setupTestEnvironment() (*TestContext, error) {
-	// 初始化日志
+	// Initialize logger
 	logger.Init()
 
-	// 加载配置
+	// Load configuration
 	cfg, err := config.LoadConfig("config.yaml")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// 连接数据库
+	// Connect to database
 	db, err := database.NewDB(&cfg.Database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
-	// 自动迁移
+	// Auto migrate
 	if err := models.AutoMigrate(db.DB); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	// 创建成功的mock服务器
+	// Create successful mock server
 	mockServer := createMockServer(false)
 
-	// 创建失败的mock服务器
+	// Create failure mock server
 	failServer := createMockServer(true)
 
-	// 创建AiGateway客户端
+	// Create AiGateway client
 	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions", "credential3")
 
-	// 创建策略服务
+	// Create strategy service
 	strategyService := services.NewStrategyService(db, gateway)
 
 	return &TestContext{
@@ -117,12 +117,12 @@ func setupTestEnvironment() (*TestContext, error) {
 	}, nil
 }
 
-// createMockServer 创建模拟服务器
+// createMockServer create mock server
 func createMockServer(shouldFail bool) *httptest.Server {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
-	// 中间件：验证Authorization
+	// Middleware: validate Authorization
 	authMiddleware := func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
 		if auth != "Bearer credential3" {
@@ -182,7 +182,7 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			// 模拟增加配额
+			// Simulate quota increase
 			var delta int
 			if _, err := fmt.Sscanf(value, "%d", &delta); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid value"})
@@ -202,7 +202,7 @@ func createMockServer(shouldFail bool) *httptest.Server {
 	return httptest.NewServer(router)
 }
 
-// cleanupTestEnvironment 清理测试环境
+// cleanupTestEnvironment cleanup test environment
 func cleanupTestEnvironment(ctx *TestContext) {
 	if ctx.MockServer != nil {
 		ctx.MockServer.Close()
@@ -212,37 +212,37 @@ func cleanupTestEnvironment(ctx *TestContext) {
 	}
 }
 
-// runAllTests 运行所有测试
+// runAllTests run all tests
 func runAllTests(ctx *TestContext) []TestResult {
 	var results []TestResult
 
-	// 测试用例列表
+	// Test case list
 	testCases := []struct {
 		name string
 		fn   func(*TestContext) TestResult
 	}{
-		{"清空数据测试", testClearData},
-		{"条件表达式-空条件测试", testEmptyCondition},
-		{"条件表达式-match-user测试", testMatchUserCondition},
-		{"条件表达式-register-before测试", testRegisterBeforeCondition},
-		{"条件表达式-access-after测试", testAccessAfterCondition},
-		{"条件表达式-github-star测试", testGithubStarCondition},
-		{"条件表达式-quota-le测试", testQuotaLECondition},
-		{"条件表达式-is-vip测试", testIsVipCondition},
-		{"条件表达式-belong-to测试", testBelongToCondition},
-		{"条件表达式-and嵌套测试", testAndCondition},
-		{"条件表达式-or嵌套测试", testOrCondition},
-		{"条件表达式-not嵌套测试", testNotCondition},
-		{"条件表达式-复杂嵌套测试", testComplexCondition},
-		{"单次充值策略测试", testSingleTypeStrategy},
-		{"定时充值策略测试", testPeriodicTypeStrategy},
-		{"策略状态控制测试", testStrategyStatusControl},
-		{"AiGateway请求失败测试", testAiGatewayFailure},
-		{"批量用户处理测试", testBatchUserProcessing},
+		{"Clear Data Test", testClearData},
+		{"Condition Expression - Empty Condition Test", testEmptyCondition},
+		{"Condition Expression - Match User Test", testMatchUserCondition},
+		{"Condition Expression - Register Before Test", testRegisterBeforeCondition},
+		{"Condition Expression - Access After Test", testAccessAfterCondition},
+		{"Condition Expression - Github Star Test", testGithubStarCondition},
+		{"Condition Expression - Quota LE Test", testQuotaLECondition},
+		{"Condition Expression - Is VIP Test", testIsVipCondition},
+		{"Condition Expression - Belong To Test", testBelongToCondition},
+		{"Condition Expression - AND Nesting Test", testAndCondition},
+		{"Condition Expression - OR Nesting Test", testOrCondition},
+		{"Condition Expression - NOT Nesting Test", testNotCondition},
+		{"Condition Expression - Complex Nesting Test", testComplexCondition},
+		{"Single Recharge Strategy Test", testSingleTypeStrategy},
+		{"Periodic Recharge Strategy Test", testPeriodicTypeStrategy},
+		{"Strategy Status Control Test", testStrategyStatusControl},
+		{"AiGateway Request Failure Test", testAiGatewayFailure},
+		{"Batch User Processing Test", testBatchUserProcessing},
 	}
 
 	for _, tc := range testCases {
-		fmt.Printf("运行测试: %s\n", tc.name)
+		fmt.Printf("Running test: %s\n", tc.name)
 		start := time.Now()
 		result := tc.fn(ctx)
 		result.Duration = time.Since(start)
@@ -259,25 +259,25 @@ func runAllTests(ctx *TestContext) []TestResult {
 	return results
 }
 
-// testClearData 测试清空数据
+// testClearData test clear data
 func testClearData(ctx *TestContext) TestResult {
-	// 清空所有表
+	// Clear all tables
 	tables := []string{"quota_execute", "quota_strategy", "user_info"}
 	for _, table := range tables {
 		if err := ctx.DB.Exec("DELETE FROM " + table).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("清空表 %s 失败: %v", table, err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
 		}
 	}
 
-	// 重置mock存储
+	// Reset mock storage
 	mockStore.data = make(map[string]int)
 
-	return TestResult{Passed: true, Message: "数据清空成功"}
+	return TestResult{Passed: true, Message: "Data cleared successfully"}
 }
 
-// testEmptyCondition 测试空条件表达式
+// testEmptyCondition test empty condition expression
 func testEmptyCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test user
 	user := &models.UserInfo{
 		ID:           "test_user_empty",
 		Name:         "Test User Empty",
@@ -285,41 +285,41 @@ func testEmptyCondition(ctx *TestContext) TestResult {
 		AccessTime:   time.Now().Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
-	// 创建空条件策略
+	// Create empty condition strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "empty-condition-test",
-		Title:     "空条件测试",
+		Title:     "Empty Condition Test",
 		Type:      "single",
 		Amount:    10,
 		Model:     "test-model",
-		Condition: "", // 空条件
+		Condition: "", // Empty condition
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	users := []models.UserInfo{*user}
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
-	// 检查执行结果
+	// Check execution result
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "空条件策略执行成功"}
+	return TestResult{Passed: true, Message: "Empty condition strategy execution succeeded"}
 }
 
-// testMatchUserCondition 测试match-user条件
+// testMatchUserCondition test match-user condition
 func testMatchUserCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_match_1",
@@ -337,14 +337,14 @@ func testMatchUserCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建match-user策略，只匹配第一个用户
+	// Create match-user strategy, only match the first user
 	strategy := &models.QuotaStrategy{
 		Name:      "match-user-test",
-		Title:     "匹配用户测试",
+		Title:     "Match User Test",
 		Type:      "single",
 		Amount:    15,
 		Model:     "test-model",
@@ -352,63 +352,63 @@ func testMatchUserCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查执行结果 - 只有user_match_1应该被执行
+	// Check execution result - only user_match_1 should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_match_1").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("user_match_1期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("user_match_1 expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查user_match_2不应该被执行
+	// Check user_match_2 should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_match_2").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("user_match_2期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("user_match_2 expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "match-user条件测试成功"}
+	return TestResult{Passed: true, Message: "match-user condition test succeeded"}
 }
 
-// testRegisterBeforeCondition 测试register-before条件
+// testRegisterBeforeCondition test register-before condition
 func testRegisterBeforeCondition(ctx *TestContext) TestResult {
-	// 使用固定的时间点
+	// Use fixed time point
 	baseTime, _ := time.Parse("2006-01-02 15:04:05", "2025-01-01 12:00:00")
 	cutoffTime := baseTime
 
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_reg_before",
 			Name:         "Early User",
-			RegisterTime: baseTime.Add(-time.Hour * 2), // 在截止时间之前注册
+			RegisterTime: baseTime.Add(-time.Hour * 2), // Register before cutoff time
 			AccessTime:   baseTime,
 		},
 		{
 			ID:           "user_reg_after",
 			Name:         "Late User",
-			RegisterTime: baseTime.Add(time.Hour * 2), // 在截止时间之后注册
+			RegisterTime: baseTime.Add(time.Hour * 2), // Register after cutoff time
 			AccessTime:   baseTime,
 		},
 	}
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建register-before策略
+	// Create register-before strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "register-before-test",
-		Title:     "注册时间测试",
+		Title:     "Register Time Test",
 		Type:      "single",
 		Amount:    20,
 		Model:     "test-model",
@@ -416,63 +416,63 @@ func testRegisterBeforeCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查早期用户应该被执行
+	// Check early user should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_reg_before").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("早期用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Early user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查晚期用户不应该被执行
+	// Check late user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_reg_after").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("晚期用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Late user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "register-before条件测试成功"}
+	return TestResult{Passed: true, Message: "register-before condition test succeeded"}
 }
 
-// testAccessAfterCondition 测试access-after条件
+// testAccessAfterCondition test access-after condition
 func testAccessAfterCondition(ctx *TestContext) TestResult {
-	// 使用固定的时间点
+	// Use fixed time point
 	baseTime, _ := time.Parse("2006-01-02 15:04:05", "2025-01-01 12:00:00")
 	cutoffTime := baseTime
 
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_access_recent",
 			Name:         "Recent User",
 			RegisterTime: baseTime.Add(-time.Hour * 24),
-			AccessTime:   baseTime.Add(time.Hour * 2), // 在截止时间之后访问
+			AccessTime:   baseTime.Add(time.Hour * 2), // Access after cutoff time
 		},
 		{
 			ID:           "user_access_old",
 			Name:         "Old User",
 			RegisterTime: baseTime.Add(-time.Hour * 24),
-			AccessTime:   baseTime.Add(-time.Hour * 2), // 在截止时间之前访问
+			AccessTime:   baseTime.Add(-time.Hour * 2), // Access before cutoff time
 		},
 	}
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建access-after策略
+	// Create access-after strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "access-after-test",
-		Title:     "最近访问测试",
+		Title:     "Recent Access Test",
 		Type:      "single",
 		Amount:    25,
 		Model:     "test-model",
@@ -480,34 +480,34 @@ func testAccessAfterCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查最近访问用户应该被执行
+	// Check recent access user should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_access_recent").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("最近访问用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Recent access user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查旧访问用户不应该被执行
+	// Check old access user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_access_old").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("旧访问用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Old access user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "access-after条件测试成功"}
+	return TestResult{Passed: true, Message: "access-after condition test succeeded"}
 }
 
-// testGithubStarCondition 测试github-star条件
+// testGithubStarCondition test github-star condition
 func testGithubStarCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_star_yes",
@@ -534,14 +534,14 @@ func testGithubStarCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建github-star策略
+	// Create github-star strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "github-star-test",
-		Title:     "GitHub星标测试",
+		Title:     "GitHub Star Test",
 		Type:      "single",
 		Amount:    30,
 		Model:     "test-model",
@@ -549,41 +549,41 @@ func testGithubStarCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查有星标用户应该被执行
+	// Check starred user should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_star_yes").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("有星标用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Starred user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查无星标用户不应该被执行
+	// Check non-starred user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_star_no").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("无星标用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Non-starred user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	// 检查空星标用户不应该被执行
+	// Check empty starred user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_star_empty").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("空星标用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Empty starred user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "github-star条件测试成功"}
+	return TestResult{Passed: true, Message: "github-star condition test succeeded"}
 }
 
-// testQuotaLECondition 测试quota-le条件
+// testQuotaLECondition test quota-le condition
 func testQuotaLECondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_quota_low",
@@ -601,18 +601,18 @@ func testQuotaLECondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 设置mock配额
-	mockStore.SetQuota("user_quota_low", 5)   // 低配额
-	mockStore.SetQuota("user_quota_high", 50) // 高配额
+	// Set mock quota
+	mockStore.SetQuota("user_quota_low", 5)   // Low quota
+	mockStore.SetQuota("user_quota_high", 50) // High quota
 
-	// 创建quota-le策略
+	// Create quota-le strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "quota-le-test",
-		Title:     "配额低于测试",
+		Title:     "Quota Less Than Test",
 		Type:      "single",
 		Amount:    35,
 		Model:     "test-model",
@@ -620,34 +620,34 @@ func testQuotaLECondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查低配额用户应该被执行
+	// Check low quota user should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_quota_low").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("低配额用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Low quota user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查高配额用户不应该被执行
+	// Check high quota user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_quota_high").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("高配额用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("High quota user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "quota-le条件测试成功"}
+	return TestResult{Passed: true, Message: "quota-le condition test succeeded"}
 }
 
-// testIsVipCondition 测试is-vip条件
+// testIsVipCondition test is-vip condition
 func testIsVipCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_vip_high",
@@ -674,14 +674,14 @@ func testIsVipCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建is-vip策略
+	// Create is-vip strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "is-vip-test",
-		Title:     "VIP等级测试",
+		Title:     "VIP Level Test",
 		Type:      "single",
 		Amount:    40,
 		Model:     "test-model",
@@ -689,41 +689,41 @@ func testIsVipCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查高VIP用户应该被执行
+	// Check high VIP user should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_vip_high").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("高VIP用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("High VIP user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查等于VIP用户应该被执行
+	// Check equal VIP user should be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_vip_equal").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("等于VIP用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Equal VIP user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查低VIP用户不应该被执行
+	// Check low VIP user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_vip_low").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("低VIP用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Low VIP user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "is-vip条件测试成功"}
+	return TestResult{Passed: true, Message: "is-vip condition test succeeded"}
 }
 
-// testBelongToCondition 测试belong-to条件
+// testBelongToCondition test belong-to condition
 func testBelongToCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_org_target",
@@ -750,14 +750,14 @@ func testBelongToCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建belong-to策略
+	// Create belong-to strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "belong-to-test",
-		Title:     "组织归属测试",
+		Title:     "Organization Belonging Test",
 		Type:      "single",
 		Amount:    45,
 		Model:     "test-model",
@@ -765,41 +765,41 @@ func testBelongToCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查目标组织用户应该被执行
+	// Check target organization user should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_org_target").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("目标组织用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Target organization user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查其他组织用户不应该被执行
+	// Check other organization user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_org_other").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("其他组织用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Other organization user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	// 检查无组织用户不应该被执行
+	// Check no organization user should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_org_empty").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("无组织用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("No organization user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "belong-to条件测试成功"}
+	return TestResult{Passed: true, Message: "belong-to condition test succeeded"}
 }
 
-// testAndCondition 测试and嵌套条件
+// testAndCondition test and nesting condition
 func testAndCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_and_both",
@@ -829,14 +829,14 @@ func testAndCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建and条件策略
+	// Create and condition strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "and-condition-test",
-		Title:     "AND条件测试",
+		Title:     "AND Condition Test",
 		Type:      "single",
 		Amount:    50,
 		Model:     "test-model",
@@ -844,41 +844,41 @@ func testAndCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查同时满足两个条件的用户应该被执行
+	// Check users simultaneously satisfying both conditions should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_and_both").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("同时满足条件用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Users simultaneously satisfying conditions expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查只满足VIP条件的用户不应该被执行
+	// Check users satisfying only VIP condition should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_and_vip_only").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("只满足VIP条件用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only VIP condition expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	// 检查只满足星标条件的用户不应该被执行
+	// Check users satisfying only star condition should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_and_star_only").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("只满足星标条件用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only star condition expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "and条件测试成功"}
+	return TestResult{Passed: true, Message: "and condition test succeeded"}
 }
 
-// testOrCondition 测试or嵌套条件
+// testOrCondition test or nesting condition
 func testOrCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_or_both",
@@ -916,14 +916,14 @@ func testOrCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建or条件策略
+	// Create or condition strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "or-condition-test",
-		Title:     "OR条件测试",
+		Title:     "OR Condition Test",
 		Type:      "single",
 		Amount:    55,
 		Model:     "test-model",
@@ -931,48 +931,48 @@ func testOrCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1], *users[2], *users[3]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查同时满足两个条件的用户应该被执行
+	// Check users simultaneously satisfying both conditions should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_both").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("同时满足条件用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Users simultaneously satisfying conditions expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查只满足VIP条件的用户应该被执行
+	// Check users satisfying only VIP condition should be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_vip_only").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("只满足VIP条件用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only VIP condition expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查只满足组织条件的用户应该被执行
+	// Check users satisfying only organization condition should be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_org_only").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("只满足组织条件用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only organization condition expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查都不满足条件的用户不应该被执行
+	// Check users not satisfying any condition should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_neither").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("都不满足条件用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Users not satisfying any condition expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "or条件测试成功"}
+	return TestResult{Passed: true, Message: "or condition test succeeded"}
 }
 
-// testNotCondition 测试not嵌套条件
+// testNotCondition test not nesting condition
 func testNotCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_not_vip",
@@ -992,14 +992,14 @@ func testNotCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建not条件策略
+	// Create not condition strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "not-condition-test",
-		Title:     "NOT条件测试",
+		Title:     "NOT Condition Test",
 		Type:      "single",
 		Amount:    60,
 		Model:     "test-model",
@@ -1007,34 +1007,34 @@ func testNotCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查VIP用户不应该被执行（被NOT排除）
+	// Check VIP user should not be executed (excluded by NOT)
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_not_vip").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("VIP用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("VIP user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	// 检查普通用户应该被执行
+	// Check normal user should be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_not_normal").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("普通用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Normal user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "not条件测试成功"}
+	return TestResult{Passed: true, Message: "not condition test succeeded"}
 }
 
-// testComplexCondition 测试复杂嵌套条件
+// testComplexCondition test complex nesting condition
 func testComplexCondition(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test users
 	users := []*models.UserInfo{
 		{
 			ID:           "user_complex_match1",
@@ -1067,15 +1067,15 @@ func testComplexCondition(ctx *TestContext) TestResult {
 
 	for _, user := range users {
 		if err := ctx.DB.Create(user).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// 创建复杂嵌套条件策略
+	// Create complex nesting condition strategy
 	// (is-vip(3) AND github-star("zgsm")) OR (register-before("2024-01-01 00:00:00") AND belong-to("org002"))
 	strategy := &models.QuotaStrategy{
 		Name:      "complex-condition-test",
-		Title:     "复杂条件测试",
+		Title:     "Complex Condition Test",
 		Type:      "single",
 		Amount:    65,
 		Model:     "test-model",
@@ -1083,41 +1083,41 @@ func testComplexCondition(ctx *TestContext) TestResult {
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查匹配第一个条件的用户应该被执行
+	// Check user satisfying first condition should be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_complex_match1").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("匹配第一个条件用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User satisfying first condition expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查匹配第二个条件的用户应该被执行
+	// Check user satisfying second condition should be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_complex_match2").Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("匹配第二个条件用户期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User satisfying second condition expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 检查不匹配任何条件的用户不应该被执行
+	// Check user not satisfying any condition should not be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_complex_no_match").Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("不匹配条件用户期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User not satisfying any condition expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "复杂条件测试成功"}
+	return TestResult{Passed: true, Message: "complex condition test succeeded"}
 }
 
-// testSingleTypeStrategy 测试单次充值策略
+// testSingleTypeStrategy test single recharge strategy
 func testSingleTypeStrategy(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test user
 	user := &models.UserInfo{
 		ID:           "user_single_test",
 		Name:         "Single Test User",
@@ -1125,51 +1125,51 @@ func testSingleTypeStrategy(ctx *TestContext) TestResult {
 		AccessTime:   time.Now().Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
-	// 创建单次充值策略
+	// Create single recharge strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "single-type-test",
-		Title:     "单次充值测试",
+		Title:     "Single Recharge Test",
 		Type:      "single",
 		Amount:    70,
 		Model:     "test-model",
-		Condition: "", // 空条件，所有用户都匹配
+		Condition: "", // Empty condition, all users match
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 第一次执行策略
+	// First execute strategy
 	users := []models.UserInfo{*user}
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
-	// 检查第一次执行结果
+	// Check first execution result
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("第一次执行期望1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("First execution expected 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 第二次执行策略（应该被跳过，因为已经执行过）
+	// Second execute strategy (should be skipped because it has already been executed)
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
-	// 检查第二次执行后的结果（应该仍然是1次）
+	// Check second execution result (should still be 1 time)
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("单次策略重复执行，期望仍然是1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Single strategy repeated execution, expected still 1 time, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "单次充值策略测试成功"}
+	return TestResult{Passed: true, Message: "Single Recharge Strategy Test Succeeded"}
 }
 
-// testPeriodicTypeStrategy 测试定时充值策略
+// testPeriodicTypeStrategy test periodic recharge strategy
 func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test user
 	user := &models.UserInfo{
 		ID:           "user_periodic_test",
 		Name:         "Periodic Test User",
@@ -1177,53 +1177,53 @@ func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
 		AccessTime:   time.Now().Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
-	// 创建定时充值策略（每分钟执行一次，方便测试）
+	// Create periodic recharge strategy (execute every minute for testing)
 	strategy := &models.QuotaStrategy{
 		Name:         "periodic-type-test",
-		Title:        "定时充值测试",
+		Title:        "Periodic Recharge Test",
 		Type:         "periodic",
 		Amount:       75,
 		Model:        "test-model",
-		PeriodicExpr: "* * * * *", // 每分钟执行一次
-		Condition:    "",          // 空条件，所有用户都匹配
+		PeriodicExpr: "* * * * *", // Execute every minute
+		Condition:    "",          // Empty condition, all users match
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 第一次执行策略
+	// First execute strategy
 	users := []models.UserInfo{*user}
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
-	// 检查第一次执行结果
+	// Check first execution result
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("第一次执行期望1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("First execution expected 1 time, actually executed %d times", executeCount)}
 	}
 
-	// 等待2秒后再次执行策略（定时策略可以重复执行）
+	// Wait 2 seconds before executing strategy again (periodic strategy can be repeated)
 	time.Sleep(2 * time.Second)
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
-	// 检查第二次执行后的结果（应该是2次）
+	// Check second execution result (should be 2 times)
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
 
 	if executeCount != 2 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("定时策略重复执行，期望2次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Periodic strategy repeated execution, expected 2 times, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "定时充值策略测试成功"}
+	return TestResult{Passed: true, Message: "Periodic Recharge Strategy Test Succeeded"}
 }
 
-// testStrategyStatusControl 测试策略状态控制
+// testStrategyStatusControl test strategy status control
 func testStrategyStatusControl(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test user
 	user := &models.UserInfo{
 		ID:           "user_status_test",
 		Name:         "Status Test User",
@@ -1231,60 +1231,60 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 		AccessTime:   time.Now().Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
-	// 创建禁用的策略
+	// Create disabled strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "status-control-test",
-		Title:     "状态控制测试",
+		Title:     "Status Control Test",
 		Type:      "single",
 		Amount:    80,
 		Model:     "test-model",
-		Condition: "", // 空条件
+		Condition: "", // Empty condition
 	}
-	// 先创建策略
+	// First create strategy
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
-	// 然后禁用它
+	// Then disable it
 	if err := ctx.StrategyService.DisableStrategy(strategy.ID); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("禁用策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Disable strategy failed: %v", err)}
 	}
 
-	// 执行禁用的策略
+	// Execute disabled strategy
 	users := []models.UserInfo{*user}
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
-	// 检查禁用策略不应该被执行
+	// Check disabled strategy should not be executed
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("禁用策略期望执行0次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Disabled strategy expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
-	// 启用策略
+	// Enable strategy
 	if err := ctx.StrategyService.EnableStrategy(strategy.ID); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("启用策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Enable strategy failed: %v", err)}
 	}
 
-	// 再次执行策略
+	// Execute strategy again
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
-	// 检查启用后策略应该被执行
+	// Check enabled strategy should be executed
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("启用策略期望执行1次，实际执行%d次", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Enabled strategy expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "策略状态控制测试成功"}
+	return TestResult{Passed: true, Message: "Strategy Status Control Test Succeeded"}
 }
 
-// testAiGatewayFailure 测试AiGateway请求失败
+// testAiGatewayFailure test AiGateway request failure
 func testAiGatewayFailure(ctx *TestContext) TestResult {
-	// 创建测试用户
+	// Create test user
 	user := &models.UserInfo{
 		ID:           "user_gateway_fail",
 		Name:         "Gateway Fail User",
@@ -1292,94 +1292,94 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 		AccessTime:   time.Now().Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建用户失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
-	// 创建使用失败网关的策略服务
+	// Create strategy service using failed gateway
 	failGateway := aigateway.NewClient(ctx.FailServer.URL, "/v1/chat/completions", "credential3")
 	failStrategyService := services.NewStrategyService(ctx.DB, failGateway)
 
-	// 创建策略
+	// Create strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "gateway-failure-test",
-		Title:     "网关失败测试",
+		Title:     "Gateway Failure Test",
 		Type:      "single",
 		Amount:    85,
 		Model:     "test-model",
-		Condition: "", // 空条件
+		Condition: "", // Empty condition
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 使用失败的网关执行策略
+	// Execute strategy using failed gateway
 	users := []models.UserInfo{*user}
 	failStrategyService.ExecStrategy(strategy, users)
 
-	// 检查执行记录存在但状态为失败
+	// Check execution record exists but status is failed
 	var execute models.QuotaExecute
 	err := ctx.DB.Where("strategy_id = ? AND user_id = ? AND status = 'failed'", strategy.ID, user.ID).First(&execute).Error
 
 	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("未找到执行记录: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Execution record not found: %v", err)}
 	}
 
 	if execute.Status != "failed" {
-		return TestResult{Passed: false, Message: fmt.Sprintf("期望状态为failed，实际状态为%s", execute.Status)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected status failed, actual status %s", execute.Status)}
 	}
 
-	return TestResult{Passed: true, Message: "AiGateway失败测试成功"}
+	return TestResult{Passed: true, Message: "Gateway Failure Test Succeeded"}
 }
 
-// testBatchUserProcessing 测试批量用户处理
+// testBatchUserProcessing test batch user processing
 func testBatchUserProcessing(ctx *TestContext) TestResult {
-	// 创建多个测试用户
+	// Create multiple test users
 	users := make([]*models.UserInfo, 10)
 	for i := 0; i < 10; i++ {
 		users[i] = &models.UserInfo{
 			ID:           fmt.Sprintf("batch_user_%03d", i),
 			Name:         fmt.Sprintf("Batch User %d", i),
-			VIP:          i % 4, // VIP等级0-3
+			VIP:          i % 4, // VIP level 0-3
 			RegisterTime: time.Now().Add(-time.Hour * 24),
 			AccessTime:   time.Now().Add(-time.Hour * 1),
 		}
 		if err := ctx.DB.Create(users[i]).Error; err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("创建用户%d失败: %v", i, err)}
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user%d failed: %v", i, err)}
 		}
 	}
 
-	// 创建VIP用户策略
+	// Create VIP user strategy
 	strategy := &models.QuotaStrategy{
 		Name:      "batch-processing-test",
-		Title:     "批量处理测试",
+		Title:     "Batch Processing Test",
 		Type:      "single",
 		Amount:    90,
 		Model:     "test-model",
-		Condition: `is-vip(2)`, // VIP等级>=2的用户
+		Condition: `is-vip(2)`, // VIP level >=2 users
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("创建策略失败: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
 	}
 
-	// 执行策略
+	// Execute strategy
 	userList := make([]models.UserInfo, len(users))
 	for i, user := range users {
 		userList[i] = *user
 	}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// 检查执行结果 - 应该有4个用户被执行（VIP等级2和3的用户）
+	// Check execution result - should be 4 users executed (VIP level 2 and 3 users)
 	var executeCount int64
 	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND status = 'completed'", strategy.ID).Count(&executeCount)
 
-	expectedCount := int64(4) // VIP等级2,3的用户各2个，共4个
+	expectedCount := int64(4) // VIP level 2,3 users each 2 times, total 4
 	if executeCount != expectedCount {
-		return TestResult{Passed: false, Message: fmt.Sprintf("批量处理期望执行%d次，实际执行%d次", expectedCount, executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Batch processing expected execution %d times, actually executed %d times", expectedCount, executeCount)}
 	}
 
-	// 验证具体执行的用户
+	// Verify specific executed users
 	var executes []models.QuotaExecute
 	ctx.DB.Where("strategy_id = ?", strategy.ID).Find(&executes)
 
@@ -1388,7 +1388,7 @@ func testBatchUserProcessing(ctx *TestContext) TestResult {
 		executedUsers[exec.User] = true
 	}
 
-	// 检查VIP>=2的用户都被执行了
+	// Check VIP>=2 users should be executed
 	for _, user := range users {
 		shouldExecute := user.VIP >= 2
 		wasExecuted := executedUsers[user.ID]
@@ -1396,17 +1396,17 @@ func testBatchUserProcessing(ctx *TestContext) TestResult {
 		if shouldExecute != wasExecuted {
 			return TestResult{
 				Passed:  false,
-				Message: fmt.Sprintf("用户%s VIP%d，期望执行:%v，实际执行:%v", user.ID, user.VIP, shouldExecute, wasExecuted),
+				Message: fmt.Sprintf("User%s VIP%d, expected execution:%v, actual execution:%v", user.ID, user.VIP, shouldExecute, wasExecuted),
 			}
 		}
 	}
 
-	return TestResult{Passed: true, Message: "批量用户处理测试成功"}
+	return TestResult{Passed: true, Message: "Batch User Processing Test Succeeded"}
 }
 
-// printTestResults 打印测试结果
+// printTestResults print test results
 func printTestResults(results []TestResult) {
-	fmt.Println("\n=== 测试结果摘要 ===")
+	fmt.Println("\n=== Test Results Summary ===")
 
 	totalTests := len(results)
 	passedTests := 0
@@ -1419,20 +1419,20 @@ func printTestResults(results []TestResult) {
 		totalDuration += result.Duration
 	}
 
-	fmt.Printf("总测试数: %d\n", totalTests)
-	fmt.Printf("通过测试: %d\n", passedTests)
-	fmt.Printf("失败测试: %d\n", totalTests-passedTests)
-	fmt.Printf("总耗时: %.2fs\n", totalDuration.Seconds())
-	fmt.Printf("成功率: %.1f%%\n", float64(passedTests)/float64(totalTests)*100)
+	fmt.Printf("Total tests: %d\n", totalTests)
+	fmt.Printf("Passed tests: %d\n", passedTests)
+	fmt.Printf("Failed tests: %d\n", totalTests-passedTests)
+	fmt.Printf("Total duration: %.2fs\n", totalDuration.Seconds())
+	fmt.Printf("Success rate: %.1f%%\n", float64(passedTests)/float64(totalTests)*100)
 
 	if passedTests != totalTests {
-		fmt.Println("\n失败的测试:")
+		fmt.Println("\nFailed tests:")
 		for _, result := range results {
 			if !result.Passed {
 				fmt.Printf("❌ %s: %s\n", result.TestName, result.Message)
 			}
 		}
 	} else {
-		fmt.Println("\n所有测试都通过了！")
+		fmt.Println("\nAll tests passed!")
 	}
 }
