@@ -54,8 +54,8 @@ func (s *VoucherService) GenerateVoucher(data *VoucherData) (string, error) {
 	// Generate HMAC signature
 	signature := s.generateSignature(jsonData)
 
-	// Combine JSON and signature
-	combined := string(jsonData) + "." + hex.EncodeToString(signature)
+	// Combine JSON and signature with "|" separator
+	combined := string(jsonData) + "|" + hex.EncodeToString(signature)
 
 	// Base64URL encode
 	voucherCode := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString([]byte(combined))
@@ -71,8 +71,8 @@ func (s *VoucherService) ValidateAndDecodeVoucher(voucherCode string) (*VoucherD
 		return nil, fmt.Errorf("failed to decode voucher code: %w", err)
 	}
 
-	// Split by "."
-	parts := strings.Split(string(decoded), ".")
+	// Split by "|"
+	parts := strings.Split(string(decoded), "|")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid voucher code format")
 	}

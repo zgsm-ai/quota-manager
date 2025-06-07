@@ -307,7 +307,7 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Strategy Status Control Test", testStrategyStatusControl},
 		{"AiGateway Request Failure Test", testAiGatewayFailure},
 		{"Batch User Processing Test", testBatchUserProcessing},
-		// {"Voucher Generation and Validation Test", testVoucherGenerationAndValidation},
+		{"Voucher Generation and Validation Test", testVoucherGenerationAndValidation},
 		// {"Quota Transfer Out Test", testQuotaTransferOut},
 		// {"Quota Transfer In Test", testQuotaTransferIn},
 		// {"Quota Expiry Test", testQuotaExpiry},
