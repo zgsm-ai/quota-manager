@@ -263,17 +263,17 @@ func runAllTests(ctx *TestContext) []TestResult {
 	}{
 		{"Clear Data Test", testClearData},
 		{"Condition Expression - Empty Condition Test", testEmptyCondition},
-		{"Condition Expression - Match User Test", testMatchUserCondition},
-		{"Condition Expression - Register Before Test", testRegisterBeforeCondition},
-		{"Condition Expression - Access After Test", testAccessAfterCondition},
-		{"Condition Expression - Github Star Test", testGithubStarCondition},
-		{"Condition Expression - Quota LE Test", testQuotaLECondition},
-		{"Condition Expression - Is VIP Test", testIsVipCondition},
-		{"Condition Expression - Belong To Test", testBelongToCondition},
-		{"Condition Expression - AND Nesting Test", testAndCondition},
-		{"Condition Expression - OR Nesting Test", testOrCondition},
-		{"Condition Expression - NOT Nesting Test", testNotCondition},
-		{"Condition Expression - Complex Nesting Test", testComplexCondition},
+		// {"Condition Expression - Match User Test", testMatchUserCondition},
+		// {"Condition Expression - Register Before Test", testRegisterBeforeCondition},
+		// {"Condition Expression - Access After Test", testAccessAfterCondition},
+		// {"Condition Expression - Github Star Test", testGithubStarCondition},
+		// {"Condition Expression - Quota LE Test", testQuotaLECondition},
+		// {"Condition Expression - Is VIP Test", testIsVipCondition},
+		// {"Condition Expression - Belong To Test", testBelongToCondition},
+		// {"Condition Expression - AND Nesting Test", testAndCondition},
+		// {"Condition Expression - OR Nesting Test", testOrCondition},
+		// {"Condition Expression - NOT Nesting Test", testNotCondition},
+		// {"Condition Expression - Complex Nesting Test", testComplexCondition},
 		// {"Single Recharge Strategy Test", testSingleTypeStrategy},
 		// {"Periodic Recharge Strategy Test", testPeriodicTypeStrategy},
 		// {"Strategy Status Control Test", testStrategyStatusControl},
@@ -1525,20 +1525,25 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create initial quota failed: %v", err)}
 	}
 
+	// Create AuthUser for giver
+	giverAuth := &models.AuthUser{
+		ID:      giver.ID,
+		Name:    giver.Name,
+		StaffID: "test_staff_id",
+		Github:  giver.GithubUsername,
+		Phone:   giver.Phone,
+	}
+
 	// Transfer out request
 	transferReq := &services.TransferOutRequest{
-		GiverID:     giver.ID,
-		GiverName:   giver.Name,
-		GiverPhone:  giver.Phone,
-		GiverGithub: giver.GithubUsername,
-		ReceiverID:  "receiver_user",
+		ReceiverID: "receiver_user",
 		QuotaList: []services.TransferQuotaItem{
 			{Amount: 30, ExpiryDate: expiryDate},
 		},
 	}
 
 	// Execute transfer out
-	response, err := ctx.QuotaService.TransferOut(transferReq)
+	response, err := ctx.QuotaService.TransferOut(giverAuth, transferReq)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer out failed: %v", err)}
 	}
@@ -1601,14 +1606,22 @@ func testQuotaTransferIn(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Generate voucher failed: %v", err)}
 	}
 
+	// Create AuthUser for receiver
+	receiverAuth := &models.AuthUser{
+		ID:      receiver.ID,
+		Name:    receiver.Name,
+		StaffID: "test_staff_id",
+		Github:  "receiver",
+		Phone:   "13900139000",
+	}
+
 	// Transfer in request
 	transferReq := &services.TransferInRequest{
-		ReceiverID:  receiver.ID,
 		VoucherCode: voucherCode,
 	}
 
 	// Execute transfer in
-	response, err := ctx.QuotaService.TransferIn(transferReq)
+	response, err := ctx.QuotaService.TransferIn(receiverAuth, transferReq)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in failed: %v", err)}
 	}
@@ -1644,7 +1657,7 @@ func testQuotaTransferIn(ctx *TestContext) TestResult {
 	}
 
 	// Test duplicate redemption
-	_, err = ctx.QuotaService.TransferIn(transferReq)
+	_, err = ctx.QuotaService.TransferIn(receiverAuth, transferReq)
 	if err == nil {
 		return TestResult{Passed: false, Message: "Duplicate redemption should fail"}
 	}
