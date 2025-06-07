@@ -7,14 +7,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
-	"time"
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/handlers"
 	"quota-manager/internal/services"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -55,17 +55,21 @@ func main() {
 	)
 
 	// Initialize services
-	strategyService := services.NewStrategyService(db, gateway)
+	voucherService := services.NewVoucherService(cfg.Voucher.SigningKey)
+	quotaService := services.NewQuotaService(db.DB, &cfg.AiGateway, voucherService)
+	strategyService := services.NewStrategyService(db, gateway, quotaService)
+	schedulerService := services.NewSchedulerService(quotaService, strategyService)
 
-	// Start strategy scan service
-	if err := strategyService.Start(); err != nil {
-		logger.Error("Failed to start strategy service", zap.Error(err))
-		log.Fatalf("Failed to start strategy service: %v", err)
+	// Start scheduler service (includes strategy scan)
+	if err := schedulerService.Start(); err != nil {
+		logger.Error("Failed to start scheduler service", zap.Error(err))
+		log.Fatalf("Failed to start scheduler service: %v", err)
 	}
-	defer strategyService.Stop()
+	defer schedulerService.Stop()
 
 	// Initialize HTTP handlers
 	strategyHandler := handlers.NewStrategyHandler(strategyService)
+	quotaHandler := handlers.NewQuotaHandler(quotaService)
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)
@@ -78,9 +82,10 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Strategy management API
+	// API routes
 	v1 := router.Group("/api/v1")
 	{
+		// Strategy management API
 		strategies := v1.Group("/strategies")
 		{
 			strategies.POST("", strategyHandler.CreateStrategy)
@@ -96,6 +101,9 @@ func main() {
 			// Manually trigger strategy scan
 			strategies.POST("/scan", strategyHandler.TriggerScan)
 		}
+
+		// Quota management API
+		handlers.RegisterQuotaRoutes(v1, quotaHandler)
 	}
 
 	// Start HTTP server

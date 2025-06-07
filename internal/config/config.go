@@ -11,6 +11,7 @@ type Config struct {
 	AiGateway AiGatewayConfig `mapstructure:"aigateway"`
 	Server    ServerConfig    `mapstructure:"server"`
 	Scheduler SchedulerConfig `mapstructure:"scheduler"`
+	Voucher   VoucherConfig   `mapstructure:"voucher"`
 }
 
 type DatabaseConfig struct {
@@ -36,6 +37,10 @@ type ServerConfig struct {
 
 type SchedulerConfig struct {
 	ScanInterval string `mapstructure:"scan_interval"`
+}
+
+type VoucherConfig struct {
+	SigningKey string `mapstructure:"signing_key"`
 }
 
 func (d *DatabaseConfig) DSN() string {
