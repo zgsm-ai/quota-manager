@@ -31,8 +31,9 @@ type AiGatewayConfig struct {
 }
 
 type ServerConfig struct {
-	Port int    `mapstructure:"port"`
-	Mode string `mapstructure:"mode"`
+	Port        int    `mapstructure:"port"`
+	Mode        string `mapstructure:"mode"`
+	TokenHeader string `mapstructure:"token_header"`
 }
 
 type SchedulerConfig struct {

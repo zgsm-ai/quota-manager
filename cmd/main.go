@@ -69,7 +69,7 @@ func main() {
 
 	// Initialize HTTP handlers
 	strategyHandler := handlers.NewStrategyHandler(strategyService)
-	quotaHandler := handlers.NewQuotaHandler(quotaService)
+	quotaHandler := handlers.NewQuotaHandler(quotaService, &cfg.Server)
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)

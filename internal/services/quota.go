@@ -45,22 +45,18 @@ type QuotaDetailItem struct {
 
 // QuotaAuditRecord represents quota audit record
 type QuotaAuditRecord struct {
-	Amount      int        `json:"amount"`
-	Operation   string     `json:"operation"`
-	Description string     `json:"description"`
-	VoucherCode string     `json:"voucher_code,omitempty"`
-	ExpiryDate  *time.Time `json:"expiry_date,omitempty"`
-	CreateTime  time.Time  `json:"create_time"`
+	Amount      int       `json:"amount"`
+	Operation   string    `json:"operation"`
+	VoucherCode string    `json:"voucher_code,omitempty"`
+	RelatedUser string    `json:"related_user,omitempty"`
+	ExpiryDate  time.Time `json:"expiry_date"`
+	CreateTime  time.Time `json:"create_time"`
 }
 
 // TransferOutRequest represents transfer out request
 type TransferOutRequest struct {
-	GiverID     string              `json:"giver_id"`
-	GiverName   string              `json:"giver_name"`
-	GiverPhone  string              `json:"giver_phone"`
-	GiverGithub string              `json:"giver_github"`
-	ReceiverID  string              `json:"receiver_id"`
-	QuotaList   []TransferQuotaItem `json:"quota_list"`
+	ReceiverID string              `json:"receiver_id"`
+	QuotaList  []TransferQuotaItem `json:"quota_list"`
 }
 
 // TransferQuotaItem represents quota item for transfer
@@ -71,13 +67,14 @@ type TransferQuotaItem struct {
 
 // TransferOutResponse represents transfer out response
 type TransferOutResponse struct {
-	VoucherCode string `json:"voucher_code"`
-	Description string `json:"description"`
+	VoucherCode string              `json:"voucher_code"`
+	RelatedUser string              `json:"related_user"`
+	Operation   string              `json:"operation"`
+	QuotaList   []TransferQuotaItem `json:"quota_list"`
 }
 
 // TransferInRequest represents transfer in request
 type TransferInRequest struct {
-	ReceiverID  string `json:"receiver_id"`
 	VoucherCode string `json:"voucher_code"`
 }
 
@@ -89,7 +86,9 @@ type TransferInResponse struct {
 	GiverGithub string                `json:"giver_github"`
 	ReceiverID  string                `json:"receiver_id"`
 	QuotaList   []TransferQuotaResult `json:"quota_list"`
-	Description string                `json:"description"`
+	VoucherCode string                `json:"voucher_code"`
+	Operation   string                `json:"operation"`
+	Amount      int                   `json:"amount"`
 }
 
 // TransferQuotaResult represents transfer quota result
@@ -168,8 +167,8 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 		result[i] = QuotaAuditRecord{
 			Amount:      record.Amount,
 			Operation:   record.Operation,
-			Description: record.Description,
 			VoucherCode: record.VoucherCode,
+			RelatedUser: record.RelatedUser,
 			ExpiryDate:  record.ExpiryDate,
 			CreateTime:  record.CreateTime,
 		}
@@ -179,7 +178,7 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 }
 
 // TransferOut handles quota transfer out
-func (s *QuotaService) TransferOut(req *TransferOutRequest) (*TransferOutResponse, error) {
+func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutRequest) (*TransferOutResponse, error) {
 	// Start transaction
 	tx := s.db.Begin()
 	defer func() {
@@ -192,7 +191,7 @@ func (s *QuotaService) TransferOut(req *TransferOutRequest) (*TransferOutRespons
 	for _, quotaItem := range req.QuotaList {
 		var quota models.Quota
 		if err := tx.Where("user_id = ? AND expiry_date = ? AND status = ?",
-			req.GiverID, quotaItem.ExpiryDate, models.StatusValid).First(&quota).Error; err != nil {
+			giver.ID, quotaItem.ExpiryDate, models.StatusValid).First(&quota).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("quota not found for expiry date %v", quotaItem.ExpiryDate)
 		}
@@ -206,20 +205,18 @@ func (s *QuotaService) TransferOut(req *TransferOutRequest) (*TransferOutRespons
 
 	// Generate voucher code
 	voucherQuotaList := make([]VoucherQuotaItem, len(req.QuotaList))
-	totalAmount := 0
 	for i, item := range req.QuotaList {
 		voucherQuotaList[i] = VoucherQuotaItem{
 			Amount:     item.Amount,
 			ExpiryDate: item.ExpiryDate,
 		}
-		totalAmount += item.Amount
 	}
 
 	voucherData := &VoucherData{
-		GiverID:     req.GiverID,
-		GiverName:   req.GiverName,
-		GiverPhone:  req.GiverPhone,
-		GiverGithub: req.GiverGithub,
+		GiverID:     giver.ID,
+		GiverName:   giver.Name,
+		GiverPhone:  giver.Phone,
+		GiverGithub: giver.Github,
 		ReceiverID:  req.ReceiverID,
 		QuotaList:   voucherQuotaList,
 	}
@@ -234,30 +231,27 @@ func (s *QuotaService) TransferOut(req *TransferOutRequest) (*TransferOutRespons
 	for _, quotaItem := range req.QuotaList {
 		if err := tx.Model(&models.Quota{}).
 			Where("user_id = ? AND expiry_date = ? AND status = ?",
-				req.GiverID, quotaItem.ExpiryDate, models.StatusValid).
+				giver.ID, quotaItem.ExpiryDate, models.StatusValid).
 			Update("amount", gorm.Expr("amount - ?", quotaItem.Amount)).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update quota: %w", err)
 		}
 	}
 
-	// Generate description
-	var quotaDetails []string
+	// Calculate total amount for audit record
+	totalAmount := 0
 	for _, item := range req.QuotaList {
-		quotaDetails = append(quotaDetails, fmt.Sprintf("%d Credit将在%s到期",
-			item.Amount, item.ExpiryDate.Format("2006年1月2日")))
+		totalAmount += item.Amount
 	}
-	description := fmt.Sprintf("您给用户%s转出总共%d Credit，兑换码:%s，其中%s",
-		req.ReceiverID, totalAmount, voucherCode, strings.Join(quotaDetails, "，"))
 
 	// Record audit log
 	auditRecord := &models.QuotaAudit{
-		UserID:      req.GiverID,
+		UserID:      giver.ID,
 		Amount:      -totalAmount,
 		Operation:   models.OperationTransferOut,
-		Description: description,
 		VoucherCode: voucherCode,
 		RelatedUser: req.ReceiverID,
+		ExpiryDate:  req.QuotaList[0].ExpiryDate, // Use first expiry date for audit
 	}
 	if err := tx.Create(auditRecord).Error; err != nil {
 		tx.Rollback()
@@ -265,7 +259,7 @@ func (s *QuotaService) TransferOut(req *TransferOutRequest) (*TransferOutRespons
 	}
 
 	// Update AiGateway quota
-	if err := s.deltaQuotaInAiGateway(req.GiverID, -totalAmount); err != nil {
+	if err := s.deltaQuotaInAiGateway(giver.ID, -totalAmount); err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to update AiGateway quota: %w", err)
 	}
@@ -274,27 +268,29 @@ func (s *QuotaService) TransferOut(req *TransferOutRequest) (*TransferOutRespons
 
 	return &TransferOutResponse{
 		VoucherCode: voucherCode,
-		Description: description,
+		RelatedUser: req.ReceiverID,
+		Operation:   models.OperationTransferOut,
+		QuotaList:   req.QuotaList,
 	}, nil
 }
 
 // TransferIn handles quota transfer in
-func (s *QuotaService) TransferIn(req *TransferInRequest) (*TransferInResponse, error) {
-	// Validate and decode voucher
+func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequest) (*TransferInResponse, error) {
+	// Validate voucher
 	voucherData, err := s.voucherSvc.ValidateAndDecodeVoucher(req.VoucherCode)
 	if err != nil {
 		return nil, fmt.Errorf("invalid voucher code: %w", err)
 	}
 
-	// Check if receiver ID matches
-	if voucherData.ReceiverID != req.ReceiverID {
-		return nil, fmt.Errorf("receiver ID mismatch")
+	// Check if voucher is for the correct receiver
+	if voucherData.ReceiverID != receiver.ID {
+		return nil, fmt.Errorf("voucher is not for this user")
 	}
 
-	// Check if voucher has been redeemed
-	var redemption models.VoucherRedemption
-	if err := s.db.Where("voucher_code = ?", req.VoucherCode).First(&redemption).Error; err == nil {
-		return nil, fmt.Errorf("voucher code has already been redeemed")
+	// Check if voucher has already been redeemed
+	var existingRedemption models.VoucherRedemption
+	if err := s.db.Where("voucher_code = ?", req.VoucherCode).First(&existingRedemption).Error; err == nil {
+		return nil, fmt.Errorf("voucher has already been redeemed")
 	}
 
 	// Start transaction
@@ -305,100 +301,73 @@ func (s *QuotaService) TransferIn(req *TransferInRequest) (*TransferInResponse, 
 		}
 	}()
 
-	// Filter valid quotas and calculate amounts
-	now := time.Now()
-	validQuotas := make([]TransferQuotaResult, 0)
-	expiredQuotas := make([]TransferQuotaResult, 0)
-	totalValidAmount := 0
-	totalExpiredAmount := 0
+	// Record redemption to prevent duplicate usage
+	redemption := &models.VoucherRedemption{
+		VoucherCode: req.VoucherCode,
+		ReceiverID:  receiver.ID,
+	}
+	if err := tx.Create(redemption).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to record voucher redemption: %w", err)
+	}
 
-	for _, quotaItem := range voucherData.QuotaList {
-		isExpired := now.After(quotaItem.ExpiryDate)
-		result := TransferQuotaResult{
+	totalAmount := 0
+	quotaResults := make([]TransferQuotaResult, len(voucherData.QuotaList))
+
+	// Process quota transfer
+	for i, quotaItem := range voucherData.QuotaList {
+		isExpired := time.Now().After(quotaItem.ExpiryDate)
+		quotaResults[i] = TransferQuotaResult{
 			Amount:     quotaItem.Amount,
 			ExpiryDate: quotaItem.ExpiryDate,
 			IsExpired:  isExpired,
 		}
 
-		if isExpired {
-			expiredQuotas = append(expiredQuotas, result)
-			totalExpiredAmount += quotaItem.Amount
-		} else {
-			validQuotas = append(validQuotas, result)
-			totalValidAmount += quotaItem.Amount
+		// Only process valid quota
+		if !isExpired {
+			var existingQuota models.Quota
+			if err := tx.Where("user_id = ? AND expiry_date = ? AND status = ?",
+				receiver.ID, quotaItem.ExpiryDate, models.StatusValid).First(&existingQuota).Error; err != nil {
+				// Create new quota record
+				newQuota := &models.Quota{
+					UserID:     receiver.ID,
+					Amount:     quotaItem.Amount,
+					ExpiryDate: quotaItem.ExpiryDate,
+					Status:     models.StatusValid,
+				}
+				if err := tx.Create(newQuota).Error; err != nil {
+					tx.Rollback()
+					return nil, fmt.Errorf("failed to create quota: %w", err)
+				}
+			} else {
+				// Update existing quota
+				if err := tx.Model(&existingQuota).Update("amount", existingQuota.Amount+quotaItem.Amount).Error; err != nil {
+					tx.Rollback()
+					return nil, fmt.Errorf("failed to update quota: %w", err)
+				}
+			}
 
-			// Add quota to receiver
-			quota := &models.Quota{
-				UserID:     req.ReceiverID,
-				Amount:     quotaItem.Amount,
-				ExpiryDate: quotaItem.ExpiryDate,
-				Status:     models.StatusValid,
+			// Record audit log for valid quota
+			auditRecord := &models.QuotaAudit{
+				UserID:      receiver.ID,
+				Amount:      quotaItem.Amount,
+				Operation:   models.OperationTransferIn,
+				VoucherCode: req.VoucherCode,
+				RelatedUser: voucherData.GiverID,
+				ExpiryDate:  quotaItem.ExpiryDate,
 			}
-			if err := tx.Create(quota).Error; err != nil {
+			if err := tx.Create(auditRecord).Error; err != nil {
 				tx.Rollback()
-				return nil, fmt.Errorf("failed to create quota: %w", err)
+				return nil, fmt.Errorf("failed to create audit record: %w", err)
 			}
+
+			totalAmount += quotaItem.Amount
 		}
 	}
 
-	allQuotas := append(validQuotas, expiredQuotas...)
-
-	// Generate description
-	var validDetails []string
-	var expiredDetails []string
-
-	for _, quota := range validQuotas {
-		validDetails = append(validDetails, fmt.Sprintf("%d Credit将在%s到期",
-			quota.Amount, quota.ExpiryDate.Format("2006年1月2日")))
-	}
-
-	for _, quota := range expiredQuotas {
-		expiredDetails = append(expiredDetails, fmt.Sprintf("%d Credit已在%s过期",
-			quota.Amount, quota.ExpiryDate.Format("2006年1月2日")))
-	}
-
-	descParts := []string{
-		fmt.Sprintf("由用户%s给您转入总共%d Credit", voucherData.GiverName, totalValidAmount+totalExpiredAmount),
-		fmt.Sprintf("兑换码:%s", req.VoucherCode),
-	}
-
-	if len(validDetails) > 0 {
-		descParts = append(descParts, fmt.Sprintf("其中有效Credit:%d(%s)", totalValidAmount, strings.Join(validDetails, "，")))
-	}
-
-	if len(expiredDetails) > 0 {
-		descParts = append(descParts, fmt.Sprintf("失效Credit:%d(%s)", totalExpiredAmount, strings.Join(expiredDetails, "，")))
-	}
-
-	description := strings.Join(descParts, "，")
-
-	// Record audit log
-	auditRecord := &models.QuotaAudit{
-		UserID:      req.ReceiverID,
-		Amount:      totalValidAmount,
-		Operation:   models.OperationTransferIn,
-		Description: description,
-		VoucherCode: req.VoucherCode,
-		RelatedUser: voucherData.GiverID,
-	}
-	if err := tx.Create(auditRecord).Error; err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to create audit record: %w", err)
-	}
-
-	// Record voucher redemption
-	redemptionRecord := &models.VoucherRedemption{
-		VoucherCode: req.VoucherCode,
-		ReceiverID:  req.ReceiverID,
-	}
-	if err := tx.Create(redemptionRecord).Error; err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to create redemption record: %w", err)
-	}
-
-	// Update AiGateway quota
-	if totalValidAmount > 0 {
-		if err := s.deltaQuotaInAiGateway(req.ReceiverID, totalValidAmount); err != nil {
+	// Update AiGateway quota only for valid quota
+	if totalAmount > 0 {
+		if err := s.deltaQuotaInAiGateway(receiver.ID, totalAmount); err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update AiGateway quota: %w", err)
 		}
@@ -411,9 +380,11 @@ func (s *QuotaService) TransferIn(req *TransferInRequest) (*TransferInResponse, 
 		GiverName:   voucherData.GiverName,
 		GiverPhone:  voucherData.GiverPhone,
 		GiverGithub: voucherData.GiverGithub,
-		ReceiverID:  voucherData.ReceiverID,
-		QuotaList:   allQuotas,
-		Description: description,
+		ReceiverID:  receiver.ID,
+		QuotaList:   quotaResults,
+		VoucherCode: req.VoucherCode,
+		Operation:   models.OperationTransferIn,
+		Amount:      totalAmount,
 	}, nil
 }
 
@@ -467,14 +438,12 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyNa
 		}
 	}
 
-	// Record audit log
-	description := fmt.Sprintf("策略执行充值: %s", strategyName)
+	// Record audit log only if it's not expired yet
 	auditRecord := &models.QuotaAudit{
-		UserID:      userID,
-		Amount:      amount,
-		Operation:   models.OperationRecharge,
-		Description: description,
-		ExpiryDate:  &expiryDate,
+		UserID:     userID,
+		Amount:     amount,
+		Operation:  models.OperationRecharge,
+		ExpiryDate: expiryDate,
 	}
 	if err := tx.Create(auditRecord).Error; err != nil {
 		tx.Rollback()

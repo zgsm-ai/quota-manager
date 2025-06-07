@@ -15,6 +15,7 @@ aigateway:
 server:
   port: 8099
   mode: "debug"
+  token_header: "authorization"
 
 scheduler:
   scan_interval: "0 0 * * * *" # Scan every hour

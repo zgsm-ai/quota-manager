@@ -1,10 +1,65 @@
 package models
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// AuthUser struct for parsing user info from JWT
+type AuthUser struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	StaffID string `json:"staffID"`
+	Github  string `json:"github"`
+	Phone   string `json:"phone"`
+}
+
+// parseUserInfoFromToken parses user info from JWT token
+func ParseUserInfoFromToken(accessToken string) (*AuthUser, error) {
+	// Remove "Bearer " prefix if present
+	if strings.HasPrefix(accessToken, "Bearer ") {
+		accessToken = accessToken[7:]
+	}
+
+	// Split JWT token into parts
+	parts := strings.Split(accessToken, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode payload (second part)
+	payload := parts[1]
+	// Add padding if needed
+	if m := len(payload) % 4; m != 0 {
+		payload += strings.Repeat("=", 4-m)
+	}
+
+	payloadBytes, err := base64.URLEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	// Parse claims
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JWT claims: %w", err)
+	}
+
+	// Extract user ID
+	var userInfo AuthUser
+	if id, ok := claims["id"].(string); ok {
+		userInfo.ID = id
+	} else {
+		return nil, fmt.Errorf("user ID not found in JWT token")
+	}
+
+	return &userInfo, nil
+}
 
 // QuotaStrategy strategy table structure
 type QuotaStrategy struct {
@@ -62,21 +117,20 @@ type Quota struct {
 
 // QuotaAudit quota change audit log
 type QuotaAudit struct {
-	ID          int        `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID      string     `gorm:"not null;index;size:255" json:"user_id"`
-	Amount      int        `gorm:"not null" json:"amount"`                  // positive or negative
-	Operation   string     `gorm:"not null;index;size:50" json:"operation"` // RECHARGE/TRANSFER_IN/TRANSFER_OUT
-	Description string     `gorm:"type:text" json:"description"`
-	VoucherCode string     `gorm:"uniqueIndex;size:255" json:"voucher_code,omitempty"`
-	RelatedUser string     `gorm:"size:255" json:"related_user,omitempty"`
-	ExpiryDate  *time.Time `json:"expiry_date,omitempty"`
-	CreateTime  time.Time  `gorm:"autoCreateTime;index" json:"create_time"`
+	ID          int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID      string    `gorm:"not null;index;size:255" json:"user_id"`
+	Amount      int       `gorm:"not null" json:"amount"`                  // positive or negative
+	Operation   string    `gorm:"not null;index;size:50" json:"operation"` // RECHARGE/TRANSFER_IN/TRANSFER_OUT
+	VoucherCode string    `gorm:"uniqueIndex;size:1000" json:"voucher_code,omitempty"`
+	RelatedUser string    `gorm:"size:255" json:"related_user,omitempty"`
+	ExpiryDate  time.Time `gorm:"not null" json:"expiry_date"`
+	CreateTime  time.Time `gorm:"autoCreateTime;index" json:"create_time"`
 }
 
 // VoucherRedemption track redeemed vouchers to prevent duplicate redemption
 type VoucherRedemption struct {
 	ID          int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	VoucherCode string    `gorm:"uniqueIndex;not null;size:255" json:"voucher_code"`
+	VoucherCode string    `gorm:"uniqueIndex;not null;size:1000" json:"voucher_code"`
 	ReceiverID  string    `gorm:"not null;size:255" json:"receiver_id"`
 	CreateTime  time.Time `gorm:"autoCreateTime" json:"create_time"`
 }
