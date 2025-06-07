@@ -121,7 +121,7 @@ type QuotaAudit struct {
 	UserID      string    `gorm:"not null;index;size:255" json:"user_id"`
 	Amount      int       `gorm:"not null" json:"amount"`                  // positive or negative
 	Operation   string    `gorm:"not null;index;size:50" json:"operation"` // RECHARGE/TRANSFER_IN/TRANSFER_OUT
-	VoucherCode string    `gorm:"uniqueIndex;size:1000" json:"voucher_code,omitempty"`
+	VoucherCode string    `gorm:"index;size:1000" json:"voucher_code,omitempty"`
 	RelatedUser string    `gorm:"size:255" json:"related_user,omitempty"`
 	ExpiryDate  time.Time `gorm:"not null" json:"expiry_date"`
 	CreateTime  time.Time `gorm:"autoCreateTime;index" json:"create_time"`

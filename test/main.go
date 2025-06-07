@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"time"
 
 	"quota-manager/internal/config"
@@ -104,12 +107,37 @@ func setupTestEnvironment() (*TestContext, error) {
 	// Create failure mock server
 	failServer := createMockServer(true)
 
-	// Create AiGateway client
+	// Create AiGateway client with mock server URL
 	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions", "credential3")
+
+	// Create mock AiGateway config for QuotaService
+	mockAiGatewayConfig := &config.AiGatewayConfig{
+		Host:       "127.0.0.1", // This will be overridden by the URL parsing
+		Port:       8080,        // This will be overridden by the URL parsing
+		AdminPath:  "/v1/chat/completions",
+		Credential: "credential3",
+	}
+
+	// Override the BaseURL method behavior by setting the host and port from mockServer URL
+	// Parse the mock server URL to get host and port
+	parsedURL, err := url.Parse(mockServer.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse mock server URL: %w", err)
+	}
+	host, portStr, err := net.SplitHostPort(parsedURL.Host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to split host and port: %w", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse port: %w", err)
+	}
+	mockAiGatewayConfig.Host = host
+	mockAiGatewayConfig.Port = port
 
 	// Create services
 	voucherService := services.NewVoucherService("test-signing-key-at-least-32-bytes-long")
-	quotaService := services.NewQuotaService(db.DB, &cfg.AiGateway, voucherService)
+	quotaService := services.NewQuotaService(db.DB, mockAiGatewayConfig, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService)
 
 	return &TestContext{
@@ -263,20 +291,20 @@ func runAllTests(ctx *TestContext) []TestResult {
 	}{
 		{"Clear Data Test", testClearData},
 		{"Condition Expression - Empty Condition Test", testEmptyCondition},
-		// {"Condition Expression - Match User Test", testMatchUserCondition},
-		// {"Condition Expression - Register Before Test", testRegisterBeforeCondition},
-		// {"Condition Expression - Access After Test", testAccessAfterCondition},
-		// {"Condition Expression - Github Star Test", testGithubStarCondition},
-		// {"Condition Expression - Quota LE Test", testQuotaLECondition},
-		// {"Condition Expression - Is VIP Test", testIsVipCondition},
-		// {"Condition Expression - Belong To Test", testBelongToCondition},
-		// {"Condition Expression - AND Nesting Test", testAndCondition},
-		// {"Condition Expression - OR Nesting Test", testOrCondition},
-		// {"Condition Expression - NOT Nesting Test", testNotCondition},
-		// {"Condition Expression - Complex Nesting Test", testComplexCondition},
-		// {"Single Recharge Strategy Test", testSingleTypeStrategy},
-		// {"Periodic Recharge Strategy Test", testPeriodicTypeStrategy},
-		// {"Strategy Status Control Test", testStrategyStatusControl},
+		{"Condition Expression - Match User Test", testMatchUserCondition},
+		{"Condition Expression - Register Before Test", testRegisterBeforeCondition},
+		{"Condition Expression - Access After Test", testAccessAfterCondition},
+		{"Condition Expression - Github Star Test", testGithubStarCondition},
+		{"Condition Expression - Quota LE Test", testQuotaLECondition},
+		{"Condition Expression - Is VIP Test", testIsVipCondition},
+		{"Condition Expression - Belong To Test", testBelongToCondition},
+		{"Condition Expression - AND Nesting Test", testAndCondition},
+		{"Condition Expression - OR Nesting Test", testOrCondition},
+		{"Condition Expression - NOT Nesting Test", testNotCondition},
+		{"Condition Expression - Complex Nesting Test", testComplexCondition},
+		{"Single Recharge Strategy Test", testSingleTypeStrategy},
+		{"Periodic Recharge Strategy Test", testPeriodicTypeStrategy},
+		{"Strategy Status Control Test", testStrategyStatusControl},
 		// {"AiGateway Request Failure Test", testAiGatewayFailure},
 		// {"Batch User Processing Test", testBatchUserProcessing},
 		// {"Voucher Generation and Validation Test", testVoucherGenerationAndValidation},
