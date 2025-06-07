@@ -114,24 +114,33 @@ func (s *QuotaService) GetUserQuota(userID string) (*QuotaInfo, error) {
 
 	// Get quota list from database
 	var quotas []models.Quota
-	if err := s.db.Where("user_id = ? AND status = ?", userID, models.StatusValid).Find(&quotas).Error; err != nil {
+	if err := s.db.Where("user_id = ? AND status = ?", userID, models.StatusValid).
+		Order("expiry_date ASC").Find(&quotas).Error; err != nil {
 		return nil, fmt.Errorf("failed to get quota list: %w", err)
 	}
 
-	// Group quotas by expiry date
-	quotaMap := make(map[string]int)
-	for _, quota := range quotas {
-		key := quota.ExpiryDate.Format("2006-01-02T15:04:05Z")
-		quotaMap[key] += quota.Amount
-	}
+	// Calculate remaining quotas considering used quota
+	quotaList := make([]QuotaDetailItem, 0)
+	remainingUsed := usedQuota
 
-	quotaList := make([]QuotaDetailItem, 0, len(quotaMap))
-	for dateStr, amount := range quotaMap {
-		expiryDate, _ := time.Parse("2006-01-02T15:04:05Z", dateStr)
-		quotaList = append(quotaList, QuotaDetailItem{
-			Amount:     amount,
-			ExpiryDate: expiryDate,
-		})
+	for _, quota := range quotas {
+		if remainingUsed <= 0 {
+			// No more used quota to deduct
+			quotaList = append(quotaList, QuotaDetailItem{
+				Amount:     quota.Amount,
+				ExpiryDate: quota.ExpiryDate,
+			})
+		} else if quota.Amount > remainingUsed {
+			// This quota is partially consumed
+			quotaList = append(quotaList, QuotaDetailItem{
+				Amount:     quota.Amount - remainingUsed,
+				ExpiryDate: quota.ExpiryDate,
+			})
+			remainingUsed = 0
+		} else {
+			// This quota is fully consumed
+			remainingUsed -= quota.Amount
+		}
 	}
 
 	return &QuotaInfo{
@@ -179,6 +188,36 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 
 // TransferOut handles quota transfer out
 func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutRequest) (*TransferOutResponse, error) {
+	// Get used quota from AiGateway to check availability
+	usedQuota, err := s.getUsedQuotaFromAiGateway(giver.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get used quota: %w", err)
+	}
+
+	// Get quota list ordered by expiry date to check availability
+	var quotas []models.Quota
+	if err := s.db.Where("user_id = ? AND status = ?", giver.ID, models.StatusValid).
+		Order("expiry_date ASC").Find(&quotas).Error; err != nil {
+		return nil, fmt.Errorf("failed to get quota list: %w", err)
+	}
+
+	// Calculate remaining quotas for each expiry date
+	quotaAvailabilityMap := make(map[string]int) // key: expiry_date as string, value: available amount
+	remainingUsed := usedQuota
+
+	for _, quota := range quotas {
+		dateKey := quota.ExpiryDate.Format("2006-01-02T15:04:05Z07:00")
+		if remainingUsed <= 0 {
+			quotaAvailabilityMap[dateKey] = quota.Amount
+		} else if quota.Amount > remainingUsed {
+			quotaAvailabilityMap[dateKey] = quota.Amount - remainingUsed
+			remainingUsed = 0
+		} else {
+			quotaAvailabilityMap[dateKey] = 0
+			remainingUsed -= quota.Amount
+		}
+	}
+
 	// Start transaction
 	tx := s.db.Begin()
 	defer func() {
@@ -187,8 +226,22 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		}
 	}()
 
-	// Validate quota availability
+	// Validate quota availability for each requested quota
 	for _, quotaItem := range req.QuotaList {
+		dateKey := quotaItem.ExpiryDate.Format("2006-01-02T15:04:05Z07:00")
+		available, exists := quotaAvailabilityMap[dateKey]
+		if !exists {
+			tx.Rollback()
+			return nil, fmt.Errorf("quota not found for expiry date %v", quotaItem.ExpiryDate)
+		}
+
+		if available < quotaItem.Amount {
+			tx.Rollback()
+			return nil, fmt.Errorf("insufficient available quota for expiry date %v: have %d, need %d",
+				quotaItem.ExpiryDate, available, quotaItem.Amount)
+		}
+
+		// Also validate the raw quota exists in database
 		var quota models.Quota
 		if err := tx.Where("user_id = ? AND expiry_date = ? AND status = ?",
 			giver.ID, quotaItem.ExpiryDate, models.StatusValid).First(&quota).Error; err != nil {
@@ -240,8 +293,13 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 
 	// Calculate total amount for audit record
 	totalAmount := 0
-	for _, item := range req.QuotaList {
+	// Find earliest expiry date for audit record
+	var earliestExpiryDate time.Time
+	for i, item := range req.QuotaList {
 		totalAmount += item.Amount
+		if i == 0 || item.ExpiryDate.Before(earliestExpiryDate) {
+			earliestExpiryDate = item.ExpiryDate
+		}
 	}
 
 	// Record audit log
@@ -251,7 +309,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		Operation:   models.OperationTransferOut,
 		VoucherCode: voucherCode,
 		RelatedUser: req.ReceiverID,
-		ExpiryDate:  req.QuotaList[0].ExpiryDate, // Use first expiry date for audit
+		ExpiryDate:  earliestExpiryDate, // Use earliest expiry date for audit
 	}
 	if err := tx.Create(auditRecord).Error; err != nil {
 		tx.Rollback()
@@ -313,6 +371,8 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 
 	totalAmount := 0
 	quotaResults := make([]TransferQuotaResult, len(voucherData.QuotaList))
+	var earliestExpiryDate time.Time
+	hasValidQuota := false
 
 	// Process quota transfer
 	for i, quotaItem := range voucherData.QuotaList {
@@ -347,21 +407,29 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 				}
 			}
 
-			// Record audit log for valid quota
-			auditRecord := &models.QuotaAudit{
-				UserID:      receiver.ID,
-				Amount:      quotaItem.Amount,
-				Operation:   models.OperationTransferIn,
-				VoucherCode: req.VoucherCode,
-				RelatedUser: voucherData.GiverID,
-				ExpiryDate:  quotaItem.ExpiryDate,
-			}
-			if err := tx.Create(auditRecord).Error; err != nil {
-				tx.Rollback()
-				return nil, fmt.Errorf("failed to create audit record: %w", err)
-			}
-
 			totalAmount += quotaItem.Amount
+
+			// Track earliest expiry date for valid quota
+			if !hasValidQuota || quotaItem.ExpiryDate.Before(earliestExpiryDate) {
+				earliestExpiryDate = quotaItem.ExpiryDate
+				hasValidQuota = true
+			}
+		}
+	}
+
+	// Record audit log for valid quota only if there's valid quota
+	if hasValidQuota {
+		auditRecord := &models.QuotaAudit{
+			UserID:      receiver.ID,
+			Amount:      totalAmount,
+			Operation:   models.OperationTransferIn,
+			VoucherCode: req.VoucherCode,
+			RelatedUser: voucherData.GiverID,
+			ExpiryDate:  earliestExpiryDate, // Use earliest expiry date from valid quota
+		}
+		if err := tx.Create(auditRecord).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create audit record: %w", err)
 		}
 	}
 
@@ -676,4 +744,9 @@ func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta int) error
 	}
 
 	return nil
+}
+
+// DeltaUsedQuotaInAiGateway is a public wrapper for deltaUsedQuotaInAiGateway
+func (s *QuotaService) DeltaUsedQuotaInAiGateway(userID string, delta int) error {
+	return s.deltaUsedQuotaInAiGateway(userID, delta)
 }
