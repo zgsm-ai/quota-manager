@@ -12,35 +12,57 @@ import (
 
 // In-memory storage, simulating Redis
 type MemoryStore struct {
-	data map[string]int
-	mu   sync.RWMutex
+	quotaData map[string]int // Total quota
+	usedData  map[string]int // Used quota
+	mu        sync.RWMutex
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		data: make(map[string]int),
-		mu:   sync.RWMutex{},
+		quotaData: make(map[string]int),
+		usedData:  make(map[string]int),
+		mu:        sync.RWMutex{},
 	}
 }
 
-func (m *MemoryStore) Get(key string) (int, bool) {
+func (m *MemoryStore) GetQuota(key string) (int, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	value, exists := m.data[key]
+	value, exists := m.quotaData[key]
 	return value, exists
 }
 
-func (m *MemoryStore) Set(key string, value int) {
+func (m *MemoryStore) SetQuota(key string, value int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.data[key] = value
+	m.quotaData[key] = value
 }
 
-func (m *MemoryStore) Incr(key string, delta int) int {
+func (m *MemoryStore) IncrQuota(key string, delta int) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.data[key] += delta
-	return m.data[key]
+	m.quotaData[key] += delta
+	return m.quotaData[key]
+}
+
+func (m *MemoryStore) GetUsed(key string) (int, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	value, exists := m.usedData[key]
+	return value, exists
+}
+
+func (m *MemoryStore) SetUsed(key string, value int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.usedData[key] = value
+}
+
+func (m *MemoryStore) IncrUsed(key string, delta int) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.usedData[key] += delta
+	return m.usedData[key]
 }
 
 var store = NewMemoryStore()
@@ -77,6 +99,15 @@ func main() {
 
 		// Increase/decrease quota
 		v1.POST("/quota/delta", deltaQuota)
+
+		// Query used quota
+		v1.GET("/quota/used", queryUsedQuota)
+
+		// Increase/decrease used quota
+		v1.POST("/quota/used/delta", deltaUsedQuota)
+
+		// Refresh used quota
+		v1.POST("/quota/used/refresh", refreshUsedQuota)
 	}
 
 	fmt.Println("AiGateway Mock Service starting on port 1002")
@@ -102,7 +133,7 @@ func refreshQuota(c *gin.Context) {
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", consumer)
-	store.Set(key, quota)
+	store.SetQuota(key, quota)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "quota refreshed",
@@ -120,7 +151,7 @@ func queryQuota(c *gin.Context) {
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", consumer)
-	quota, exists := store.Get(key)
+	quota, exists := store.GetQuota(key)
 	if !exists {
 		quota = 0 // Default quota is 0
 	}
@@ -148,12 +179,85 @@ func deltaQuota(c *gin.Context) {
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", consumer)
-	newQuota := store.Incr(key, value)
+	newQuota := store.IncrQuota(key, value)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "quota updated",
 		"consumer":  consumer,
 		"delta":     value,
 		"new_quota": newQuota,
+	})
+}
+
+// queryUsedQuota queries the used quota
+func queryUsedQuota(c *gin.Context) {
+	consumer := c.Query("consumer")
+	if consumer == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer is required"})
+		return
+	}
+
+	key := fmt.Sprintf("chat_quota:%s", consumer)
+	used, exists := store.GetUsed(key)
+	if !exists {
+		used = 0 // Default used quota is 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"quota":    used,
+		"consumer": consumer,
+	})
+}
+
+// deltaUsedQuota increases or decreases the used quota
+func deltaUsedQuota(c *gin.Context) {
+	consumer := c.PostForm("consumer")
+	valueStr := c.PostForm("value")
+
+	if consumer == "" || valueStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer and value are required"})
+		return
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid value"})
+		return
+	}
+
+	key := fmt.Sprintf("chat_quota:%s", consumer)
+	newUsed := store.IncrUsed(key, value)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "used quota updated",
+		"consumer": consumer,
+		"delta":    value,
+		"new_used": newUsed,
+	})
+}
+
+// refreshUsedQuota refreshes the used quota
+func refreshUsedQuota(c *gin.Context) {
+	consumer := c.PostForm("consumer")
+	quotaStr := c.PostForm("quota")
+
+	if consumer == "" || quotaStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer and quota are required"})
+		return
+	}
+
+	quota, err := strconv.Atoi(quotaStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quota value"})
+		return
+	}
+
+	key := fmt.Sprintf("chat_quota:%s", consumer)
+	store.SetUsed(key, quota)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "used quota refreshed",
+		"consumer": consumer,
+		"quota":    quota,
 	})
 }

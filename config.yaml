@@ -18,3 +18,6 @@ server:
 
 scheduler:
   scan_interval: "0 0 * * * *" # Scan every hour
+
+voucher:
+  signing_key: "your-secret-signing-key-at-least-32-bytes-long-for-security"

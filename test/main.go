@@ -21,6 +21,8 @@ import (
 type TestContext struct {
 	DB              *database.DB
 	StrategyService *services.StrategyService
+	QuotaService    *services.QuotaService
+	VoucherService  *services.VoucherService
 	Gateway         *aigateway.Client
 	MockServer      *httptest.Server
 	FailServer      *httptest.Server
@@ -105,12 +107,16 @@ func setupTestEnvironment() (*TestContext, error) {
 	// Create AiGateway client
 	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions", "credential3")
 
-	// Create strategy service
-	strategyService := services.NewStrategyService(db, gateway)
+	// Create services
+	voucherService := services.NewVoucherService("test-signing-key-at-least-32-bytes-long")
+	quotaService := services.NewQuotaService(db.DB, &cfg.AiGateway, voucherService)
+	strategyService := services.NewStrategyService(db, gateway, quotaService)
 
 	return &TestContext{
 		DB:              db,
 		StrategyService: strategyService,
+		QuotaService:    quotaService,
+		VoucherService:  voucherService,
 		Gateway:         gateway,
 		MockServer:      mockServer,
 		FailServer:      failServer,
@@ -197,6 +203,40 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				"new_quota": newQuota,
 			})
 		})
+
+		v1.GET("/quota/used", func(c *gin.Context) {
+			if shouldFail {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+				return
+			}
+
+			consumer := c.Query("consumer")
+			// Mock used quota as 0 for simplicity
+			c.JSON(http.StatusOK, gin.H{
+				"quota":    0,
+				"consumer": consumer,
+			})
+		})
+
+		v1.POST("/quota/used/delta", func(c *gin.Context) {
+			if shouldFail {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+				return
+			}
+
+			consumer := c.PostForm("consumer")
+			value := c.PostForm("value")
+
+			if consumer == "" || value == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"message":  "success",
+				"consumer": consumer,
+			})
+		})
 	}
 
 	return httptest.NewServer(router)
@@ -239,6 +279,12 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Strategy Status Control Test", testStrategyStatusControl},
 		{"AiGateway Request Failure Test", testAiGatewayFailure},
 		{"Batch User Processing Test", testBatchUserProcessing},
+		{"Voucher Generation and Validation Test", testVoucherGenerationAndValidation},
+		{"Quota Transfer Out Test", testQuotaTransferOut},
+		{"Quota Transfer In Test", testQuotaTransferIn},
+		{"Quota Expiry Test", testQuotaExpiry},
+		{"Quota Audit Records Test", testQuotaAuditRecords},
+		{"Strategy with Expiry Date Test", testStrategyWithExpiryDate},
 	}
 
 	for _, tc := range testCases {
@@ -262,7 +308,7 @@ func runAllTests(ctx *TestContext) []TestResult {
 // testClearData test clear data
 func testClearData(ctx *TestContext) TestResult {
 	// Clear all tables
-	tables := []string{"quota_execute", "quota_strategy", "user_info"}
+	tables := []string{"voucher_redemption", "quota_audit", "quota", "quota_execute", "quota_strategy", "user_info"}
 	for _, table := range tables {
 		if err := ctx.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
@@ -1297,7 +1343,7 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 
 	// Create strategy service using failed gateway
 	failGateway := aigateway.NewClient(ctx.FailServer.URL, "/v1/chat/completions", "credential3")
-	failStrategyService := services.NewStrategyService(ctx.DB, failGateway)
+	failStrategyService := services.NewStrategyService(ctx.DB, failGateway, ctx.QuotaService)
 
 	// Create strategy
 	strategy := &models.QuotaStrategy{
@@ -1402,6 +1448,379 @@ func testBatchUserProcessing(ctx *TestContext) TestResult {
 	}
 
 	return TestResult{Passed: true, Message: "Batch User Processing Test Succeeded"}
+}
+
+// testVoucherGenerationAndValidation test voucher generation and validation
+func testVoucherGenerationAndValidation(ctx *TestContext) TestResult {
+	// Test voucher data
+	voucherData := &services.VoucherData{
+		GiverID:     "giver123",
+		GiverName:   "张三",
+		GiverPhone:  "13800138000",
+		GiverGithub: "zhangsan",
+		ReceiverID:  "receiver456",
+		QuotaList: []services.VoucherQuotaItem{
+			{Amount: 10, ExpiryDate: time.Now().Add(30 * 24 * time.Hour)},
+			{Amount: 20, ExpiryDate: time.Now().Add(60 * 24 * time.Hour)},
+		},
+	}
+
+	// Generate voucher
+	voucherCode, err := ctx.VoucherService.GenerateVoucher(voucherData)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Generate voucher failed: %v", err)}
+	}
+
+	if voucherCode == "" {
+		return TestResult{Passed: false, Message: "Generated voucher code is empty"}
+	}
+
+	// Validate and decode voucher
+	decodedData, err := ctx.VoucherService.ValidateAndDecodeVoucher(voucherCode)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Validate voucher failed: %v", err)}
+	}
+
+	// Verify decoded data
+	if decodedData.GiverID != voucherData.GiverID ||
+		decodedData.GiverName != voucherData.GiverName ||
+		decodedData.ReceiverID != voucherData.ReceiverID ||
+		len(decodedData.QuotaList) != len(voucherData.QuotaList) {
+		return TestResult{Passed: false, Message: "Decoded voucher data mismatch"}
+	}
+
+	// Test invalid voucher
+	_, err = ctx.VoucherService.ValidateAndDecodeVoucher("invalid-voucher-code")
+	if err == nil {
+		return TestResult{Passed: false, Message: "Invalid voucher should fail validation"}
+	}
+
+	return TestResult{Passed: true, Message: "Voucher Generation and Validation Test Succeeded"}
+}
+
+// testQuotaTransferOut test quota transfer out
+func testQuotaTransferOut(ctx *TestContext) TestResult {
+	// Create test users
+	giver := &models.UserInfo{
+		ID:             "giver_user",
+		Name:           "Giver User",
+		Phone:          "13800138000",
+		GithubUsername: "giver",
+		RegisterTime:   time.Now().Add(-time.Hour * 24),
+		AccessTime:     time.Now().Add(-time.Hour * 1),
+	}
+	if err := ctx.DB.Create(giver).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create giver user failed: %v", err)}
+	}
+
+	// Add initial quota for giver
+	expiryDate := time.Now().Add(30 * 24 * time.Hour)
+	quota := &models.Quota{
+		UserID:     giver.ID,
+		Amount:     100,
+		ExpiryDate: expiryDate,
+		Status:     models.StatusValid,
+	}
+	if err := ctx.DB.Create(quota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create initial quota failed: %v", err)}
+	}
+
+	// Transfer out request
+	transferReq := &services.TransferOutRequest{
+		GiverID:     giver.ID,
+		GiverName:   giver.Name,
+		GiverPhone:  giver.Phone,
+		GiverGithub: giver.GithubUsername,
+		ReceiverID:  "receiver_user",
+		QuotaList: []services.TransferQuotaItem{
+			{Amount: 30, ExpiryDate: expiryDate},
+		},
+	}
+
+	// Execute transfer out
+	response, err := ctx.QuotaService.TransferOut(transferReq)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer out failed: %v", err)}
+	}
+
+	if response.VoucherCode == "" {
+		return TestResult{Passed: false, Message: "Voucher code is empty"}
+	}
+
+	// Verify giver's quota is reduced
+	var updatedQuota models.Quota
+	if err := ctx.DB.Where("user_id = ? AND expiry_date = ?", giver.ID, expiryDate).First(&updatedQuota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get updated quota: %v", err)}
+	}
+
+	if updatedQuota.Amount != 70 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota 70, got %d", updatedQuota.Amount)}
+	}
+
+	// Verify audit record
+	var auditRecord models.QuotaAudit
+	if err := ctx.DB.Where("user_id = ? AND operation = ?", giver.ID, models.OperationTransferOut).First(&auditRecord).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get audit record: %v", err)}
+	}
+
+	if auditRecord.Amount != -30 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount -30, got %d", auditRecord.Amount)}
+	}
+
+	return TestResult{Passed: true, Message: "Quota Transfer Out Test Succeeded"}
+}
+
+// testQuotaTransferIn test quota transfer in
+func testQuotaTransferIn(ctx *TestContext) TestResult {
+	// Create test users
+	receiver := &models.UserInfo{
+		ID:           "receiver_user",
+		Name:         "Receiver User",
+		RegisterTime: time.Now().Add(-time.Hour * 24),
+		AccessTime:   time.Now().Add(-time.Hour * 1),
+	}
+	if err := ctx.DB.Create(receiver).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create receiver user failed: %v", err)}
+	}
+
+	// Generate a valid voucher
+	expiryDate := time.Now().Add(30 * 24 * time.Hour)
+	voucherData := &services.VoucherData{
+		GiverID:     "giver_user",
+		GiverName:   "Giver User",
+		GiverPhone:  "13800138000",
+		GiverGithub: "giver",
+		ReceiverID:  receiver.ID,
+		QuotaList: []services.VoucherQuotaItem{
+			{Amount: 30, ExpiryDate: expiryDate},
+		},
+	}
+
+	voucherCode, err := ctx.VoucherService.GenerateVoucher(voucherData)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Generate voucher failed: %v", err)}
+	}
+
+	// Transfer in request
+	transferReq := &services.TransferInRequest{
+		ReceiverID:  receiver.ID,
+		VoucherCode: voucherCode,
+	}
+
+	// Execute transfer in
+	response, err := ctx.QuotaService.TransferIn(transferReq)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in failed: %v", err)}
+	}
+
+	if response.GiverID != voucherData.GiverID {
+		return TestResult{Passed: false, Message: "Transfer in response giver ID mismatch"}
+	}
+
+	// Verify receiver's quota is added
+	var quota models.Quota
+	if err := ctx.DB.Where("user_id = ? AND expiry_date = ?", receiver.ID, expiryDate).First(&quota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get receiver quota: %v", err)}
+	}
+
+	if quota.Amount != 30 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected receiver quota 30, got %d", quota.Amount)}
+	}
+
+	// Verify audit record
+	var auditRecord models.QuotaAudit
+	if err := ctx.DB.Where("user_id = ? AND operation = ?", receiver.ID, models.OperationTransferIn).First(&auditRecord).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get audit record: %v", err)}
+	}
+
+	if auditRecord.Amount != 30 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount 30, got %d", auditRecord.Amount)}
+	}
+
+	// Verify voucher redemption record
+	var redemption models.VoucherRedemption
+	if err := ctx.DB.Where("voucher_code = ?", voucherCode).First(&redemption).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get redemption record: %v", err)}
+	}
+
+	// Test duplicate redemption
+	_, err = ctx.QuotaService.TransferIn(transferReq)
+	if err == nil {
+		return TestResult{Passed: false, Message: "Duplicate redemption should fail"}
+	}
+
+	return TestResult{Passed: true, Message: "Quota Transfer In Test Succeeded"}
+}
+
+// testQuotaExpiry test quota expiry functionality
+func testQuotaExpiry(ctx *TestContext) TestResult {
+	// Create test user
+	user := &models.UserInfo{
+		ID:           "expiry_test_user",
+		Name:         "Expiry Test User",
+		RegisterTime: time.Now().Add(-time.Hour * 24),
+		AccessTime:   time.Now().Add(-time.Hour * 1),
+	}
+	if err := ctx.DB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Create expired and valid quotas
+	expiredDate := time.Now().Add(-time.Hour)
+	validDate := time.Now().Add(30 * 24 * time.Hour)
+
+	quotas := []*models.Quota{
+		{UserID: user.ID, Amount: 50, ExpiryDate: expiredDate, Status: models.StatusValid},
+		{UserID: user.ID, Amount: 100, ExpiryDate: validDate, Status: models.StatusValid},
+	}
+
+	for _, quota := range quotas {
+		if err := ctx.DB.Create(quota).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create quota failed: %v", err)}
+		}
+	}
+
+	// Set initial AiGateway quota
+	mockStore.SetQuota(user.ID, 150)
+
+	// Execute quota expiry
+	if err := ctx.QuotaService.ExpireQuotas(); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expire quotas failed: %v", err)}
+	}
+
+	// Verify expired quota status
+	var expiredQuota models.Quota
+	if err := ctx.DB.Where("user_id = ? AND expiry_date = ?", user.ID, expiredDate).First(&expiredQuota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get expired quota: %v", err)}
+	}
+
+	if expiredQuota.Status != models.StatusExpired {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected expired status, got %s", expiredQuota.Status)}
+	}
+
+	// Verify valid quota remains valid
+	var validQuota models.Quota
+	if err := ctx.DB.Where("user_id = ? AND expiry_date = ?", user.ID, validDate).First(&validQuota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get valid quota: %v", err)}
+	}
+
+	if validQuota.Status != models.StatusValid {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected valid status, got %s", validQuota.Status)}
+	}
+
+	return TestResult{Passed: true, Message: "Quota Expiry Test Succeeded"}
+}
+
+// testQuotaAuditRecords test quota audit records functionality
+func testQuotaAuditRecords(ctx *TestContext) TestResult {
+	// Create test user
+	user := &models.UserInfo{
+		ID:           "audit_test_user",
+		Name:         "Audit Test User",
+		RegisterTime: time.Now().Add(-time.Hour * 24),
+		AccessTime:   time.Now().Add(-time.Hour * 1),
+	}
+	if err := ctx.DB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Add quota using strategy execution
+	if err := ctx.QuotaService.AddQuotaForStrategy(user.ID, 50, "test-strategy"); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Add quota for strategy failed: %v", err)}
+	}
+
+	// Get audit records
+	records, total, err := ctx.QuotaService.GetQuotaAuditRecords(user.ID, 1, 10)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Get audit records failed: %v", err)}
+	}
+
+	if total != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 audit record, got %d", total)}
+	}
+
+	if len(records) != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 record in result, got %d", len(records))}
+	}
+
+	record := records[0]
+	if record.Amount != 50 || record.Operation != models.OperationRecharge {
+		return TestResult{Passed: false, Message: "Audit record data mismatch"}
+	}
+
+	return TestResult{Passed: true, Message: "Quota Audit Records Test Succeeded"}
+}
+
+// testStrategyWithExpiryDate test strategy execution with expiry date
+func testStrategyWithExpiryDate(ctx *TestContext) TestResult {
+	// Create test user
+	user := &models.UserInfo{
+		ID:           "strategy_expiry_user",
+		Name:         "Strategy Expiry User",
+		RegisterTime: time.Now().Add(-time.Hour * 24),
+		AccessTime:   time.Now().Add(-time.Hour * 1),
+	}
+	if err := ctx.DB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Create strategy
+	strategy := &models.QuotaStrategy{
+		Name:      "expiry-date-test",
+		Title:     "Expiry Date Test",
+		Type:      "single",
+		Amount:    75,
+		Model:     "test-model",
+		Condition: "",
+		Status:    true,
+	}
+	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
+	}
+
+	// Execute strategy
+	users := []models.UserInfo{*user}
+	ctx.StrategyService.ExecStrategy(strategy, users)
+
+	// Verify quota was created with expiry date
+	var quota models.Quota
+	if err := ctx.DB.Where("user_id = ?", user.ID).First(&quota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get quota: %v", err)}
+	}
+
+	if quota.Amount != 75 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 75, got %d", quota.Amount)}
+	}
+
+	if quota.Status != models.StatusValid {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected valid status, got %s", quota.Status)}
+	}
+
+	// Verify expiry date is set correctly (end of month or next month)
+	now := time.Now()
+	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
+	var expectedExpiry time.Time
+	if endOfMonth.Sub(now).Hours() < 24*30 {
+		expectedExpiry = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
+	} else {
+		expectedExpiry = endOfMonth
+	}
+
+	if !quota.ExpiryDate.Equal(expectedExpiry) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected expiry date %v, got %v", expectedExpiry, quota.ExpiryDate)}
+	}
+
+	// Verify execution record has expiry date
+	var execute models.QuotaExecute
+	if err := ctx.DB.Where("strategy_id = ? AND user_id = ?", strategy.ID, user.ID).First(&execute).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get execute record: %v", err)}
+	}
+
+	if !execute.ExpiryDate.Equal(expectedExpiry) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected execute expiry date %v, got %v", expectedExpiry, execute.ExpiryDate)}
+	}
+
+	return TestResult{Passed: true, Message: "Strategy with Expiry Date Test Succeeded"}
 }
 
 // printTestResults print test results
