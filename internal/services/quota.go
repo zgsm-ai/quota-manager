@@ -45,13 +45,14 @@ type QuotaDetailItem struct {
 
 // QuotaAuditRecord represents quota audit record
 type QuotaAuditRecord struct {
-	Amount      int                       `json:"amount"`
-	Operation   string                    `json:"operation"`
-	VoucherCode string                    `json:"voucher_code,omitempty"`
-	RelatedUser string                    `json:"related_user,omitempty"`
-	ExpiryDate  time.Time                 `json:"expiry_date"`
-	Details     *models.QuotaAuditDetails `json:"details,omitempty"`
-	CreateTime  time.Time                 `json:"create_time"`
+	Amount       int                       `json:"amount"`
+	Operation    string                    `json:"operation"`
+	VoucherCode  string                    `json:"voucher_code,omitempty"`
+	RelatedUser  string                    `json:"related_user,omitempty"`
+	StrategyName string                    `json:"strategy_name,omitempty"`
+	ExpiryDate   time.Time                 `json:"expiry_date"`
+	Details      *models.QuotaAuditDetails `json:"details,omitempty"`
+	CreateTime   time.Time                 `json:"create_time"`
 }
 
 // TransferOutRequest represents transfer out request
@@ -206,13 +207,14 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 		}
 
 		result[i] = QuotaAuditRecord{
-			Amount:      record.Amount,
-			Operation:   record.Operation,
-			VoucherCode: record.VoucherCode,
-			RelatedUser: record.RelatedUser,
-			ExpiryDate:  record.ExpiryDate,
-			Details:     details,
-			CreateTime:  record.CreateTime,
+			Amount:       record.Amount,
+			Operation:    record.Operation,
+			VoucherCode:  record.VoucherCode,
+			RelatedUser:  record.RelatedUser,
+			StrategyName: record.StrategyName,
+			ExpiryDate:   record.ExpiryDate,
+			Details:      details,
+			CreateTime:   record.CreateTime,
 		}
 	}
 
@@ -378,6 +380,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		VoucherCode: voucherCode,
 		RelatedUser: req.ReceiverID,
 		ExpiryDate:  earliestExpiryDate, // Use earliest expiry date for audit
+		// StrategyName is empty for transfer operations
 	}
 	if err := auditRecord.MarshalDetails(auditDetails); err != nil {
 		tx.Rollback()
@@ -581,6 +584,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 			VoucherCode: req.VoucherCode,
 			RelatedUser: voucherData.GiverID,
 			ExpiryDate:  earliestExpiryDate, // Use earliest expiry date from valid quota
+			// StrategyName is empty for transfer operations
 		}
 		if err := auditRecord.MarshalDetails(auditDetails); err != nil {
 			tx.Rollback()
@@ -719,10 +723,11 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyNa
 
 	// Record audit log only if it's not expired yet
 	auditRecord := &models.QuotaAudit{
-		UserID:     userID,
-		Amount:     amount,
-		Operation:  models.OperationRecharge,
-		ExpiryDate: expiryDate,
+		UserID:       userID,
+		Amount:       amount,
+		Operation:    models.OperationRecharge,
+		StrategyName: strategyName,
+		ExpiryDate:   expiryDate,
 	}
 	if err := auditRecord.MarshalDetails(auditDetails); err != nil {
 		tx.Rollback()

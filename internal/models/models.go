@@ -117,15 +117,16 @@ type Quota struct {
 
 // QuotaAudit quota change audit log
 type QuotaAudit struct {
-	ID          int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID      string    `gorm:"not null;index;size:255" json:"user_id"`
-	Amount      int       `gorm:"not null" json:"amount"`                  // positive or negative
-	Operation   string    `gorm:"not null;index;size:50" json:"operation"` // RECHARGE/TRANSFER_IN/TRANSFER_OUT
-	VoucherCode string    `gorm:"index;size:1000" json:"voucher_code,omitempty"`
-	RelatedUser string    `gorm:"size:255" json:"related_user,omitempty"`
-	ExpiryDate  time.Time `gorm:"not null" json:"expiry_date"`
-	Details     string    `gorm:"type:text" json:"details,omitempty"` // JSON string with detailed operation info
-	CreateTime  time.Time `gorm:"autoCreateTime;index" json:"create_time"`
+	ID           int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID       string    `gorm:"not null;index;size:255" json:"user_id"`
+	Amount       int       `gorm:"not null" json:"amount"`                  // positive or negative
+	Operation    string    `gorm:"not null;index;size:50" json:"operation"` // RECHARGE/TRANSFER_IN/TRANSFER_OUT
+	VoucherCode  string    `gorm:"index;size:1000" json:"voucher_code,omitempty"`
+	RelatedUser  string    `gorm:"size:255" json:"related_user,omitempty"`
+	StrategyName string    `gorm:"index;size:100" json:"strategy_name,omitempty"` // Strategy name for RECHARGE operations
+	ExpiryDate   time.Time `gorm:"not null" json:"expiry_date"`
+	Details      string    `gorm:"type:text" json:"details,omitempty"` // JSON string with detailed operation info
+	CreateTime   time.Time `gorm:"autoCreateTime;index" json:"create_time"`
 }
 
 // QuotaAuditDetails contains detailed information about quota operations
