@@ -142,7 +142,7 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 	}
 
 	// Transfer quota from user1 to user2 - use same expiry date as created by strategy
-	now := time.Now().Truncate(time.Second)
+	now := time.Now()
 	var transferExpiryDate time.Time
 	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 	if endOfMonth.Sub(now).Hours() < 24*30 {
@@ -241,7 +241,7 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 200)
 
 	// Add quota with mixed expiry dates - we'll create a scenario where quota expires between transfer out and transfer in
-	now := time.Now().Truncate(time.Second)
+	now := time.Now()
 
 	// Add quota that will expire very soon (expires in 2 seconds)
 	shortValidDate := now.Add(time.Second * 2)
@@ -452,7 +452,7 @@ func testTransferInQuotaExpiryConsistency(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 200)
 
 	// Add quota with different expiry dates
-	now := time.Now().Truncate(time.Second)
+	now := time.Now()
 
 	// Add quota expiring in 15 days
 	earlyExpiry := now.AddDate(0, 0, 15)

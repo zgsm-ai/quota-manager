@@ -432,7 +432,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 
 	// Process quota transfer
 	for i, quotaItem := range voucherData.QuotaList {
-		isExpired := time.Now().Truncate(time.Second).After(quotaItem.ExpiryDate.Truncate(time.Second))
+		isExpired := time.Now().After(quotaItem.ExpiryDate)
 
 		quotaResult := TransferQuotaResult{
 			Amount:     quotaItem.Amount,
@@ -561,7 +561,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 // AddQuotaForStrategy adds quota for strategy execution
 func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyName string) error {
 	// Calculate expiry date (end of this/next month)
-	now := time.Now().Truncate(time.Second)
+	now := time.Now()
 	var expiryDate time.Time
 
 	// If less than 30 days until end of month, set expiry to end of next month
@@ -632,7 +632,7 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyNa
 
 // ExpireQuotas expires quotas and synchronizes with AiGateway
 func (s *QuotaService) ExpireQuotas() error {
-	now := time.Now().Truncate(time.Second)
+	now := time.Now()
 
 	// Find expired but still valid quotas
 	var expiredQuotas []models.Quota

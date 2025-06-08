@@ -10,10 +10,10 @@ CREATE TABLE IF NOT EXISTS user_info (
     github_star TEXT,
     vip INTEGER DEFAULT 0,
     org VARCHAR(255),
-    register_time TIMESTAMP(0),
-    access_time TIMESTAMP(0),
-    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
+    register_time TIMESTAMPTZ(0),
+    access_time TIMESTAMPTZ(0),
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Quota strategy table
@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS quota_strategy (
     periodic_expr VARCHAR(255),
     condition TEXT,
     status BOOLEAN DEFAULT true NOT NULL,  -- Status field: true=enabled, false=disabled
-    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Quota execution status table
@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS quota_execute (
     user_id VARCHAR(255) NOT NULL,
     batch_number VARCHAR(20) NOT NULL,
     status VARCHAR(50) NOT NULL,
-    expiry_date TIMESTAMP(0) NOT NULL,
-    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
+    expiry_date TIMESTAMPTZ(0) NOT NULL,
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (strategy_id) REFERENCES quota_strategy(id)
 );
 
@@ -57,10 +57,10 @@ CREATE TABLE IF NOT EXISTS quota (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255) NOT NULL,
     amount INTEGER NOT NULL,
-    expiry_date TIMESTAMP(0) NOT NULL,
+    expiry_date TIMESTAMPTZ(0) NOT NULL,
     status VARCHAR(20) DEFAULT 'VALID' NOT NULL,
-    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_quota_user_id ON quota(user_id);
@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS quota_audit (
     operation VARCHAR(50) NOT NULL,
     voucher_code VARCHAR(1000),
     related_user VARCHAR(255),
-    expiry_date TIMESTAMP(0) NOT NULL,
-    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
+    expiry_date TIMESTAMPTZ(0) NOT NULL,
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_quota_audit_user_id ON quota_audit(user_id);
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS voucher_redemption (
     id SERIAL PRIMARY KEY,
     voucher_code VARCHAR(1000) UNIQUE NOT NULL,
     receiver_id VARCHAR(255) NOT NULL,
-    create_time TIMESTAMP(0) DEFAULT CURRENT_TIMESTAMP
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create unique index to enforce one record per user per expiry date per status
