@@ -18,14 +18,16 @@ type StrategyService struct {
 	db           *database.DB
 	gateway      *aigateway.Client
 	quotaQuerier condition.QuotaQuerier
+	quotaService *QuotaService
 	cron         *cron.Cron
 }
 
-func NewStrategyService(db *database.DB, gateway *aigateway.Client) *StrategyService {
+func NewStrategyService(db *database.DB, gateway *aigateway.Client, quotaService *QuotaService) *StrategyService {
 	return &StrategyService{
 		db:           db,
 		gateway:      gateway,
 		quotaQuerier: condition.NewAiGatewayQuotaQuerier(gateway),
+		quotaService: quotaService,
 		cron:         cron.New(),
 	}
 }
@@ -131,7 +133,7 @@ func (s *StrategyService) shouldExecutePeriodic(strategy *models.QuotaStrategy) 
 		return false
 	}
 
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	next := schedule.Next(now.Add(-time.Hour))
 
 	// If next execution time is before or equal to current time, it should be executed
@@ -236,20 +238,33 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 		return fmt.Errorf("strategy is disabled")
 	}
 
+	// Calculate expiry date (end of this/next month)
+	now := time.Now().Truncate(time.Second)
+	var expiryDate time.Time
+
+	// If less than 30 days until end of month, set expiry to end of next month
+	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
+	if endOfMonth.Sub(now).Hours() < 24*30 {
+		expiryDate = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
+	} else {
+		expiryDate = endOfMonth
+	}
+
 	// 1. Record execution status as processing
 	execute := &models.QuotaExecute{
 		StrategyID:  latestStrategy.ID,
 		User:        user.ID,
 		BatchNumber: batchNumber,
 		Status:      "processing",
+		ExpiryDate:  expiryDate,
 	}
 
 	if err := s.db.Create(execute).Error; err != nil {
 		return fmt.Errorf("failed to create execute record: %w", err)
 	}
 
-	// 2. Call AiGateway for recharge
-	err := s.gateway.DeltaQuota(user.ID, latestStrategy.Amount)
+	// 2. Add quota using QuotaService
+	err := s.quotaService.AddQuotaForStrategy(user.ID, latestStrategy.Amount, latestStrategy.Name)
 	if err != nil {
 		// Update execution status to failed
 		s.db.Model(execute).Update("status", "failed")
@@ -265,14 +280,15 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 		zap.String("user", user.ID),
 		zap.String("strategy", latestStrategy.Name),
 		zap.Int("amount", latestStrategy.Amount),
-		zap.String("model", latestStrategy.Model))
+		zap.String("model", latestStrategy.Model),
+		zap.Time("expiry_date", expiryDate))
 
 	return nil
 }
 
 // generateBatchNumber generates batch number
 func (s *StrategyService) generateBatchNumber() string {
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	return now.Format("2006010215") // YearMonthDayHour
 }
 
