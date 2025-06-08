@@ -75,12 +75,15 @@ CREATE TABLE IF NOT EXISTS quota_audit (
     operation VARCHAR(50) NOT NULL,
     voucher_code VARCHAR(1000),
     related_user VARCHAR(255),
+    strategy_name VARCHAR(100),
     expiry_date TIMESTAMPTZ(0) NOT NULL,
+    details TEXT,
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_quota_audit_user_id ON quota_audit(user_id);
 CREATE INDEX IF NOT EXISTS idx_quota_audit_operation ON quota_audit(operation);
+CREATE INDEX IF NOT EXISTS idx_quota_audit_strategy_name ON quota_audit(strategy_name);
 CREATE INDEX IF NOT EXISTS idx_quota_audit_create_time ON quota_audit(create_time);
 
 -- Voucher redemption table

@@ -2,8 +2,12 @@
 
 # API Test Script
 
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:8099"
 AIGATEWAY_URL="http://localhost:1002"
+
+# Test JWT token (base64url encoded without signature verification)
+# Contains: {"id":"user001","name":"John Doe","staffID":"emp001","github":"johndoe","phone":"13800138001"}
+TEST_TOKEN="eyJpZCI6InVzZXIwMDEiLCJuYW1lIjoiSm9obiBEb2UiLCJzdGFmZklEIjoiZW1wMDAxIiwiZ2l0aHViIjoiam9obmRvZSIsInBob25lIjoiMTM4MDAxMzgwMDEifQ"
 
 echo "=== Quota Manager API Test ==="
 
@@ -108,8 +112,36 @@ echo "16b. Query Disabled Strategies (?status=false):"
 curl -s "$BASE_URL/api/v1/strategies?status=false" | jq '.total'
 echo ""
 
-# 17. Cleanup: Delete Test Strategy
-echo "17. Cleanup: Delete Test Strategy..."
+# 17. Test Quota Management APIs
+echo "17. Test Quota Management APIs..."
+
+echo "17a. Get User Quota:"
+curl -s "$BASE_URL/api/v1/quota" \
+  -H "Authorization: Bearer $TEST_TOKEN" | jq .
+echo ""
+
+echo "17b. Get Quota Audit Records:"
+curl -s "$BASE_URL/api/v1/quota/audit?page=1&page_size=5" \
+  -H "Authorization: Bearer $TEST_TOKEN" | jq .
+echo ""
+
+echo "17c. Test Transfer Out (will fail due to insufficient quota, but tests API structure):"
+curl -s -X POST "$BASE_URL/api/v1/quota/transfer-out" \
+  -H "Authorization: Bearer $TEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "receiver_id": "user002",
+    "quota_list": [
+      {
+        "amount": 1,
+        "expiry_date": "2025-06-30T23:59:59Z"
+      }
+    ]
+  }' | jq .
+echo ""
+
+# 18. Cleanup: Delete Test Strategy
+echo "18. Cleanup: Delete Test Strategy..."
 curl -s -X DELETE "$BASE_URL/api/v1/strategies/$STRATEGY_ID" | jq .
 echo ""
 

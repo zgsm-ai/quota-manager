@@ -14,7 +14,7 @@ func testVoucherGenerationAndValidation(ctx *TestContext) TestResult {
 	// Test voucher data
 	voucherData := &services.VoucherData{
 		GiverID:     "giver123",
-		GiverName:   "张三",
+		GiverName:   "John Doe",
 		GiverPhone:  "13800138000",
 		GiverGithub: "zhangsan",
 		ReceiverID:  "receiver456",

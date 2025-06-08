@@ -102,9 +102,9 @@ func runAllTests(ctx *TestContext) []TestResult {
 		results = append(results, result)
 
 		if result.Passed {
-			fmt.Printf("✅ %s - 通过 (%.2fs)\n", tc.name, result.Duration.Seconds())
+			fmt.Printf("✅ %s - PASSED (%.2fs)\n", tc.name, result.Duration.Seconds())
 		} else {
-			fmt.Printf("❌ %s - 失败: %s (%.2fs)\n", tc.name, result.Message, result.Duration.Seconds())
+			fmt.Printf("❌ %s - FAILED: %s (%.2fs)\n", tc.name, result.Message, result.Duration.Seconds())
 		}
 	}
 

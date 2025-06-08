@@ -34,6 +34,16 @@ func main() {
 		log.Fatalf("Failed to generate strategies: %v", err)
 	}
 
+	// Generate quota data
+	if err := generateQuotas(db); err != nil {
+		log.Fatalf("Failed to generate quotas: %v", err)
+	}
+
+	// Generate audit data
+	if err := generateAudits(db); err != nil {
+		log.Fatalf("Failed to generate audits: %v", err)
+	}
+
 	fmt.Println("Data generation completed successfully!")
 }
 
@@ -229,5 +239,171 @@ func generateStrategies(db *database.DB) error {
 	}
 
 	fmt.Printf("Generated %d strategies\n", len(strategies))
+	return nil
+}
+
+func generateQuotas(db *database.DB) error {
+	fmt.Println("Generating quota data...")
+
+	quotas := []models.Quota{
+		{
+			UserID:     "user001",
+			Amount:     100,
+			ExpiryDate: time.Date(2025, 6, 30, 23, 59, 59, 0, time.UTC),
+			Status:     models.StatusValid,
+		},
+		{
+			UserID:     "user001",
+			Amount:     50,
+			ExpiryDate: time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC),
+			Status:     models.StatusValid,
+		},
+		{
+			UserID:     "user002",
+			Amount:     75,
+			ExpiryDate: time.Date(2025, 7, 31, 23, 59, 59, 0, time.UTC),
+			Status:     models.StatusValid,
+		},
+		{
+			UserID:     "user003",
+			Amount:     25,
+			ExpiryDate: time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			Status:     models.StatusValid,
+		},
+		{
+			UserID:     "user004",
+			Amount:     200,
+			ExpiryDate: time.Date(2025, 8, 31, 23, 59, 59, 0, time.UTC),
+			Status:     models.StatusValid,
+		},
+		{
+			UserID:     "user005",
+			Amount:     10,
+			ExpiryDate: time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC),
+			Status:     models.StatusExpired,
+		},
+	}
+
+	// Generate more random quotas for other users
+	for i := 6; i <= 20; i++ {
+		userID := fmt.Sprintf("user%03d", i)
+
+		// Generate 1-3 quota records per user
+		quotaCount := rand.Intn(3) + 1
+		for j := 0; j < quotaCount; j++ {
+			quota := models.Quota{
+				UserID:     userID,
+				Amount:     rand.Intn(150) + 10, // 10-160
+				ExpiryDate: time.Date(2025, time.Month(rand.Intn(12)+1), rand.Intn(28)+1, 23, 59, 59, 0, time.UTC),
+				Status:     models.StatusValid,
+			}
+
+			// Randomly make some quotas expired
+			if rand.Float32() < 0.1 {
+				quota.Status = models.StatusExpired
+				quota.ExpiryDate = time.Date(2024, time.Month(rand.Intn(12)+1), rand.Intn(28)+1, 23, 59, 59, 0, time.UTC)
+			}
+
+			quotas = append(quotas, quota)
+		}
+	}
+
+	// Batch insert quota data
+	for _, quota := range quotas {
+		if err := db.Create(&quota).Error; err != nil {
+			fmt.Printf("Warning: Failed to create quota for %s: %v\n", quota.UserID, err)
+		}
+	}
+
+	fmt.Printf("Generated %d quota records\n", len(quotas))
+	return nil
+}
+
+func generateAudits(db *database.DB) error {
+	fmt.Println("Generating audit data...")
+
+	audits := []models.QuotaAudit{
+		{
+			UserID:       "user001",
+			Amount:       100,
+			Operation:    models.OperationRecharge,
+			StrategyName: "recharge-star-everyday",
+			ExpiryDate:   time.Date(2025, 6, 30, 23, 59, 59, 0, time.UTC),
+		},
+		{
+			UserID:       "user001",
+			Amount:       50,
+			Operation:    models.OperationRecharge,
+			StrategyName: "vip-daily-bonus",
+			ExpiryDate:   time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC),
+		},
+		{
+			UserID:      "user002",
+			Amount:      -25,
+			Operation:   models.OperationTransferOut,
+			VoucherCode: "sample-voucher-code-123",
+			RelatedUser: "user003",
+			ExpiryDate:  time.Date(2025, 7, 31, 23, 59, 59, 0, time.UTC),
+		},
+		{
+			UserID:      "user003",
+			Amount:      25,
+			Operation:   models.OperationTransferIn,
+			VoucherCode: "sample-voucher-code-123",
+			RelatedUser: "user002",
+			ExpiryDate:  time.Date(2025, 7, 31, 23, 59, 59, 0, time.UTC),
+		},
+		{
+			UserID:       "user004",
+			Amount:       200,
+			Operation:    models.OperationRecharge,
+			StrategyName: "new-user-welcome",
+			ExpiryDate:   time.Date(2025, 8, 31, 23, 59, 59, 0, time.UTC),
+		},
+	}
+
+	// Generate more random audit records
+	operations := []string{models.OperationRecharge, models.OperationTransferOut, models.OperationTransferIn}
+	strategies := []string{"recharge-star-everyday", "vip-daily-bonus", "org-weekly-bonus", "active-user-bonus"}
+
+	for i := 6; i <= 20; i++ {
+		userID := fmt.Sprintf("user%03d", i)
+
+		// Generate 1-5 audit records per user
+		auditCount := rand.Intn(5) + 1
+		for j := 0; j < auditCount; j++ {
+			operation := operations[rand.Intn(len(operations))]
+			audit := models.QuotaAudit{
+				UserID:     userID,
+				Amount:     rand.Intn(100) + 10, // 10-110
+				Operation:  operation,
+				ExpiryDate: time.Date(2025, time.Month(rand.Intn(12)+1), rand.Intn(28)+1, 23, 59, 59, 0, time.UTC),
+			}
+
+			// Set specific fields based on operation type
+			switch operation {
+			case models.OperationRecharge:
+				audit.StrategyName = strategies[rand.Intn(len(strategies))]
+			case models.OperationTransferOut:
+				audit.Amount = -audit.Amount // Negative for transfer out
+				audit.VoucherCode = fmt.Sprintf("voucher-%d-%d", i, j)
+				audit.RelatedUser = fmt.Sprintf("user%03d", rand.Intn(20)+1)
+			case models.OperationTransferIn:
+				audit.VoucherCode = fmt.Sprintf("voucher-%d-%d", rand.Intn(20)+1, rand.Intn(5)+1)
+				audit.RelatedUser = fmt.Sprintf("user%03d", rand.Intn(20)+1)
+			}
+
+			audits = append(audits, audit)
+		}
+	}
+
+	// Batch insert audit data
+	for _, audit := range audits {
+		if err := db.Create(&audit).Error; err != nil {
+			fmt.Printf("Warning: Failed to create audit for %s: %v\n", audit.UserID, err)
+		}
+	}
+
+	fmt.Printf("Generated %d audit records\n", len(audits))
 	return nil
 }

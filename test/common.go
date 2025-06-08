@@ -38,13 +38,13 @@ func printTestResults(results []TestResult) {
 	for _, result := range results {
 		if result.Passed {
 			passed++
-			fmt.Printf("✅ %s - 通过 (%.2fs)\n", result.TestName, result.Duration.Seconds())
+			fmt.Printf("✅ %s - PASSED (%.2fs)\n", result.TestName, result.Duration.Seconds())
 		} else {
 			failed++
-			fmt.Printf("❌ %s - 失败: %s (%.2fs)\n", result.TestName, result.Message, result.Duration.Seconds())
+			fmt.Printf("❌ %s - FAILED: %s (%.2fs)\n", result.TestName, result.Message, result.Duration.Seconds())
 		}
 	}
-	fmt.Printf("\n总计: %d 个测试, %d 通过, %d 失败\n", len(results), passed, failed)
+	fmt.Printf("\nTotal: %d tests, %d passed, %d failed\n", len(results), passed, failed)
 }
 
 // setupTestEnvironment setup test environment
@@ -138,11 +138,11 @@ func verifyStrategyNameInAudit(ctx *TestContext, userID, expectedStrategyName st
 		First(&auditRecord).Error
 
 	if err != nil {
-		return fmt.Errorf("未找到包含策略名称 '%s' 的审计记录: %v", expectedStrategyName, err)
+		return fmt.Errorf("audit record with strategy name '%s' not found: %v", expectedStrategyName, err)
 	}
 
 	if auditRecord.StrategyName != expectedStrategyName {
-		return fmt.Errorf("审计记录中的策略名称不匹配，期望: %s, 实际: %s",
+		return fmt.Errorf("strategy name mismatch in audit record, expected: %s, actual: %s",
 			expectedStrategyName, auditRecord.StrategyName)
 	}
 
@@ -157,11 +157,11 @@ func verifyNoStrategyNameInAudit(ctx *TestContext, userID, operationType string)
 		First(&auditRecord).Error
 
 	if err != nil {
-		return fmt.Errorf("未找到 %s 操作的审计记录: %v", operationType, err)
+		return fmt.Errorf("audit record for %s operation not found: %v", operationType, err)
 	}
 
 	if auditRecord.StrategyName != "" {
-		return fmt.Errorf("%s 操作的审计记录不应包含策略名称，但实际为: %s",
+		return fmt.Errorf("audit record for %s operation should not contain strategy name, but actual: %s",
 			operationType, auditRecord.StrategyName)
 	}
 
@@ -172,11 +172,11 @@ func verifyNoStrategyNameInAudit(ctx *TestContext, userID, operationType string)
 func verifyAuditRecordCount(ctx *TestContext, userID string, expectedCount int64) error {
 	var count int64
 	if err := ctx.DB.DB.Model(&models.QuotaAudit{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
-		return fmt.Errorf("查询审计记录数量失败: %v", err)
+		return fmt.Errorf("failed to query audit record count: %v", err)
 	}
 
 	if count != expectedCount {
-		return fmt.Errorf("审计记录数量不匹配，期望: %d, 实际: %d", expectedCount, count)
+		return fmt.Errorf("audit record count mismatch, expected: %d, actual: %d", expectedCount, count)
 	}
 
 	return nil

@@ -59,6 +59,6 @@ go mod tidy
 # Run integration tests
 echo "Starting integration tests..."
 cd test
-go run integration_main.go
+go run main.go
 
 echo "Integration tests completed"
