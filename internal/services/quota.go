@@ -186,7 +186,7 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 
 	// Get records with pagination
 	if err := s.db.Where("user_id = ?", userID).
-		Order("create_time DESC").
+		Order("create_time DESC, id DESC").
 		Offset(offset).
 		Limit(pageSize).
 		Find(&records).Error; err != nil {
