@@ -45,12 +45,13 @@ type QuotaDetailItem struct {
 
 // QuotaAuditRecord represents quota audit record
 type QuotaAuditRecord struct {
-	Amount      int       `json:"amount"`
-	Operation   string    `json:"operation"`
-	VoucherCode string    `json:"voucher_code,omitempty"`
-	RelatedUser string    `json:"related_user,omitempty"`
-	ExpiryDate  time.Time `json:"expiry_date"`
-	CreateTime  time.Time `json:"create_time"`
+	Amount      int                       `json:"amount"`
+	Operation   string                    `json:"operation"`
+	VoucherCode string                    `json:"voucher_code,omitempty"`
+	RelatedUser string                    `json:"related_user,omitempty"`
+	ExpiryDate  time.Time                 `json:"expiry_date"`
+	Details     *models.QuotaAuditDetails `json:"details,omitempty"`
+	CreateTime  time.Time                 `json:"create_time"`
 }
 
 // TransferOutRequest represents transfer out request
@@ -195,12 +196,22 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 
 	result := make([]QuotaAuditRecord, len(records))
 	for i, record := range records {
+		// Parse details if available
+		var details *models.QuotaAuditDetails
+		if record.Details != "" {
+			parsedDetails, err := record.UnmarshalDetails()
+			if err == nil {
+				details = parsedDetails
+			}
+		}
+
 		result[i] = QuotaAuditRecord{
 			Amount:      record.Amount,
 			Operation:   record.Operation,
 			VoucherCode: record.VoucherCode,
 			RelatedUser: record.RelatedUser,
 			ExpiryDate:  record.ExpiryDate,
+			Details:     details,
 			CreateTime:  record.CreateTime,
 		}
 	}
@@ -338,6 +349,27 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		}
 	}
 
+	// Prepare detailed audit information
+	auditDetails := &models.QuotaAuditDetails{
+		Operation: models.OperationTransferOut,
+		Summary: models.QuotaAuditSummary{
+			TotalAmount:        totalAmount,
+			TotalItems:         len(req.QuotaList),
+			SuccessfulItems:    len(req.QuotaList), // All items are successful in transfer out
+			EarliestExpiryDate: earliestExpiryDate.Format(time.RFC3339),
+		},
+		Items: make([]models.QuotaAuditDetailItem, len(req.QuotaList)),
+	}
+
+	// Record each quota item detail
+	for i, item := range req.QuotaList {
+		auditDetails.Items[i] = models.QuotaAuditDetailItem{
+			Amount:     item.Amount,
+			ExpiryDate: item.ExpiryDate.Format(time.RFC3339),
+			Status:     models.AuditStatusSuccess,
+		}
+	}
+
 	// Record audit log
 	auditRecord := &models.QuotaAudit{
 		UserID:      giver.ID,
@@ -346,6 +378,10 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		VoucherCode: voucherCode,
 		RelatedUser: req.ReceiverID,
 		ExpiryDate:  earliestExpiryDate, // Use earliest expiry date for audit
+	}
+	if err := auditRecord.MarshalDetails(auditDetails); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to marshal audit details: %w", err)
 	}
 	if err := tx.Create(auditRecord).Error; err != nil {
 		tx.Rollback()
@@ -497,6 +533,47 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 
 	// Record audit log for valid quota only if there's valid quota
 	if hasValidQuota {
+		// Prepare detailed audit information
+		expiredCount := 0
+		failedCount := 0
+		auditDetails := &models.QuotaAuditDetails{
+			Operation: models.OperationTransferIn,
+			Items:     make([]models.QuotaAuditDetailItem, len(quotaResults)),
+		}
+
+		// Record each quota item detail
+		for i, result := range quotaResults {
+			item := models.QuotaAuditDetailItem{
+				Amount:     result.Amount,
+				ExpiryDate: result.ExpiryDate.Format(time.RFC3339),
+			}
+
+			if result.IsExpired {
+				item.Status = models.AuditStatusExpired
+				item.FailureReason = "Quota expired"
+				expiredCount++
+			} else if result.Success {
+				item.Status = models.AuditStatusSuccess
+			} else {
+				item.Status = models.AuditStatusFailed
+				if result.FailureReason != nil {
+					item.FailureReason = string(*result.FailureReason)
+				}
+				failedCount++
+			}
+
+			auditDetails.Items[i] = item
+		}
+
+		auditDetails.Summary = models.QuotaAuditSummary{
+			TotalAmount:        totalAmount,
+			TotalItems:         len(voucherData.QuotaList),
+			SuccessfulItems:    successCount,
+			FailedItems:        failedCount,
+			ExpiredItems:       expiredCount,
+			EarliestExpiryDate: earliestExpiryDate.Format(time.RFC3339),
+		}
+
 		auditRecord := &models.QuotaAudit{
 			UserID:      receiver.ID,
 			Amount:      totalAmount,
@@ -504,6 +581,13 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 			VoucherCode: req.VoucherCode,
 			RelatedUser: voucherData.GiverID,
 			ExpiryDate:  earliestExpiryDate, // Use earliest expiry date from valid quota
+		}
+		if err := auditRecord.MarshalDetails(auditDetails); err != nil {
+			tx.Rollback()
+			return &TransferInResponse{
+				Status:  TransferStatusFailed,
+				Message: "Failed to marshal audit details",
+			}, nil
 		}
 		if err := tx.Create(auditRecord).Error; err != nil {
 			tx.Rollback()
@@ -608,12 +692,41 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyNa
 		}
 	}
 
+	// Prepare detailed audit information for recharge
+	auditDetails := &models.QuotaAuditDetails{
+		Operation: models.OperationRecharge,
+		Summary: models.QuotaAuditSummary{
+			TotalAmount:        amount,
+			TotalItems:         1,
+			SuccessfulItems:    1,
+			EarliestExpiryDate: expiryDate.Format(time.RFC3339),
+		},
+		Items: []models.QuotaAuditDetailItem{
+			{
+				Amount:        amount,
+				ExpiryDate:    expiryDate.Format(time.RFC3339),
+				Status:        models.AuditStatusSuccess,
+				OriginalQuota: quota.Amount - amount, // Before recharge
+				NewQuota:      quota.Amount,          // After recharge
+			},
+		},
+	}
+
+	// Add strategy information if available
+	if strategyName != "" {
+		auditDetails.Items[0].FailureReason = fmt.Sprintf("Strategy: %s", strategyName)
+	}
+
 	// Record audit log only if it's not expired yet
 	auditRecord := &models.QuotaAudit{
 		UserID:     userID,
 		Amount:     amount,
 		Operation:  models.OperationRecharge,
 		ExpiryDate: expiryDate,
+	}
+	if err := auditRecord.MarshalDetails(auditDetails); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to marshal audit details: %w", err)
 	}
 	if err := tx.Create(auditRecord).Error; err != nil {
 		tx.Rollback()

@@ -124,7 +124,35 @@ type QuotaAudit struct {
 	VoucherCode string    `gorm:"index;size:1000" json:"voucher_code,omitempty"`
 	RelatedUser string    `gorm:"size:255" json:"related_user,omitempty"`
 	ExpiryDate  time.Time `gorm:"not null" json:"expiry_date"`
+	Details     string    `gorm:"type:text" json:"details,omitempty"` // JSON string with detailed operation info
 	CreateTime  time.Time `gorm:"autoCreateTime;index" json:"create_time"`
+}
+
+// QuotaAuditDetails contains detailed information about quota operations
+type QuotaAuditDetails struct {
+	Operation string                 `json:"operation"`
+	Summary   QuotaAuditSummary      `json:"summary"`
+	Items     []QuotaAuditDetailItem `json:"items,omitempty"`
+}
+
+// QuotaAuditSummary contains summary information
+type QuotaAuditSummary struct {
+	TotalAmount        int    `json:"total_amount"`
+	TotalItems         int    `json:"total_items"`
+	SuccessfulItems    int    `json:"successful_items,omitempty"`
+	FailedItems        int    `json:"failed_items,omitempty"`
+	ExpiredItems       int    `json:"expired_items,omitempty"`
+	EarliestExpiryDate string `json:"earliest_expiry_date"`
+}
+
+// QuotaAuditDetailItem represents individual quota item in audit
+type QuotaAuditDetailItem struct {
+	Amount        int    `json:"amount"`
+	ExpiryDate    string `json:"expiry_date"`
+	Status        string `json:"status"` // SUCCESS/FAILED/EXPIRED
+	FailureReason string `json:"failure_reason,omitempty"`
+	OriginalQuota int    `json:"original_quota,omitempty"` // For TRANSFER_IN: existing quota before transfer
+	NewQuota      int    `json:"new_quota,omitempty"`      // For TRANSFER_IN: quota after transfer
 }
 
 // VoucherRedemption track redeemed vouchers to prevent duplicate redemption
@@ -201,6 +229,43 @@ const (
 	OperationTransferIn  = "TRANSFER_IN"
 	OperationTransferOut = "TRANSFER_OUT"
 )
+
+// Status constants for quota audit detail items
+const (
+	AuditStatusSuccess = "SUCCESS"
+	AuditStatusFailed  = "FAILED"
+	AuditStatusExpired = "EXPIRED"
+)
+
+// MarshalDetails converts QuotaAuditDetails to JSON string
+func (q *QuotaAudit) MarshalDetails(details *QuotaAuditDetails) error {
+	if details == nil {
+		q.Details = ""
+		return nil
+	}
+
+	jsonBytes, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("failed to marshal audit details: %w", err)
+	}
+
+	q.Details = string(jsonBytes)
+	return nil
+}
+
+// UnmarshalDetails converts JSON string back to QuotaAuditDetails
+func (q *QuotaAudit) UnmarshalDetails() (*QuotaAuditDetails, error) {
+	if q.Details == "" {
+		return nil, nil
+	}
+
+	var details QuotaAuditDetails
+	if err := json.Unmarshal([]byte(q.Details), &details); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal audit details: %w", err)
+	}
+
+	return &details, nil
+}
 
 // Status constants
 const (
