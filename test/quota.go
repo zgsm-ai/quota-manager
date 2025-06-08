@@ -14,16 +14,16 @@ func testQuotaExpiry(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "expiry_test_user",
 		Name:         "Expiry Test User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
 	// Create expired and valid quotas
-	expiredDate := time.Now().Add(-time.Hour)
-	validDate := time.Now().Add(30 * 24 * time.Hour)
+	expiredDate := time.Now().Truncate(time.Second).Add(-time.Hour)
+	validDate := time.Now().Truncate(time.Second).Add(30 * 24 * time.Hour)
 
 	quotas := []*models.Quota{
 		{UserID: user.ID, Amount: 50, ExpiryDate: expiredDate, Status: models.StatusValid},
@@ -73,8 +73,8 @@ func testQuotaAuditRecords(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "audit_test_user",
 		Name:         "Audit Test User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
@@ -113,8 +113,8 @@ func testStrategyWithExpiryDate(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "strategy_expiry_user",
 		Name:         "Strategy Expiry User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
@@ -185,14 +185,14 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_ops_accuracy_1",
 		Name:         "Operations User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_ops_accuracy_2",
 		Name:         "Operations User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -309,8 +309,8 @@ func testUserQuotaConsumptionOrder(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "user_consumption_order",
 		Name:         "Consumption Order User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user).Error; err != nil {
@@ -407,14 +407,14 @@ func testStrategyExpiryDateCoverage(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_strategy_coverage_1",
 		Name:         "Strategy Coverage User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_strategy_coverage_2",
 		Name:         "Strategy Coverage User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {

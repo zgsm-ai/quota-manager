@@ -13,8 +13,8 @@ func testEmptyCondition(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "test_user_empty",
 		Name:         "Test User Empty",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
@@ -56,14 +56,14 @@ func testMatchUserCondition(ctx *TestContext) TestResult {
 		{
 			ID:           "user_match_1",
 			Name:         "Match User 1",
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 		{
 			ID:           "user_match_2",
 			Name:         "Match User 2",
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 	}
 
@@ -245,22 +245,22 @@ func testGithubStarCondition(ctx *TestContext) TestResult {
 			ID:           "user_star_yes",
 			Name:         "Starred User",
 			GithubStar:   "zgsm,openai/gpt-4,facebook/react",
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 		{
 			ID:           "user_star_no",
 			Name:         "Non-starred User",
 			GithubStar:   "microsoft/vscode,google/tensorflow",
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 		{
 			ID:           "user_star_empty",
 			Name:         "Empty Star User",
 			GithubStar:   "",
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 	}
 
@@ -320,14 +320,14 @@ func testQuotaLECondition(ctx *TestContext) TestResult {
 		{
 			ID:           "user_quota_low",
 			Name:         "Low Quota User",
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 		{
 			ID:           "user_quota_high",
 			Name:         "High Quota User",
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 	}
 
@@ -385,22 +385,22 @@ func testIsVipCondition(ctx *TestContext) TestResult {
 			ID:           "user_vip_high",
 			Name:         "High VIP User",
 			VIP:          3,
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 		{
 			ID:           "user_vip_low",
 			Name:         "Low VIP User",
 			VIP:          0,
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 		{
 			ID:           "user_vip_equal",
 			Name:         "Equal VIP User",
 			VIP:          2,
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		},
 	}
 

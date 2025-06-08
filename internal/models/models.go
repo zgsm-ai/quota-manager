@@ -187,7 +187,7 @@ func (q *Quota) IsValid() bool {
 
 // IsExpired checks if quota is expired
 func (q *Quota) IsExpired() bool {
-	return time.Now().After(q.ExpiryDate)
+	return time.Now().Truncate(time.Second).After(q.ExpiryDate.Truncate(time.Second))
 }
 
 // Expire sets quota status to expired

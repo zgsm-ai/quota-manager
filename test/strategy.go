@@ -19,8 +19,8 @@ func testSingleTypeStrategy(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "user_single_test",
 		Name:         "Single Test User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
@@ -71,8 +71,8 @@ func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "user_periodic_test",
 		Name:         "Periodic Test User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
@@ -125,8 +125,8 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "user_status_test",
 		Name:         "Status Test User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
@@ -186,8 +186,8 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "user_gateway_fail",
 		Name:         "Gateway Fail User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
@@ -261,8 +261,8 @@ func testBatchUserProcessing(ctx *TestContext) TestResult {
 			ID:           fmt.Sprintf("batch_user_%03d", i),
 			Name:         fmt.Sprintf("Batch User %d", i),
 			VIP:          i % 4, // VIP level 0-3
-			RegisterTime: time.Now().Add(-time.Hour * 24),
-			AccessTime:   time.Now().Add(-time.Hour * 1),
+			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 		}
 		if err := ctx.DB.Create(users[i]).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Create user%d failed: %v", i, err)}

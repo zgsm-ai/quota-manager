@@ -133,7 +133,7 @@ func (s *StrategyService) shouldExecutePeriodic(strategy *models.QuotaStrategy) 
 		return false
 	}
 
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	next := schedule.Next(now.Add(-time.Hour))
 
 	// If next execution time is before or equal to current time, it should be executed
@@ -239,7 +239,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 	}
 
 	// Calculate expiry date (end of this/next month)
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	var expiryDate time.Time
 
 	// If less than 30 days until end of month, set expiry to end of next month
@@ -288,7 +288,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 
 // generateBatchNumber generates batch number
 func (s *StrategyService) generateBatchNumber() string {
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	return now.Format("2006010215") // YearMonthDayHour
 }
 

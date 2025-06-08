@@ -19,8 +19,8 @@ func testVoucherGenerationAndValidation(ctx *TestContext) TestResult {
 		GiverGithub: "zhangsan",
 		ReceiverID:  "receiver456",
 		QuotaList: []services.VoucherQuotaItem{
-			{Amount: 10, ExpiryDate: time.Now().Add(30 * 24 * time.Hour)},
-			{Amount: 20, ExpiryDate: time.Now().Add(60 * 24 * time.Hour)},
+			{Amount: 10, ExpiryDate: time.Now().Truncate(time.Second).Add(30 * 24 * time.Hour)},
+			{Amount: 20, ExpiryDate: time.Now().Truncate(time.Second).Add(60 * 24 * time.Hour)},
 		},
 	}
 
@@ -65,15 +65,15 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 		Name:           "Giver User",
 		Phone:          "13800138000",
 		GithubUsername: "giver",
-		RegisterTime:   time.Now().Add(-time.Hour * 24),
-		AccessTime:     time.Now().Add(-time.Hour * 1),
+		RegisterTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:     time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(giver).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create giver user failed: %v", err)}
 	}
 
 	// Add initial quota for giver
-	expiryDate := time.Now().Add(30 * 24 * time.Hour)
+	expiryDate := time.Now().Truncate(time.Second).Add(30 * 24 * time.Hour)
 	quota := &models.Quota{
 		UserID:     giver.ID,
 		Amount:     100,
@@ -139,14 +139,14 @@ func testTransferOutInsufficientAvailable(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_insufficient_1",
 		Name:         "Insufficient User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_insufficient_2",
 		Name:         "Insufficient User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -160,7 +160,7 @@ func testTransferOutInsufficientAvailable(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 200)
 
 	// Add quota with different expiry dates
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	// Add 100 quota expiring in 10 days
 	earlyExpiry := now.AddDate(0, 0, 10)
@@ -258,14 +258,14 @@ func testTransferEarliestExpiryDate(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_earliest_expiry_1",
 		Name:         "Earliest Expiry User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_earliest_expiry_2",
 		Name:         "Earliest Expiry User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -279,7 +279,7 @@ func testTransferEarliestExpiryDate(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 300)
 
 	// Add quota with multiple expiry dates
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	expiry1 := now.AddDate(0, 0, 10) // Earliest
 	expiry2 := now.AddDate(0, 0, 20) // Middle

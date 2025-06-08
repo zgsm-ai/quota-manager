@@ -15,15 +15,15 @@ func testQuotaTransferIn(ctx *TestContext) TestResult {
 	receiver := &models.UserInfo{
 		ID:           "receiver_user",
 		Name:         "Receiver User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	if err := ctx.DB.Create(receiver).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create receiver user failed: %v", err)}
 	}
 
 	// Generate a valid voucher
-	expiryDate := time.Now().Add(30 * 24 * time.Hour)
+	expiryDate := time.Now().Truncate(time.Second).Add(30 * 24 * time.Hour)
 	voucherData := &services.VoucherData{
 		GiverID:     "giver_user",
 		GiverName:   "Giver User",
@@ -107,20 +107,20 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_mismatch_1",
 		Name:         "Mismatch User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_mismatch_2",
 		Name:         "Mismatch User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user3 := &models.UserInfo{
 		ID:           "user_mismatch_3",
 		Name:         "Mismatch User 3",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -142,7 +142,7 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 	}
 
 	// Transfer quota from user1 to user2 - use same expiry date as created by strategy
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	var transferExpiryDate time.Time
 	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 	if endOfMonth.Sub(now).Hours() < 24*30 {
@@ -220,14 +220,14 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_expired_1",
 		Name:         "Expired User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_expired_2",
 		Name:         "Expired User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -241,7 +241,7 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 200)
 
 	// Add quota with mixed expiry dates - we'll create a scenario where quota expires between transfer out and transfer in
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	// Add quota that will expire very soon (expires in 2 seconds)
 	shortValidDate := now.Add(time.Second * 2)
@@ -357,8 +357,8 @@ func testTransferInInvalidVoucher(ctx *TestContext) TestResult {
 	user := &models.UserInfo{
 		ID:           "user_invalid_voucher",
 		Name:         "Invalid Voucher User",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user).Error; err != nil {
@@ -431,14 +431,14 @@ func testTransferInQuotaExpiryConsistency(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_expiry_consistency_1",
 		Name:         "Expiry Consistency User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_expiry_consistency_2",
 		Name:         "Expiry Consistency User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -452,7 +452,7 @@ func testTransferInQuotaExpiryConsistency(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 200)
 
 	// Add quota with different expiry dates
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	// Add quota expiring in 15 days
 	earlyExpiry := now.AddDate(0, 0, 15)

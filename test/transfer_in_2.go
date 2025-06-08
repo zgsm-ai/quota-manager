@@ -15,14 +15,14 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_status_1",
 		Name:         "Status User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_status_2",
 		Name:         "Status User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -35,7 +35,7 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	// Initialize mock quota
 	mockStore.SetQuota(user1.ID, 300)
 
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	// Test Case 1: Transfer In All Success
 	// Add quota with valid expiry dates
@@ -113,14 +113,14 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	user3 := &models.UserInfo{
 		ID:           "user_status_3",
 		Name:         "Status User 3",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user4 := &models.UserInfo{
 		ID:           "user_status_4",
 		Name:         "Status User 4",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user3).Error; err != nil {
@@ -133,8 +133,9 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user3.ID, 200)
 
 	// Add quota with mixed valid dates - we'll create a scenario where quota expires between transfer out and transfer in
-	shortValidDate := now.Add(time.Second * 2) // Very short expiry - will expire quickly
-	validDate := now.AddDate(0, 0, 30)         // 30 days from now
+	now2 := time.Now().Truncate(time.Second)
+	shortValidDate := now2.Add(time.Second * 2) // Very short expiry - will expire quickly
+	validDate := now2.AddDate(0, 0, 30)         // 30 days from now
 
 	if err := ctx.DB.Create(&models.Quota{
 		UserID:     user3.ID,

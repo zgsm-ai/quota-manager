@@ -13,20 +13,20 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 	user1 := &models.UserInfo{
 		ID:           "user_concurrent_1",
 		Name:         "Concurrent User 1",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user2 := &models.UserInfo{
 		ID:           "user_concurrent_2",
 		Name:         "Concurrent User 2",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 	user3 := &models.UserInfo{
 		ID:           "user_concurrent_3",
 		Name:         "Concurrent User 3",
-		RegisterTime: time.Now().Add(-time.Hour * 24),
-		AccessTime:   time.Now().Add(-time.Hour * 1),
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
 	}
 
 	if err := ctx.DB.Create(user1).Error; err != nil {
@@ -63,7 +63,7 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 	// Concurrent operation 2: Multiple transfer outs
 	go func() {
 		<-startChan
-		expiry := time.Now().AddDate(0, 0, 30)
+		expiry := time.Now().Truncate(time.Second).AddDate(0, 0, 30)
 		for i := 0; i < 3; i++ {
 			transferOutReq := &services.TransferOutRequest{
 				ReceiverID: user2.ID,
