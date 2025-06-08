@@ -19,8 +19,8 @@ func testVoucherGenerationAndValidation(ctx *TestContext) TestResult {
 		GiverGithub: "zhangsan",
 		ReceiverID:  "receiver456",
 		QuotaList: []services.VoucherQuotaItem{
-			{Amount: 10, ExpiryDate: time.Now().Add(30 * 24 * time.Hour)},
-			{Amount: 20, ExpiryDate: time.Now().Add(60 * 24 * time.Hour)},
+			{Amount: 10, ExpiryDate: time.Now().Truncate(time.Second).Add(30 * 24 * time.Hour)},
+			{Amount: 20, ExpiryDate: time.Now().Truncate(time.Second).Add(60 * 24 * time.Hour)},
 		},
 	}
 
@@ -73,7 +73,7 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 	}
 
 	// Add initial quota for giver
-	expiryDate := time.Now().Add(30 * 24 * time.Hour)
+	expiryDate := time.Now().Truncate(time.Second).Add(30 * 24 * time.Hour)
 	quota := &models.Quota{
 		UserID:     giver.ID,
 		Amount:     100,
@@ -160,7 +160,7 @@ func testTransferOutInsufficientAvailable(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 200)
 
 	// Add quota with different expiry dates
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	// Add 100 quota expiring in 10 days
 	earlyExpiry := now.AddDate(0, 0, 10)
@@ -279,7 +279,7 @@ func testTransferEarliestExpiryDate(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 300)
 
 	// Add quota with multiple expiry dates
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	expiry1 := now.AddDate(0, 0, 10) // Earliest
 	expiry2 := now.AddDate(0, 0, 20) // Middle
@@ -382,7 +382,8 @@ func testTransferEarliestExpiryDate(ctx *TestContext) TestResult {
 	}
 
 	// Additional test: Transfer out with only non-earliest expiry dates
-	// Add more quota to user1
+	// Add more quota to user1 (update mock store too)
+	mockStore.DeltaQuota(user1.ID, 200) // Add 200 more to mock store
 	if err := ctx.DB.Create(&models.Quota{
 		UserID:     user1.ID,
 		Amount:     200,

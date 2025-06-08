@@ -229,15 +229,19 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 
 	for _, quota := range quotas {
 		dateKey := quota.ExpiryDate.Format("2006-01-02T15:04:05Z07:00")
+		var availableFromThisQuota int
 		if remainingUsed <= 0 {
-			quotaAvailabilityMap[dateKey] = quota.Amount
+			availableFromThisQuota = quota.Amount
 		} else if quota.Amount > remainingUsed {
-			quotaAvailabilityMap[dateKey] = quota.Amount - remainingUsed
+			availableFromThisQuota = quota.Amount - remainingUsed
 			remainingUsed = 0
 		} else {
-			quotaAvailabilityMap[dateKey] = 0
+			availableFromThisQuota = 0
 			remainingUsed -= quota.Amount
 		}
+
+		// Add to existing amount for the same expiry date (accumulate instead of overwriting)
+		quotaAvailabilityMap[dateKey] += availableFromThisQuota
 	}
 
 	// Start transaction
@@ -263,18 +267,21 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 				quotaItem.ExpiryDate, available, quotaItem.Amount)
 		}
 
-		// Also validate the raw quota exists in database
-		var quota models.Quota
-		if err := tx.Where("user_id = ? AND expiry_date = ? AND status = ?",
-			giver.ID, quotaItem.ExpiryDate, models.StatusValid).First(&quota).Error; err != nil {
+		// Also validate the total quota exists in database for this expiry date
+		var totalQuotaAmount int64
+		if err := tx.Model(&models.Quota{}).
+			Where("user_id = ? AND expiry_date = ? AND status = ?",
+				giver.ID, quotaItem.ExpiryDate, models.StatusValid).
+			Select("COALESCE(SUM(amount), 0)").
+			Scan(&totalQuotaAmount).Error; err != nil {
 			tx.Rollback()
-			return nil, fmt.Errorf("quota not found for expiry date %v", quotaItem.ExpiryDate)
+			return nil, fmt.Errorf("failed to check quota for expiry date %v: %w", quotaItem.ExpiryDate, err)
 		}
 
-		if quota.Amount < quotaItem.Amount {
+		if int(totalQuotaAmount) < quotaItem.Amount {
 			tx.Rollback()
 			return nil, fmt.Errorf("insufficient quota for expiry date %v: have %d, need %d",
-				quotaItem.ExpiryDate, quota.Amount, quotaItem.Amount)
+				quotaItem.ExpiryDate, int(totalQuotaAmount), quotaItem.Amount)
 		}
 	}
 
@@ -310,6 +317,13 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 			Update("amount", gorm.Expr("amount - ?", quotaItem.Amount)).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update quota: %w", err)
+		}
+
+		// Delete quota records with zero or negative amounts
+		if err := tx.Where("user_id = ? AND expiry_date = ? AND status = ? AND amount <= 0",
+			giver.ID, quotaItem.ExpiryDate, models.StatusValid).Delete(&models.Quota{}).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to delete zero quota records: %w", err)
 		}
 	}
 
@@ -418,7 +432,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 
 	// Process quota transfer
 	for i, quotaItem := range voucherData.QuotaList {
-		isExpired := time.Now().After(quotaItem.ExpiryDate)
+		isExpired := time.Now().Truncate(time.Second).After(quotaItem.ExpiryDate.Truncate(time.Second))
 
 		quotaResult := TransferQuotaResult{
 			Amount:     quotaItem.Amount,
@@ -547,7 +561,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 // AddQuotaForStrategy adds quota for strategy execution
 func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyName string) error {
 	// Calculate expiry date (end of this/next month)
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	var expiryDate time.Time
 
 	// If less than 30 days until end of month, set expiry to end of next month
@@ -618,7 +632,7 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyNa
 
 // ExpireQuotas expires quotas and synchronizes with AiGateway
 func (s *QuotaService) ExpireQuotas() error {
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	// Find expired but still valid quotas
 	var expiredQuotas []models.Quota
@@ -698,6 +712,63 @@ func (s *QuotaService) ExpireQuotas() error {
 			if err := s.deltaQuotaInAiGateway(userID, deltaQuota); err != nil {
 				tx.Rollback()
 				return fmt.Errorf("failed to adjust total quota for user %s: %w", userID, err)
+			}
+		}
+	}
+
+	tx.Commit()
+	return nil
+}
+
+// MergeQuotaRecords merges quota records for the same user and expiry date
+func (s *QuotaService) MergeQuotaRecords() error {
+	// Start transaction
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Find all quota records grouped by user_id and expiry_date
+	type QuotaGroup struct {
+		UserID      string    `gorm:"column:user_id"`
+		ExpiryDate  time.Time `gorm:"column:expiry_date"`
+		Status      string    `gorm:"column:status"`
+		TotalAmount int       `gorm:"column:total_amount"`
+		RecordCount int       `gorm:"column:record_count"`
+	}
+
+	var groups []QuotaGroup
+	if err := tx.Model(&models.Quota{}).
+		Select("user_id, expiry_date, status, SUM(amount) as total_amount, COUNT(*) as record_count").
+		Group("user_id, expiry_date, status").
+		Having("COUNT(*) > 1").
+		Scan(&groups).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to find duplicate quota records: %w", err)
+	}
+
+	// Process each group that has duplicates
+	for _, group := range groups {
+		// Delete all existing records for this group
+		if err := tx.Where("user_id = ? AND expiry_date = ? AND status = ?",
+			group.UserID, group.ExpiryDate, group.Status).Delete(&models.Quota{}).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to delete duplicate quota records: %w", err)
+		}
+
+		// Create a single merged record (only if total amount is positive)
+		if group.TotalAmount > 0 {
+			mergedQuota := &models.Quota{
+				UserID:     group.UserID,
+				Amount:     group.TotalAmount,
+				ExpiryDate: group.ExpiryDate,
+				Status:     group.Status,
+			}
+			if err := tx.Create(mergedQuota).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("failed to create merged quota record: %w", err)
 			}
 		}
 	}

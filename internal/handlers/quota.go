@@ -39,7 +39,7 @@ func (h *QuotaHandler) getUserFromToken(c *gin.Context) (*models.AuthUser, error
 	return models.ParseUserInfoFromToken(token)
 }
 
-// getUserIDFromToken extracts user ID from token in request header (backward compatibility)
+// getUserIDFromToken extracts user ID from token in request header
 func (h *QuotaHandler) getUserIDFromToken(c *gin.Context) (string, error) {
 	authUser, err := h.getUserFromToken(c)
 	if err != nil {
