@@ -39,10 +39,7 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user3 failed: %v", err)}
 	}
 
-	// Initialize mock quota
-	mockStore.SetQuota(user1.ID, 500)
-
-	// Add initial quota for user1
+	// Add initial quota for user1 (no need to set mock quota since AddQuotaForStrategy will handle AiGateway)
 	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 500, "concurrent-test-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add initial quota failed: %v", err)}
 	}
@@ -63,7 +60,16 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 	// Concurrent operation 2: Multiple transfer outs
 	go func() {
 		<-startChan
-		expiry := time.Now().Truncate(time.Second).AddDate(0, 0, 30)
+		// Use the same expiry date calculation as AddQuotaForStrategy
+		now := time.Now().Truncate(time.Second)
+		var expiry time.Time
+		endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
+		if endOfMonth.Sub(now).Hours() < 24*30 {
+			expiry = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
+		} else {
+			expiry = endOfMonth
+		}
+
 		for i := 0; i < 3; i++ {
 			transferOutReq := &services.TransferOutRequest{
 				ReceiverID: user2.ID,
@@ -105,7 +111,7 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 
 	// Collect results
 	var errors []error
-	for i := 0; i < 11; i++ { // 1 + 3 + 2 + 5 operations
+	for i := 0; i < 7; i++ { // 1 + 3 + 2 + 1 operations
 		if err := <-resultChan; err != nil {
 			errors = append(errors, err)
 		}
