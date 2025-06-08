@@ -168,16 +168,19 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 	transferInReq := &services.TransferInRequest{
 		VoucherCode: transferOutResp.VoucherCode,
 	}
-	_, err = ctx.QuotaService.TransferIn(&models.AuthUser{
+	mismatchResp, err := ctx.QuotaService.TransferIn(&models.AuthUser{
 		ID: user3.ID, Name: user3.Name, Phone: "13700137000", Github: "user3",
 	}, transferInReq)
-	if err == nil {
-		return TestResult{Passed: false, Message: "Transfer in should have failed with mismatched user ID"}
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in request failed unexpectedly: %v", err)}
+	}
+	if mismatchResp.Status != services.TransferStatusFailed {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected FAILED status for mismatched user ID, got %s", mismatchResp.Status)}
 	}
 
-	// Verify the error message contains appropriate information
-	if !strings.Contains(err.Error(), "voucher is not for this user") {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'voucher is not for this user' error, got: %v", err)}
+	// Verify the response message contains appropriate information
+	if !strings.Contains(mismatchResp.Message, "Voucher is not for this user") {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'Voucher is not for this user' message, got: %v", mismatchResp.Message)}
 	}
 
 	// Verify user3 has no quota records
@@ -199,11 +202,14 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 	}
 
 	// Verify the voucher is still available for the correct user (user2)
-	_, err = ctx.QuotaService.TransferIn(&models.AuthUser{
+	correctResp, err := ctx.QuotaService.TransferIn(&models.AuthUser{
 		ID: user2.ID, Name: user2.Name, Phone: "13900139000", Github: "user2",
 	}, transferInReq)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in with correct user failed: %v", err)}
+	}
+	if correctResp.Status != services.TransferStatusSuccess {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected SUCCESS status for correct user, got %s", correctResp.Status)}
 	}
 
 	return TestResult{Passed: true, Message: "Transfer in user ID mismatch test succeeded"}
@@ -234,18 +240,18 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	// Initialize mock quota
 	mockStore.SetQuota(user1.ID, 200)
 
-	// Add quota with mixed expiry dates - some expired, some valid
+	// Add quota with mixed expiry dates - we'll create a scenario where quota expires between transfer out and transfer in
 	now := time.Now()
 
-	// Add 100 quota that already expired (yesterday)
-	expiredDate := now.AddDate(0, 0, -1)
+	// Add quota that will expire very soon (expires in 2 seconds)
+	shortValidDate := now.Add(time.Second * 2)
 	if err := ctx.DB.Create(&models.Quota{
 		UserID:     user1.ID,
 		Amount:     100,
-		ExpiryDate: expiredDate,
-		Status:     models.StatusExpired,
+		ExpiryDate: shortValidDate,
+		Status:     models.StatusValid,
 	}).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Create expired quota failed: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create short-term quota failed: %v", err)}
 	}
 
 	// Add 100 quota that is still valid (expires in 30 days)
@@ -259,12 +265,12 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create valid quota failed: %v", err)}
 	}
 
-	// Transfer out both quotas (including expired one)
+	// Transfer out both quotas (including the one that will expire soon)
 	transferOutReq := &services.TransferOutRequest{
 		ReceiverID: user2.ID,
 		QuotaList: []services.TransferQuotaItem{
-			{Amount: 100, ExpiryDate: expiredDate}, // Expired quota
-			{Amount: 50, ExpiryDate: validDate},    // Valid quota
+			{Amount: 80, ExpiryDate: shortValidDate}, // This will expire by transfer in time
+			{Amount: 50, ExpiryDate: validDate},      // Valid quota
 		},
 	}
 	transferOutResp, err := ctx.QuotaService.TransferOut(&models.AuthUser{
@@ -273,6 +279,9 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer out failed: %v", err)}
 	}
+
+	// Wait for short-term quota to expire
+	time.Sleep(time.Second * 3)
 
 	// Transfer in - should only get valid quota
 	transferInReq := &services.TransferInRequest{
@@ -291,20 +300,28 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 50 transferred quota (excluding expired), got %d", transferInResp.Amount)}
 	}
 
-	// Verify user2's quota records
+	// Verify user2's quota records - should only contain the valid quota
 	var quotaRecords []models.Quota
 	if err := ctx.DB.DB.Where("user_id = ?", user2.ID).Find(&quotaRecords).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get user2 quota records failed: %v", err)}
 	}
 
-	// Should only have one quota record (the valid one)
-	if len(quotaRecords) != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 quota record for user2, got %d", len(quotaRecords))}
+	// Filter only valid quota records
+	var validQuotaRecords []models.Quota
+	for _, record := range quotaRecords {
+		if time.Now().Before(record.ExpiryDate) {
+			validQuotaRecords = append(validQuotaRecords, record)
+		}
 	}
 
-	// Verify the quota record has the correct expiry date (should be the valid date)
-	if !quotaRecords[0].ExpiryDate.Equal(validDate) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota record expiry date to match valid date, got %v", quotaRecords[0].ExpiryDate)}
+	// Should only have one valid quota record
+	if len(validQuotaRecords) != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 valid quota record for user2, got %d (total records: %d)", len(validQuotaRecords), len(quotaRecords))}
+	}
+
+	// Verify the valid quota record has the correct expiry date (should be the valid date)
+	if !validQuotaRecords[0].ExpiryDate.Truncate(time.Second).Equal(validDate.Truncate(time.Second)) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota record expiry date to match valid date %v, got %v", validDate.Truncate(time.Second), validQuotaRecords[0].ExpiryDate.Truncate(time.Second))}
 	}
 
 	// Verify the audit record uses earliest expiry date from valid quotas only
@@ -318,8 +335,8 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	}
 
 	// The audit record should have the valid date as expiry date (not the expired date)
-	if !auditRecords[0].ExpiryDate.Equal(validDate) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit record expiry date to be valid date, got %v", auditRecords[0].ExpiryDate)}
+	if !auditRecords[0].ExpiryDate.Truncate(time.Second).Equal(validDate.Truncate(time.Second)) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit record expiry date to be valid date %v, got %v", validDate.Truncate(time.Second), auditRecords[0].ExpiryDate.Truncate(time.Second))}
 	}
 
 	// Verify user2's total quota

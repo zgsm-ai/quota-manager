@@ -132,17 +132,17 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 
 	mockStore.SetQuota(user3.ID, 200)
 
-	// Add quota with mixed valid and expired dates
-	expiredDate := now.AddDate(0, 0, -1) // Yesterday
-	validDate := now.AddDate(0, 0, 30)   // 30 days from now
+	// Add quota with mixed valid dates - we'll create a scenario where quota expires between transfer out and transfer in
+	shortValidDate := now.Add(time.Second * 2) // Very short expiry - will expire quickly
+	validDate := now.AddDate(0, 0, 30)         // 30 days from now
 
 	if err := ctx.DB.Create(&models.Quota{
 		UserID:     user3.ID,
 		Amount:     100,
-		ExpiryDate: expiredDate,
-		Status:     models.StatusExpired,
+		ExpiryDate: shortValidDate,
+		Status:     models.StatusValid,
 	}).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Create expired quota failed: %v", err)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create short-term quota failed: %v", err)}
 	}
 
 	if err := ctx.DB.Create(&models.Quota{
@@ -158,8 +158,8 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	transferOutReq2 := &services.TransferOutRequest{
 		ReceiverID: user4.ID,
 		QuotaList: []services.TransferQuotaItem{
-			{Amount: 100, ExpiryDate: expiredDate}, // This will be expired
-			{Amount: 80, ExpiryDate: validDate},    // This will be valid
+			{Amount: 80, ExpiryDate: shortValidDate}, // This will expire by transfer in time
+			{Amount: 80, ExpiryDate: validDate},      // This will remain valid
 		},
 	}
 
@@ -169,6 +169,9 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer out for partial success test failed: %v", err)}
 	}
+
+	// Wait for short-term quota to expire
+	time.Sleep(time.Second * 3)
 
 	// Transfer in - should be partial success
 	transferInReq2 := &services.TransferInRequest{

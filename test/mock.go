@@ -10,7 +10,8 @@ import (
 
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
-	data map[string]int
+	data     map[string]int // Total quota
+	usedData map[string]int // Used quota
 }
 
 func (m *MockQuotaStore) GetQuota(consumer string) int {
@@ -29,7 +30,26 @@ func (m *MockQuotaStore) DeltaQuota(consumer string, delta int) int {
 	return m.data[consumer]
 }
 
-var mockStore = &MockQuotaStore{data: make(map[string]int)}
+func (m *MockQuotaStore) GetUsed(consumer string) int {
+	if used, exists := m.usedData[consumer]; exists {
+		return used
+	}
+	return 0
+}
+
+func (m *MockQuotaStore) SetUsed(consumer string, used int) {
+	m.usedData[consumer] = used
+}
+
+func (m *MockQuotaStore) DeltaUsed(consumer string, delta int) int {
+	m.usedData[consumer] += delta
+	return m.usedData[consumer]
+}
+
+var mockStore = &MockQuotaStore{
+	data:     make(map[string]int),
+	usedData: make(map[string]int),
+}
 
 // createMockServer create mock server
 func createMockServer(shouldFail bool) *httptest.Server {
@@ -119,9 +139,10 @@ func createMockServer(shouldFail bool) *httptest.Server {
 			}
 
 			consumer := c.Query("consumer")
-			// Mock used quota as 0 for simplicity
+			used := mockStore.GetUsed(consumer)
+
 			c.JSON(http.StatusOK, gin.H{
-				"quota":    0,
+				"quota":    used,
 				"consumer": consumer,
 			})
 		})
@@ -140,9 +161,19 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
+			// Parse and update used quota
+			var delta int
+			if _, err := fmt.Sscanf(value, "%d", &delta); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid value"})
+				return
+			}
+
+			newUsed := mockStore.DeltaUsed(consumer, delta)
+
 			c.JSON(http.StatusOK, gin.H{
 				"message":  "success",
 				"consumer": consumer,
+				"new_used": newUsed,
 			})
 		})
 	}
