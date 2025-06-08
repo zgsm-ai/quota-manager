@@ -19,7 +19,7 @@ func testClearData(ctx *TestContext) TestResult {
 	// Clear all tables
 	tables := []string{"voucher_redemption", "quota_audit", "quota", "quota_execute", "quota_strategy", "user_info"}
 	for _, table := range tables {
-		if err := ctx.DB.Exec("DELETE FROM " + table).Error; err != nil {
+		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
 		}
 	}
@@ -127,4 +127,57 @@ func cleanupTestEnvironment(ctx *TestContext) {
 	if ctx.FailServer != nil {
 		ctx.FailServer.Close()
 	}
+}
+
+// verifyStrategyNameInAudit verifies that audit records contain the correct strategy name
+func verifyStrategyNameInAudit(ctx *TestContext, userID, expectedStrategyName string, operationType string) error {
+	var auditRecord models.QuotaAudit
+	err := ctx.DB.DB.Where("user_id = ? AND operation = ? AND strategy_name = ?",
+		userID, operationType, expectedStrategyName).
+		Order("create_time DESC").
+		First(&auditRecord).Error
+
+	if err != nil {
+		return fmt.Errorf("未找到包含策略名称 '%s' 的审计记录: %v", expectedStrategyName, err)
+	}
+
+	if auditRecord.StrategyName != expectedStrategyName {
+		return fmt.Errorf("审计记录中的策略名称不匹配，期望: %s, 实际: %s",
+			expectedStrategyName, auditRecord.StrategyName)
+	}
+
+	return nil
+}
+
+// verifyNoStrategyNameInAudit verifies that audit records do not contain strategy name for non-recharge operations
+func verifyNoStrategyNameInAudit(ctx *TestContext, userID, operationType string) error {
+	var auditRecord models.QuotaAudit
+	err := ctx.DB.DB.Where("user_id = ? AND operation = ?", userID, operationType).
+		Order("create_time DESC").
+		First(&auditRecord).Error
+
+	if err != nil {
+		return fmt.Errorf("未找到 %s 操作的审计记录: %v", operationType, err)
+	}
+
+	if auditRecord.StrategyName != "" {
+		return fmt.Errorf("%s 操作的审计记录不应包含策略名称，但实际为: %s",
+			operationType, auditRecord.StrategyName)
+	}
+
+	return nil
+}
+
+// verifyAuditRecordCount verifies the total count of audit records for a user
+func verifyAuditRecordCount(ctx *TestContext, userID string, expectedCount int64) error {
+	var count int64
+	if err := ctx.DB.DB.Model(&models.QuotaAudit{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return fmt.Errorf("查询审计记录数量失败: %v", err)
+	}
+
+	if count != expectedCount {
+		return fmt.Errorf("审计记录数量不匹配，期望: %d, 实际: %d", expectedCount, count)
+	}
+
+	return nil
 }

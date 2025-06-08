@@ -131,6 +131,11 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount -30, got %d", auditRecord.Amount)}
 	}
 
+	// Verify no strategy name in transfer out audit record
+	if err := verifyNoStrategyNameInAudit(ctx, giver.ID, models.OperationTransferOut); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer out strategy name verification failed: %v", err)}
+	}
+
 	return TestResult{Passed: true, Message: "Quota Transfer Out Test Succeeded"}
 }
 

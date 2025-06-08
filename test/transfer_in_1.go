@@ -99,6 +99,11 @@ func testQuotaTransferIn(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected ALREADY_REDEEMED status, got %s", duplicateResp.Status)}
 	}
 
+	// Verify no strategy name in transfer in audit record
+	if err := verifyNoStrategyNameInAudit(ctx, receiver.ID, models.OperationTransferIn); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in strategy name verification failed: %v", err)}
+	}
+
 	return TestResult{Passed: true, Message: "Quota Transfer In Test Succeeded"}
 }
 
@@ -139,6 +144,11 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 	// Add quota for user1
 	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, "test-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add quota failed: %v", err)}
+	}
+
+	// Verify strategy name in audit record for AddQuotaForStrategy
+	if err := verifyStrategyNameInAudit(ctx, user1.ID, "test-strategy", models.OperationRecharge); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("AddQuotaForStrategy strategy name verification failed: %v", err)}
 	}
 
 	// Transfer quota from user1 to user2 - use same expiry date as created by strategy

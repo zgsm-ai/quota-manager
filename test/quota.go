@@ -104,6 +104,16 @@ func testQuotaAuditRecords(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: "Audit record data mismatch"}
 	}
 
+	// Verify strategy name is correctly recorded
+	if record.StrategyName != "test-strategy" {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected strategy name 'test-strategy', got '%s'", record.StrategyName)}
+	}
+
+	// Use helper function to verify audit record
+	if err := verifyStrategyNameInAudit(ctx, user.ID, "test-strategy", models.OperationRecharge); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy name verification failed: %v", err)}
+	}
+
 	return TestResult{Passed: true, Message: "Quota Audit Records Test Succeeded"}
 }
 
@@ -211,6 +221,11 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add initial quota failed: %v", err)}
 	}
 
+	// Verify strategy name in audit for initial recharge
+	if err := verifyStrategyNameInAudit(ctx, user1.ID, "initial-strategy", models.OperationRecharge); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Initial strategy name verification failed: %v", err)}
+	}
+
 	// 2. Transfer some quota from user1 to user2 - use same expiry date as created by strategy
 	now := time.Now()
 	var transferExpiryDate time.Time
@@ -252,6 +267,19 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 	// 5. Add more quota via strategy for user1
 	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 50, "additional-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add additional quota failed: %v", err)}
+	}
+
+	// Verify strategy name in audit for additional recharge
+	if err := verifyStrategyNameInAudit(ctx, user1.ID, "additional-strategy", models.OperationRecharge); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Additional strategy name verification failed: %v", err)}
+	}
+
+	// Verify transfer operations have no strategy name
+	if err := verifyNoStrategyNameInAudit(ctx, user1.ID, models.OperationTransferOut); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer out strategy name verification failed: %v", err)}
+	}
+	if err := verifyNoStrategyNameInAudit(ctx, user2.ID, models.OperationTransferIn); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in strategy name verification failed: %v", err)}
 	}
 
 	// Verify user1 quota calculations

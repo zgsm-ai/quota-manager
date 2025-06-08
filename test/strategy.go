@@ -52,6 +52,11 @@ func testSingleTypeStrategy(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("First execution expected 1 time, actually executed %d times", executeCount)}
 	}
 
+	// Verify strategy name in audit record
+	if err := verifyStrategyNameInAudit(ctx, user.ID, "single-type-test", models.OperationRecharge); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy name verification failed: %v", err)}
+	}
+
 	// Second execute strategy (should be skipped because it has already been executed)
 	ctx.StrategyService.ExecStrategy(strategy, users)
 
@@ -116,6 +121,16 @@ func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Periodic strategy repeated execution, expected 2 times, actually executed %d times", executeCount)}
 	}
 
+	// Verify strategy name in audit records (should have 2 records)
+	if err := verifyAuditRecordCount(ctx, user.ID, 2); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Audit record count verification failed: %v", err)}
+	}
+
+	// Verify strategy name in latest audit record
+	if err := verifyStrategyNameInAudit(ctx, user.ID, "periodic-type-test", models.OperationRecharge); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy name verification failed: %v", err)}
+	}
+
 	return TestResult{Passed: true, Message: "Periodic Recharge Strategy Test Succeeded"}
 }
 
@@ -175,6 +190,11 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 
 	if executeCount != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Enabled strategy expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// Verify strategy name in audit record
+	if err := verifyStrategyNameInAudit(ctx, user.ID, "status-control-test", models.OperationRecharge); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy name verification failed: %v", err)}
 	}
 
 	return TestResult{Passed: true, Message: "Strategy Status Control Test Succeeded"}
