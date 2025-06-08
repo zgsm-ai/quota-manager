@@ -78,6 +78,24 @@ type TransferInRequest struct {
 	VoucherCode string `json:"voucher_code"`
 }
 
+// TransferStatus represents the transfer status
+type TransferStatus string
+
+const (
+	TransferStatusSuccess         TransferStatus = "SUCCESS"
+	TransferStatusPartialSuccess  TransferStatus = "PARTIAL_SUCCESS"
+	TransferStatusFailed          TransferStatus = "FAILED"
+	TransferStatusAlreadyRedeemed TransferStatus = "ALREADY_REDEEMED"
+)
+
+// TransferFailureReason represents the reason for transfer failure
+type TransferFailureReason string
+
+const (
+	TransferFailureReasonExpired TransferFailureReason = "EXPIRED"
+	TransferFailureReasonPending TransferFailureReason = "PENDING"
+)
+
 // TransferInResponse represents transfer in response
 type TransferInResponse struct {
 	GiverID     string                `json:"giver_id"`
@@ -89,13 +107,17 @@ type TransferInResponse struct {
 	VoucherCode string                `json:"voucher_code"`
 	Operation   string                `json:"operation"`
 	Amount      int                   `json:"amount"`
+	Status      TransferStatus        `json:"status"`
+	Message     string                `json:"message,omitempty"`
 }
 
 // TransferQuotaResult represents transfer quota result
 type TransferQuotaResult struct {
-	Amount     int       `json:"amount"`
-	ExpiryDate time.Time `json:"expiry_date"`
-	IsExpired  bool      `json:"is_expired"`
+	Amount        int                    `json:"amount"`
+	ExpiryDate    time.Time              `json:"expiry_date"`
+	IsExpired     bool                   `json:"is_expired"`
+	Success       bool                   `json:"success"`
+	FailureReason *TransferFailureReason `json:"failure_reason,omitempty"`
 }
 
 // GetUserQuota retrieves user quota information
@@ -337,18 +359,34 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 	// Validate voucher
 	voucherData, err := s.voucherSvc.ValidateAndDecodeVoucher(req.VoucherCode)
 	if err != nil {
-		return nil, fmt.Errorf("invalid voucher code: %w", err)
+		return &TransferInResponse{
+			Status:  TransferStatusFailed,
+			Message: "Invalid voucher code",
+		}, nil
 	}
 
 	// Check if voucher is for the correct receiver
 	if voucherData.ReceiverID != receiver.ID {
-		return nil, fmt.Errorf("voucher is not for this user")
+		return &TransferInResponse{
+			Status:  TransferStatusFailed,
+			Message: "Voucher is not for this user",
+		}, nil
 	}
 
 	// Check if voucher has already been redeemed
 	var existingRedemption models.VoucherRedemption
 	if err := s.db.Where("voucher_code = ?", req.VoucherCode).First(&existingRedemption).Error; err == nil {
-		return nil, fmt.Errorf("voucher has already been redeemed")
+		return &TransferInResponse{
+			GiverID:     voucherData.GiverID,
+			GiverName:   voucherData.GiverName,
+			GiverPhone:  voucherData.GiverPhone,
+			GiverGithub: voucherData.GiverGithub,
+			ReceiverID:  receiver.ID,
+			VoucherCode: req.VoucherCode,
+			Operation:   models.OperationTransferIn,
+			Status:      TransferStatusAlreadyRedeemed,
+			Message:     "Voucher has already been redeemed",
+		}, nil
 	}
 
 	// Start transaction
@@ -366,10 +404,14 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 	}
 	if err := tx.Create(redemption).Error; err != nil {
 		tx.Rollback()
-		return nil, fmt.Errorf("failed to record voucher redemption: %w", err)
+		return &TransferInResponse{
+			Status:  TransferStatusFailed,
+			Message: "Failed to record voucher redemption",
+		}, nil
 	}
 
 	totalAmount := 0
+	successCount := 0
 	quotaResults := make([]TransferQuotaResult, len(voucherData.QuotaList))
 	var earliestExpiryDate time.Time
 	hasValidQuota := false
@@ -377,10 +419,12 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 	// Process quota transfer
 	for i, quotaItem := range voucherData.QuotaList {
 		isExpired := time.Now().After(quotaItem.ExpiryDate)
-		quotaResults[i] = TransferQuotaResult{
+
+		quotaResult := TransferQuotaResult{
 			Amount:     quotaItem.Amount,
 			ExpiryDate: quotaItem.ExpiryDate,
 			IsExpired:  isExpired,
+			Success:    false,
 		}
 
 		// Only process valid quota
@@ -396,25 +440,45 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 					Status:     models.StatusValid,
 				}
 				if err := tx.Create(newQuota).Error; err != nil {
-					tx.Rollback()
-					return nil, fmt.Errorf("failed to create quota: %w", err)
+					// Individual quota creation failed, mark as pending
+					reason := TransferFailureReasonPending
+					quotaResult.FailureReason = &reason
+				} else {
+					quotaResult.Success = true
+					successCount++
+					totalAmount += quotaItem.Amount
+
+					// Track earliest expiry date for valid quota
+					if !hasValidQuota || quotaItem.ExpiryDate.Before(earliestExpiryDate) {
+						earliestExpiryDate = quotaItem.ExpiryDate
+						hasValidQuota = true
+					}
 				}
 			} else {
 				// Update existing quota
 				if err := tx.Model(&existingQuota).Update("amount", existingQuota.Amount+quotaItem.Amount).Error; err != nil {
-					tx.Rollback()
-					return nil, fmt.Errorf("failed to update quota: %w", err)
+					// Individual quota update failed, mark as pending
+					reason := TransferFailureReasonPending
+					quotaResult.FailureReason = &reason
+				} else {
+					quotaResult.Success = true
+					successCount++
+					totalAmount += quotaItem.Amount
+
+					// Track earliest expiry date for valid quota
+					if !hasValidQuota || quotaItem.ExpiryDate.Before(earliestExpiryDate) {
+						earliestExpiryDate = quotaItem.ExpiryDate
+						hasValidQuota = true
+					}
 				}
 			}
-
-			totalAmount += quotaItem.Amount
-
-			// Track earliest expiry date for valid quota
-			if !hasValidQuota || quotaItem.ExpiryDate.Before(earliestExpiryDate) {
-				earliestExpiryDate = quotaItem.ExpiryDate
-				hasValidQuota = true
-			}
+		} else {
+			// Mark expired quota
+			reason := TransferFailureReasonExpired
+			quotaResult.FailureReason = &reason
 		}
+
+		quotaResults[i] = quotaResult
 	}
 
 	// Record audit log for valid quota only if there's valid quota
@@ -429,7 +493,10 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 		}
 		if err := tx.Create(auditRecord).Error; err != nil {
 			tx.Rollback()
-			return nil, fmt.Errorf("failed to create audit record: %w", err)
+			return &TransferInResponse{
+				Status:  TransferStatusFailed,
+				Message: "Failed to create audit record",
+			}, nil
 		}
 	}
 
@@ -437,11 +504,30 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 	if totalAmount > 0 {
 		if err := s.deltaQuotaInAiGateway(receiver.ID, totalAmount); err != nil {
 			tx.Rollback()
-			return nil, fmt.Errorf("failed to update AiGateway quota: %w", err)
+			return &TransferInResponse{
+				Status:  TransferStatusFailed,
+				Message: "Failed to update AiGateway quota",
+			}, nil
 		}
 	}
 
 	tx.Commit()
+
+	// Determine overall transfer status
+	var status TransferStatus
+	var message string
+	totalQuotas := len(voucherData.QuotaList)
+
+	if successCount == 0 {
+		status = TransferStatusFailed
+		message = "All quota transfers failed"
+	} else if successCount == totalQuotas {
+		status = TransferStatusSuccess
+		message = "All quota transfers completed successfully"
+	} else {
+		status = TransferStatusPartialSuccess
+		message = fmt.Sprintf("%d of %d quota transfers completed successfully", successCount, totalQuotas)
+	}
 
 	return &TransferInResponse{
 		GiverID:     voucherData.GiverID,
@@ -453,6 +539,8 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 		VoucherCode: req.VoucherCode,
 		Operation:   models.OperationTransferIn,
 		Amount:      totalAmount,
+		Status:      status,
+		Message:     message,
 	}, nil
 }
 
