@@ -531,8 +531,8 @@ func testTransferInQuotaExpiryConsistency(ctx *TestContext) TestResult {
 	}
 
 	// The audit record should have the earliest expiry date
-	if !auditRecords2[0].ExpiryDate.Equal(earlyExpiry) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit record expiry date to be %v, got %v", earlyExpiry, auditRecords2[0].ExpiryDate)}
+	if !auditRecords2[0].ExpiryDate.Truncate(time.Microsecond).Equal(earlyExpiry.Truncate(time.Microsecond)) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit record expiry date to be %v, got %v", earlyExpiry.Truncate(time.Microsecond), auditRecords2[0].ExpiryDate.Truncate(time.Microsecond))}
 	}
 
 	// Verify user2's quota records have correct individual expiry dates
@@ -546,13 +546,13 @@ func testTransferInQuotaExpiryConsistency(ctx *TestContext) TestResult {
 	}
 
 	// First record should have early expiry
-	if !quotaRecords[0].ExpiryDate.Equal(earlyExpiry) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected first quota record expiry to be %v, got %v", earlyExpiry, quotaRecords[0].ExpiryDate)}
+	if !quotaRecords[0].ExpiryDate.Truncate(time.Microsecond).Equal(earlyExpiry.Truncate(time.Microsecond)) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected first quota record expiry to be %v, got %v", earlyExpiry.Truncate(time.Microsecond), quotaRecords[0].ExpiryDate.Truncate(time.Microsecond))}
 	}
 
 	// Second record should have late expiry
-	if !quotaRecords[1].ExpiryDate.Equal(lateExpiry) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected second quota record expiry to be %v, got %v", lateExpiry, quotaRecords[1].ExpiryDate)}
+	if !quotaRecords[1].ExpiryDate.Truncate(time.Microsecond).Equal(lateExpiry.Truncate(time.Microsecond)) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected second quota record expiry to be %v, got %v", lateExpiry.Truncate(time.Microsecond), quotaRecords[1].ExpiryDate.Truncate(time.Microsecond))}
 	}
 
 	// Verify the audit record for user1 (transfer out) also has the earliest expiry date
@@ -574,8 +574,8 @@ func testTransferInQuotaExpiryConsistency(ctx *TestContext) TestResult {
 	}
 
 	// The transfer out audit record should also have the earliest expiry date
-	if !transferOutRecord.ExpiryDate.Equal(earlyExpiry) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected transfer out audit record expiry date to be %v, got %v", earlyExpiry, transferOutRecord.ExpiryDate)}
+	if !transferOutRecord.ExpiryDate.Truncate(time.Microsecond).Equal(earlyExpiry.Truncate(time.Microsecond)) {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected transfer out audit record expiry date to be %v, got %v", earlyExpiry.Truncate(time.Microsecond), transferOutRecord.ExpiryDate.Truncate(time.Microsecond))}
 	}
 
 	return TestResult{Passed: true, Message: "Transfer in quota expiry consistency test succeeded"}
