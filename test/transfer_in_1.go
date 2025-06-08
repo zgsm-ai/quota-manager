@@ -369,24 +369,36 @@ func testTransferInInvalidVoucher(ctx *TestContext) TestResult {
 	transferInReq1 := &services.TransferInRequest{
 		VoucherCode: "invalid",
 	}
-	_, err := ctx.QuotaService.TransferIn(&models.AuthUser{
+	resp1, err := ctx.QuotaService.TransferIn(&models.AuthUser{
 		ID: user.ID, Name: user.Name, Phone: "13800138000", Github: "user",
 	}, transferInReq1)
 
-	if err == nil {
-		return TestResult{Passed: false, Message: "Should fail with completely invalid voucher"}
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in request failed unexpectedly: %v", err)}
+	}
+	if resp1.Status != services.TransferStatusFailed {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected FAILED status for invalid voucher, got %s", resp1.Status)}
+	}
+	if !strings.Contains(resp1.Message, "Invalid voucher code") {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'Invalid voucher code' message, got '%s'", resp1.Message)}
 	}
 
 	// Test case 2: Voucher with invalid format (missing separators)
 	transferInReq2 := &services.TransferInRequest{
 		VoucherCode: "invalidvouchercodewithoutanyseparators",
 	}
-	_, err = ctx.QuotaService.TransferIn(&models.AuthUser{
+	resp2, err := ctx.QuotaService.TransferIn(&models.AuthUser{
 		ID: user.ID, Name: user.Name, Phone: "13800138000", Github: "user",
 	}, transferInReq2)
 
-	if err == nil {
-		return TestResult{Passed: false, Message: "Should fail with invalid format voucher"}
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in request failed unexpectedly: %v", err)}
+	}
+	if resp2.Status != services.TransferStatusFailed {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected FAILED status for invalid format voucher, got %s", resp2.Status)}
+	}
+	if !strings.Contains(resp2.Message, "Invalid voucher code") {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'Invalid voucher code' message, got '%s'", resp2.Message)}
 	}
 
 	// Test case 3: Voucher with tampered signature
@@ -395,12 +407,18 @@ func testTransferInInvalidVoucher(ctx *TestContext) TestResult {
 	transferInReq3 := &services.TransferInRequest{
 		VoucherCode: tamperedVoucher,
 	}
-	_, err = ctx.QuotaService.TransferIn(&models.AuthUser{
+	resp3, err := ctx.QuotaService.TransferIn(&models.AuthUser{
 		ID: user.ID, Name: user.Name, Phone: "13800138000", Github: "user",
 	}, transferInReq3)
 
-	if err == nil {
-		return TestResult{Passed: false, Message: "Should fail with tampered signature voucher"}
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer in request failed unexpectedly: %v", err)}
+	}
+	if resp3.Status != services.TransferStatusFailed {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected FAILED status for tampered voucher, got %s", resp3.Status)}
+	}
+	if !strings.Contains(resp3.Message, "Invalid voucher code") {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'Invalid voucher code' message, got '%s'", resp3.Message)}
 	}
 
 	// Verify that no quota was transferred to the user
