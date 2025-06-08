@@ -91,9 +91,12 @@ func testQuotaTransferIn(ctx *TestContext) TestResult {
 	}
 
 	// Test duplicate redemption
-	_, err = ctx.QuotaService.TransferIn(receiverAuth, transferReq)
-	if err == nil {
-		return TestResult{Passed: false, Message: "Duplicate redemption should fail"}
+	duplicateResp, err := ctx.QuotaService.TransferIn(receiverAuth, transferReq)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Duplicate redemption check failed: %v", err)}
+	}
+	if duplicateResp.Status != services.TransferStatusAlreadyRedeemed {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected ALREADY_REDEEMED status, got %s", duplicateResp.Status)}
 	}
 
 	return TestResult{Passed: true, Message: "Quota Transfer In Test Succeeded"}
