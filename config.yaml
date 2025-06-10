@@ -8,8 +8,10 @@ database:
 
 aigateway:
   host: "127.0.0.1"
-  port: 1002
+  port: 8002
   admin_path: "/v1/chat/completions"
+  auth_header: "x-admin-key"
+  auth_value: "12345678"
   credential: "credential3"
 
 server:

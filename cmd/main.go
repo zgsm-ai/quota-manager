@@ -49,9 +49,10 @@ func main() {
 
 	// Initialize AiGateway client
 	gateway := aigateway.NewClient(
-		cfg.AiGateway.BaseURL(),
+		cfg.AiGateway.GetBaseURL(),
 		cfg.AiGateway.AdminPath,
-		cfg.AiGateway.Credential,
+		cfg.AiGateway.AuthHeader,
+		cfg.AiGateway.AuthValue,
 	)
 
 	// Initialize services

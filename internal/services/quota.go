@@ -898,19 +898,22 @@ func (s *QuotaService) MergeQuotaRecords() error {
 // Helper methods for AiGateway communication
 
 func (s *QuotaService) getQuotaFromAiGateway(userID string) (int, error) {
-	url := fmt.Sprintf("%s%s/quota?consumer=%s", s.aiGatewayConf.BaseURL(), s.aiGatewayConf.AdminPath, userID)
+	url := fmt.Sprintf("%s%s/quota?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.aiGatewayConf.Credential)
+	// Set admin key header if configured
+	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
+		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
+	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to get total quota: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -932,19 +935,22 @@ func (s *QuotaService) getQuotaFromAiGateway(userID string) (int, error) {
 }
 
 func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
-	url := fmt.Sprintf("%s%s/quota/used?consumer=%s", s.aiGatewayConf.BaseURL(), s.aiGatewayConf.AdminPath, userID)
+	url := fmt.Sprintf("%s%s/quota/used?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.aiGatewayConf.Credential)
+	// Set admin key header if configured
+	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
+		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
+	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to get used quota: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -966,24 +972,28 @@ func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
 }
 
 func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
-	reqURL := fmt.Sprintf("%s%s/quota/delta", s.aiGatewayConf.BaseURL(), s.aiGatewayConf.AdminPath)
+	reqURL := fmt.Sprintf("%s%s/quota/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
 
 	data := url.Values{}
-	data.Set("consumer", userID)
+	data.Set("user_id", userID)
 	data.Set("value", strconv.Itoa(delta))
 
 	req, err := http.NewRequest("POST", reqURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.aiGatewayConf.Credential)
+	// Set admin key header if configured
+	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
+		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
+	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delta quota: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -995,24 +1005,28 @@ func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
 }
 
 func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta int) error {
-	reqURL := fmt.Sprintf("%s%s/quota/used/delta", s.aiGatewayConf.BaseURL(), s.aiGatewayConf.AdminPath)
+	reqURL := fmt.Sprintf("%s%s/quota/used/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
 
 	data := url.Values{}
-	data.Set("consumer", userID)
+	data.Set("user_id", userID)
 	data.Set("value", strconv.Itoa(delta))
 
 	req, err := http.NewRequest("POST", reqURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+s.aiGatewayConf.Credential)
+	// Set admin key header if configured
+	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
+		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
+	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delta used quota: %w", err)
 	}
 	defer resp.Body.Close()
 

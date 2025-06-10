@@ -24,10 +24,10 @@ type DatabaseConfig struct {
 }
 
 type AiGatewayConfig struct {
-	Host       string `mapstructure:"host"`
-	Port       int    `mapstructure:"port"`
+	BaseURL    string `mapstructure:"base_url"`
 	AdminPath  string `mapstructure:"admin_path"`
-	Credential string `mapstructure:"credential"`
+	AuthHeader string `mapstructure:"auth_header"`
+	AuthValue  string `mapstructure:"auth_value"`
 }
 
 type ServerConfig struct {
@@ -49,8 +49,11 @@ func (d *DatabaseConfig) DSN() string {
 		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode)
 }
 
-func (a *AiGatewayConfig) BaseURL() string {
-	return fmt.Sprintf("http://%s:%d", a.Host, a.Port)
+func (a *AiGatewayConfig) GetBaseURL() string {
+	if a.BaseURL != "" {
+		return a.BaseURL
+	}
+	return "http://localhost:8002"
 }
 
 func LoadConfig(path string) (*Config, error) {

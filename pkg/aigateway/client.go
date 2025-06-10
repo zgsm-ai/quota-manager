@@ -14,20 +14,22 @@ import (
 type Client struct {
 	BaseURL    string
 	AdminPath  string
-	Credential string
+	AuthHeader string
+	AuthValue  string
 	HTTPClient *http.Client
 }
 
 type QuotaResponse struct {
-	Quota    int    `json:"quota"`
-	Consumer string `json:"consumer"`
+	Quota  int    `json:"quota"`
+	UserID string `json:"user_id"`
 }
 
-func NewClient(baseURL, adminPath, credential string) *Client {
+func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
 	return &Client{
 		BaseURL:    baseURL,
 		AdminPath:  adminPath,
-		Credential: credential,
+		AuthHeader: authHeader,
+		AuthValue:  authValue,
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -35,11 +37,11 @@ func NewClient(baseURL, adminPath, credential string) *Client {
 }
 
 // RefreshQuota refreshes user quota
-func (c *Client) RefreshQuota(consumer string, quota int) error {
+func (c *Client) RefreshQuota(userID string, quota int) error {
 	apiUrl := fmt.Sprintf("%s%s/quota/refresh", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
-	data.Set("consumer", consumer)
+	data.Set("user_id", userID)
 	data.Set("quota", strconv.Itoa(quota))
 
 	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
@@ -47,7 +49,11 @@ func (c *Client) RefreshQuota(consumer string, quota int) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Credential)
+	// Set admin key header if configured
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.HTTPClient.Do(req)
@@ -64,15 +70,18 @@ func (c *Client) RefreshQuota(consumer string, quota int) error {
 }
 
 // QueryQuota queries user quota
-func (c *Client) QueryQuota(consumer string) (*QuotaResponse, error) {
-	apiUrl := fmt.Sprintf("%s%s/quota?consumer=%s", c.BaseURL, c.AdminPath, consumer)
+func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
+	apiUrl := fmt.Sprintf("%s%s/quota?user_id=%s", c.BaseURL, c.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Credential)
+	// Set admin key header if configured
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -98,11 +107,11 @@ func (c *Client) QueryQuota(consumer string) (*QuotaResponse, error) {
 }
 
 // DeltaQuota increases or decreases user quota
-func (c *Client) DeltaQuota(consumer string, value int) error {
+func (c *Client) DeltaQuota(userID string, value int) error {
 	apiUrl := fmt.Sprintf("%s%s/quota/delta", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
-	data.Set("consumer", consumer)
+	data.Set("user_id", userID)
 	data.Set("value", strconv.Itoa(value))
 
 	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
@@ -110,7 +119,11 @@ func (c *Client) DeltaQuota(consumer string, value int) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Credential)
+	// Set admin key header if configured
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.HTTPClient.Do(req)
