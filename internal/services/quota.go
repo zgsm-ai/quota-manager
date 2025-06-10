@@ -223,6 +223,11 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 
 // TransferOut handles quota transfer out
 func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutRequest) (*TransferOutResponse, error) {
+	// Check if receiver_id is empty
+	if req.ReceiverID == "" {
+		return nil, fmt.Errorf("receiver_id cannot be empty")
+	}
+
 	// Get used quota from AiGateway to check availability
 	usedQuota, err := s.getUsedQuotaFromAiGateway(giver.ID)
 	if err != nil {

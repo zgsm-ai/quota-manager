@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net"
-	"net/url"
-	"strconv"
 
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
@@ -76,32 +73,15 @@ func setupTestEnvironment() (*TestContext, error) {
 	failServer := createMockServer(true)
 
 	// Create AiGateway client with mock server URL
-	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions", "credential3")
+	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions", "X-Auth-Key", "credential3")
 
 	// Create mock AiGateway config for QuotaService
 	mockAiGatewayConfig := &config.AiGatewayConfig{
-		Host:       "127.0.0.1", // This will be overridden by the URL parsing
-		Port:       8080,        // This will be overridden by the URL parsing
+		BaseURL:    mockServer.URL,
 		AdminPath:  "/v1/chat/completions",
-		Credential: "credential3",
+		AuthHeader: "X-Auth-Key",
+		AuthValue:  "credential3",
 	}
-
-	// Override the BaseURL method behavior by setting the host and port from mockServer URL
-	// Parse the mock server URL to get host and port
-	parsedURL, err := url.Parse(mockServer.URL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse mock server URL: %w", err)
-	}
-	host, portStr, err := net.SplitHostPort(parsedURL.Host)
-	if err != nil {
-		return nil, fmt.Errorf("failed to split host and port: %w", err)
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse port: %w", err)
-	}
-	mockAiGatewayConfig.Host = host
-	mockAiGatewayConfig.Port = port
 
 	// Create services
 	voucherService := services.NewVoucherService("test-signing-key-at-least-32-bytes-long")

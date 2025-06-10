@@ -433,3 +433,82 @@ func testTransferEarliestExpiryDate(ctx *TestContext) TestResult {
 
 	return TestResult{Passed: true, Message: "Transfer earliest expiry date test succeeded"}
 }
+
+// testTransferOutEmptyReceiverID tests transfer out with empty receiver_id
+func testTransferOutEmptyReceiverID(ctx *TestContext) TestResult {
+	// Create test user
+	user := &models.UserInfo{
+		ID:           "user_empty_receiver",
+		Name:         "Empty Receiver User",
+		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
+		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
+	}
+	if err := ctx.DB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Add initial quota for user
+	expiryDate := time.Now().Truncate(time.Second).Add(30 * 24 * time.Hour)
+	quota := &models.Quota{
+		UserID:     user.ID,
+		Amount:     100,
+		ExpiryDate: expiryDate,
+		Status:     models.StatusValid,
+	}
+	if err := ctx.DB.Create(quota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create initial quota failed: %v", err)}
+	}
+
+	// Initialize mock quota
+	mockStore.SetQuota(user.ID, 100)
+
+	// Create AuthUser
+	userAuth := &models.AuthUser{
+		ID:      user.ID,
+		Name:    user.Name,
+		StaffID: "test_staff_id",
+		Github:  "empty_receiver_user",
+		Phone:   "13800138000",
+	}
+
+	// Transfer out request with empty receiver_id
+	transferReq := &services.TransferOutRequest{
+		ReceiverID: "", // Empty receiver_id
+		QuotaList: []services.TransferQuotaItem{
+			{Amount: 30, ExpiryDate: expiryDate},
+		},
+	}
+
+	// Execute transfer out - should fail with receiver_id empty error
+	_, err := ctx.QuotaService.TransferOut(userAuth, transferReq)
+	if err == nil {
+		return TestResult{Passed: false, Message: "Transfer out should have failed due to empty receiver_id"}
+	}
+
+	// Verify the error message indicates receiver_id cannot be empty
+	if !strings.Contains(err.Error(), "receiver_id cannot be empty") {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'receiver_id cannot be empty' error, got: %v", err)}
+	}
+
+	// Verify user's quota remains unchanged
+	var unchangedQuota models.Quota
+	if err := ctx.DB.Where("user_id = ? AND expiry_date = ?", user.ID, expiryDate).First(&unchangedQuota).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get quota: %v", err)}
+	}
+
+	if unchangedQuota.Amount != 100 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota to remain unchanged at 100, got %d", unchangedQuota.Amount)}
+	}
+
+	// Verify no audit record was created for the failed transfer
+	var auditCount int64
+	if err := ctx.DB.Model(&models.QuotaAudit{}).Where("user_id = ? AND operation = ?", user.ID, models.OperationTransferOut).Count(&auditCount).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count audit records: %v", err)}
+	}
+
+	if auditCount != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no audit records for failed transfer, got %d", auditCount)}
+	}
+
+	return TestResult{Passed: true, Message: "Transfer out empty receiver_id test succeeded"}
+}

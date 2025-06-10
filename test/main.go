@@ -90,6 +90,7 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Transfer In Quota Expiry Consistency Test", testTransferInQuotaExpiryConsistency},
 		{"Strategy Expiry Date Coverage Test", testStrategyExpiryDateCoverage},
 		{"Transfer Earliest Expiry Date Test", testTransferEarliestExpiryDate},
+		{"Transfer Out Empty Receiver ID Test", testTransferOutEmptyReceiverID},
 		{"Concurrent Operations Test", testConcurrentOperations},
 	}
 

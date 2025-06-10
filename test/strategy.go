@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net"
-	"net/url"
-	"strconv"
 	"time"
 
 	"quota-manager/internal/config"
@@ -214,29 +211,16 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 	}
 
 	// Create mock AiGateway config pointing to the fail server
-	parsedURL, err := url.Parse(ctx.FailServer.URL)
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to parse fail server URL: %v", err)}
-	}
-	host, portStr, err := net.SplitHostPort(parsedURL.Host)
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to split host and port: %v", err)}
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to parse port: %v", err)}
-	}
-
 	failAiGatewayConfig := &config.AiGatewayConfig{
-		Host:       host,
-		Port:       port,
+		BaseURL:    ctx.FailServer.URL,
 		AdminPath:  "/v1/chat/completions",
-		Credential: "credential3",
+		AuthHeader: "X-Auth-Key",
+		AuthValue:  "credential3",
 	}
 
 	// Create services using failed gateway configuration
 	failQuotaService := services.NewQuotaService(ctx.DB.DB, failAiGatewayConfig, ctx.VoucherService)
-	failGateway := aigateway.NewClient(ctx.FailServer.URL, "/v1/chat/completions", "credential3")
+	failGateway := aigateway.NewClient(ctx.FailServer.URL, "/v1/chat/completions", "X-Auth-Key", "credential3")
 	failStrategyService := services.NewStrategyService(ctx.DB, failGateway, failQuotaService)
 
 	// Create strategy
@@ -259,7 +243,7 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 
 	// Check execution record exists but status is failed
 	var execute models.QuotaExecute
-	err = ctx.DB.Where("strategy_id = ? AND user_id = ? AND status = 'failed'", strategy.ID, user.ID).First(&execute).Error
+	err := ctx.DB.Where("strategy_id = ? AND user_id = ? AND status = 'failed'", strategy.ID, user.ID).First(&execute).Error
 
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Execution record not found: %v", err)}

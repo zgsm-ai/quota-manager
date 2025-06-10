@@ -58,8 +58,8 @@ func createMockServer(shouldFail bool) *httptest.Server {
 
 	// Middleware: validate Authorization
 	authMiddleware := func(c *gin.Context) {
-		auth := c.GetHeader("Authorization")
-		if auth != "Bearer credential3" {
+		auth := c.GetHeader("X-Auth-Key")
+		if auth != "credential3" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
 			c.Abort()
 			return
@@ -76,10 +76,10 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			consumer := c.PostForm("consumer")
+			userID := c.PostForm("user_id")
 			quota := c.PostForm("quota")
 
-			if consumer == "" || quota == "" {
+			if userID == "" || quota == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
 				return
 			}
@@ -93,12 +93,12 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			consumer := c.Query("consumer")
-			quota := mockStore.GetQuota(consumer)
+			userID := c.Query("user_id")
+			quota := mockStore.GetQuota(userID)
 
 			c.JSON(http.StatusOK, gin.H{
-				"quota":    quota,
-				"consumer": consumer,
+				"quota":   quota,
+				"user_id": userID,
 			})
 		})
 
@@ -108,10 +108,10 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			consumer := c.PostForm("consumer")
+			userID := c.PostForm("user_id")
 			value := c.PostForm("value")
 
-			if consumer == "" || value == "" {
+			if userID == "" || value == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
 				return
 			}
@@ -123,11 +123,11 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			newQuota := mockStore.DeltaQuota(consumer, delta)
+			newQuota := mockStore.DeltaQuota(userID, delta)
 
 			c.JSON(http.StatusOK, gin.H{
 				"message":   "success",
-				"consumer":  consumer,
+				"user_id":   userID,
 				"new_quota": newQuota,
 			})
 		})
@@ -138,12 +138,12 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			consumer := c.Query("consumer")
-			used := mockStore.GetUsed(consumer)
+			userID := c.Query("user_id")
+			used := mockStore.GetUsed(userID)
 
 			c.JSON(http.StatusOK, gin.H{
-				"quota":    used,
-				"consumer": consumer,
+				"quota":   used,
+				"user_id": userID,
 			})
 		})
 
@@ -153,10 +153,10 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			consumer := c.PostForm("consumer")
+			userID := c.PostForm("user_id")
 			value := c.PostForm("value")
 
-			if consumer == "" || value == "" {
+			if userID == "" || value == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
 				return
 			}
@@ -168,11 +168,11 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				return
 			}
 
-			newUsed := mockStore.DeltaUsed(consumer, delta)
+			newUsed := mockStore.DeltaUsed(userID, delta)
 
 			c.JSON(http.StatusOK, gin.H{
-				"message":  "success",
-				"consumer": consumer,
+				"message": "success",
+				"user_id": userID,
 				"new_used": newUsed,
 			})
 		})
