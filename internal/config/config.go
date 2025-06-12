@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	Database  DatabaseConfig  `mapstructure:"database"`
-	AiGateway AiGatewayConfig `mapstructure:"aigateway"`
-	Server    ServerConfig    `mapstructure:"server"`
-	Scheduler SchedulerConfig `mapstructure:"scheduler"`
-	Voucher   VoucherConfig   `mapstructure:"voucher"`
+	Database     DatabaseConfig  `mapstructure:"database"`
+	AuthDatabase DatabaseConfig  `mapstructure:"auth_database"`
+	AiGateway    AiGatewayConfig `mapstructure:"aigateway"`
+	Server       ServerConfig    `mapstructure:"server"`
+	Scheduler    SchedulerConfig `mapstructure:"scheduler"`
+	Voucher      VoucherConfig   `mapstructure:"voucher"`
 }
 
 type DatabaseConfig struct {

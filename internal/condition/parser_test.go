@@ -87,12 +87,13 @@ func TestNonQuotaConditions(t *testing.T) {
 	}
 
 	user := &models.UserInfo{
-		ID:           "test_user",
-		VIP:          2,
-		Org:          "test_org",
-		GithubStar:   "zgsm,openai/gpt-4",
-		RegisterTime: time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
-		AccessTime:   time.Now(),
+		ID:         "test_user",
+		VIP:        2,
+		Company:    "test_org",
+		GithubStar: "zgsm,openai/gpt-4",
+		CreatedAt:  time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+		UpdatedAt:  time.Now(),
+		AccessTime: time.Now(),
 	}
 
 	tests := []struct {

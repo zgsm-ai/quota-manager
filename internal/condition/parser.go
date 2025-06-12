@@ -82,7 +82,7 @@ type RegisterBeforeExpr struct {
 }
 
 func (r *RegisterBeforeExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
-	return !user.RegisterTime.After(r.Timestamp), nil
+	return !user.CreatedAt.After(r.Timestamp), nil
 }
 
 // AccessAfterExpr access time after expression
@@ -145,7 +145,7 @@ type BelongToExpr struct {
 }
 
 func (b *BelongToExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
-	return user.Org == b.Org, nil
+	return user.Company == b.Org, nil
 }
 
 // RechargeExpr already recharged expression

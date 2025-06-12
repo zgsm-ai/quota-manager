@@ -6,6 +6,14 @@ database:
   dbname: "quota_manager"
   sslmode: "disable"
 
+auth_database:
+  host: "127.0.0.1"
+  port: 5432
+  user: "keycloak"
+  password: "sf2025~SHENMA"
+  dbname: "auth"
+  sslmode: "disable"
+
 aigateway:
   host: "127.0.0.1"
   port: 1002

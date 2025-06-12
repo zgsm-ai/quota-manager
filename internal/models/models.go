@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 // AuthUser struct for parsing user info from JWT
@@ -90,18 +88,24 @@ type QuotaExecute struct {
 
 // UserInfo user information table
 type UserInfo struct {
-	ID             string    `gorm:"primaryKey" json:"id"`
-	Name           string    `json:"name"`
-	GithubUsername string    `json:"github_username"`
-	Email          string    `json:"email"`
-	Phone          string    `json:"phone"`
-	GithubStar     string    `json:"github_star"`
-	VIP            int       `gorm:"default:0" json:"vip"`
-	Org            string    `json:"org"`
-	RegisterTime   time.Time `json:"register_time"`
-	AccessTime     time.Time `json:"access_time"`
-	CreateTime     time.Time `gorm:"autoCreateTime" json:"create_time"`
-	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`
+	ID               string    `gorm:"primaryKey;type:uuid" json:"id"`
+	CreatedAt        time.Time `gorm:"column:created_at;type:timestamptz(0)" json:"created_at"`
+	UpdatedAt        time.Time `gorm:"column:updated_at;type:timestamptz(0)" json:"updated_at"`
+	AccessTime       time.Time `gorm:"column:access_time;type:timestamptz(0)" json:"access_time"`
+	Name             string    `gorm:"size:100;not null" json:"name"`
+	GithubID         string    `gorm:"column:github_id;size:100" json:"github_id"`
+	GithubName       string    `gorm:"column:github_name;size:100" json:"github_name"`
+	VIP              int       `gorm:"default:0" json:"vip"`
+	Phone            string    `gorm:"size:20" json:"phone"`
+	Email            string    `gorm:"size:100" json:"email"`
+	Password         string    `gorm:"size:100" json:"password"`
+	Company          string    `gorm:"size:100" json:"company"`
+	Location         string    `gorm:"size:100" json:"location"`
+	UserCode         string    `gorm:"column:user_code;size:100" json:"user_code"`
+	ExternalAccounts string    `gorm:"column:external_accounts;size:100" json:"external_accounts"`
+	EmployeeNumber   string    `gorm:"column:employee_number;size:100" json:"employee_number"`
+	GithubStar       string    `gorm:"column:github_star;type:text" json:"github_star"`
+	Devices          string    `gorm:"type:jsonb" json:"devices"`
 }
 
 // Quota user quota table with expiry time
@@ -174,7 +178,7 @@ func (QuotaExecute) TableName() string {
 }
 
 func (UserInfo) TableName() string {
-	return "user_info"
+	return "auth_users"
 }
 
 func (Quota) TableName() string {
@@ -187,11 +191,6 @@ func (QuotaAudit) TableName() string {
 
 func (VoucherRedemption) TableName() string {
 	return "voucher_redemption"
-}
-
-// AutoMigrate automatically migrates database tables
-func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(&QuotaStrategy{}, &QuotaExecute{}, &UserInfo{}, &Quota{}, &QuotaAudit{}, &VoucherRedemption{})
 }
 
 // IsEnabled checks if the strategy is enabled

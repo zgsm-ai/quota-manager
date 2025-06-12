@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Initialize database
-	db, err := database.NewDB(&cfg.Database)
+	db, err := database.NewDB(cfg)
 	if err != nil {
 		logger.Error("Failed to connect database", zap.Error(err))
 		log.Fatalf("Failed to connect database: %v", err)

@@ -13,13 +13,8 @@ import (
 // testSingleTypeStrategy test single recharge strategy
 func testSingleTypeStrategy(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "user_single_test",
-		Name:         "Single Test User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("user_single_test", "Single Test User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -70,13 +65,8 @@ func testSingleTypeStrategy(ctx *TestContext) TestResult {
 // testPeriodicTypeStrategy test periodic recharge strategy
 func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "user_periodic_test",
-		Name:         "Periodic Test User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("user_periodic_test", "Periodic Test User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -134,13 +124,8 @@ func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
 // testStrategyStatusControl test strategy status control
 func testStrategyStatusControl(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "user_status_test",
-		Name:         "Status Test User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("user_status_test", "Status Test User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -200,13 +185,8 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 // testAiGatewayFailure test AiGateway request failure
 func testAiGatewayFailure(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "user_gateway_fail",
-		Name:         "Gateway Fail User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("user_gateway_fail", "Gateway Fail User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -261,14 +241,8 @@ func testBatchUserProcessing(ctx *TestContext) TestResult {
 	// Create multiple test users
 	users := make([]*models.UserInfo, 10)
 	for i := 0; i < 10; i++ {
-		users[i] = &models.UserInfo{
-			ID:           fmt.Sprintf("batch_user_%03d", i),
-			Name:         fmt.Sprintf("Batch User %d", i),
-			VIP:          i % 4, // VIP level 0-3
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		}
-		if err := ctx.DB.Create(users[i]).Error; err != nil {
+		users[i] = createTestUser(fmt.Sprintf("batch_user_%03d", i), fmt.Sprintf("Batch User %d", i), i%4)
+		if err := ctx.DB.AuthDB.Create(users[i]).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Create user%d failed: %v", i, err)}
 		}
 	}

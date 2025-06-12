@@ -60,15 +60,8 @@ func testVoucherGenerationAndValidation(ctx *TestContext) TestResult {
 // testQuotaTransferOut test quota transfer out
 func testQuotaTransferOut(ctx *TestContext) TestResult {
 	// Create test users
-	giver := &models.UserInfo{
-		ID:             "giver_user",
-		Name:           "Giver User",
-		Phone:          "13800138000",
-		GithubUsername: "giver",
-		RegisterTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:     time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(giver).Error; err != nil {
+	giver := createTestUser("giver_user", "Giver User", 0)
+	if err := ctx.DB.AuthDB.Create(giver).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create giver user failed: %v", err)}
 	}
 
@@ -89,7 +82,7 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 		ID:      giver.ID,
 		Name:    giver.Name,
 		StaffID: "test_staff_id",
-		Github:  giver.GithubUsername,
+		Github:  giver.GithubName,
 		Phone:   giver.Phone,
 	}
 
@@ -141,23 +134,13 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 
 func testTransferOutInsufficientAvailable(ctx *TestContext) TestResult {
 	// Create test users
-	user1 := &models.UserInfo{
-		ID:           "user_insufficient_1",
-		Name:         "Insufficient User 1",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user2 := &models.UserInfo{
-		ID:           "user_insufficient_2",
-		Name:         "Insufficient User 2",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	user1 := createTestUser("user_insufficient_1", "Insufficient User 1", 0)
+	user2 := createTestUser("user_insufficient_2", "Insufficient User 2", 0)
 
-	if err := ctx.DB.Create(user1).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user1).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user1 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user2).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user2).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user2 failed: %v", err)}
 	}
 
@@ -260,23 +243,13 @@ func testTransferOutInsufficientAvailable(ctx *TestContext) TestResult {
 
 func testTransferEarliestExpiryDate(ctx *TestContext) TestResult {
 	// Create test users
-	user1 := &models.UserInfo{
-		ID:           "user_earliest_expiry_1",
-		Name:         "Earliest Expiry User 1",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user2 := &models.UserInfo{
-		ID:           "user_earliest_expiry_2",
-		Name:         "Earliest Expiry User 2",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	user1 := createTestUser("user_earliest_expiry_1", "Earliest Expiry User 1", 0)
+	user2 := createTestUser("user_earliest_expiry_2", "Earliest Expiry User 2", 0)
 
-	if err := ctx.DB.Create(user1).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user1).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user1 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user2).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user2).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user2 failed: %v", err)}
 	}
 
@@ -437,13 +410,8 @@ func testTransferEarliestExpiryDate(ctx *TestContext) TestResult {
 // testTransferOutEmptyReceiverID tests transfer out with empty receiver_id
 func testTransferOutEmptyReceiverID(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "user_empty_receiver",
-		Name:         "Empty Receiver User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("user_empty_receiver", "Empty Receiver User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 

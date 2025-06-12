@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"quota-manager/internal/condition"
 	"quota-manager/internal/database"
 	"quota-manager/internal/services"
 	"quota-manager/pkg/aigateway"
@@ -20,6 +21,7 @@ type TestContext struct {
 	Gateway         *aigateway.Client
 	MockServer      *httptest.Server
 	FailServer      *httptest.Server
+	quotaQuerier    condition.QuotaQuerier
 }
 
 // TestResult test result
@@ -51,7 +53,7 @@ func main() {
 func runAllTests(ctx *TestContext) []TestResult {
 	var results []TestResult
 
-	// Test case list
+	// Test case list - Currently testing only the first test case
 	testCases := []struct {
 		name string
 		fn   func(*TestContext) TestResult
@@ -69,6 +71,13 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Condition Expression - OR Nesting Test", testOrCondition},
 		{"Condition Expression - NOT Nesting Test", testNotCondition},
 		{"Condition Expression - Complex Nesting Test", testComplexCondition},
+		{"Condition Expression - AND + OR Nesting Test", testAndOrNestingCondition},
+		{"Condition Expression - OR + NOT Nesting Test", testOrNotNestingCondition},
+		{"Condition Expression - Three-Level Nesting Test", testThreeLevelNestingCondition},
+		{"Condition Expression - Multiple Conditions Nesting Test", testMultipleConditionsNestingCondition},
+		{"Condition Expression - Complex Nesting Test1", testComplexNestedConditions1},
+		{"Condition Expression - Complex Nesting Test2", testComplexNestedConditions2},
+		{"Condition Expression - Complex Nesting Test3", testComplexNestedConditions3},
 		{"Single Recharge Strategy Test", testSingleTypeStrategy},
 		{"Periodic Recharge Strategy Test", testPeriodicTypeStrategy},
 		{"Strategy Status Control Test", testStrategyStatusControl},
@@ -91,6 +100,11 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Strategy Expiry Date Coverage Test", testStrategyExpiryDateCoverage},
 		{"Transfer Earliest Expiry Date Test", testTransferEarliestExpiryDate},
 		{"Transfer Out Empty Receiver ID Test", testTransferOutEmptyReceiverID},
+		{"Transfer Out With Expired Quota Test", testTransferOutWithExpiredQuota},
+		{"Transfer In With Expired Voucher Test", testTransferInWithExpiredVoucher},
+		{"Quota Expiry During Transfer Test", testQuotaExpiryDuringTransfer},
+		{"Batch Quota Expiry Consistency Test", testBatchQuotaExpiryConsistency},
+		{"Transfer Out Expiry Date Validation Test", testTransferOutExpiryDateValidation},
 		{"Concurrent Operations Test", testConcurrentOperations},
 	}
 

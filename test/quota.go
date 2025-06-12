@@ -11,13 +11,8 @@ import (
 // testQuotaExpiry test quota expiry functionality
 func testQuotaExpiry(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "expiry_test_user",
-		Name:         "Expiry Test User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("expiry_test_user", "Expiry Test User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -70,13 +65,8 @@ func testQuotaExpiry(ctx *TestContext) TestResult {
 // testQuotaAuditRecords test quota audit records functionality
 func testQuotaAuditRecords(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "audit_test_user",
-		Name:         "Audit Test User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("audit_test_user", "Audit Test User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -120,13 +110,8 @@ func testQuotaAuditRecords(ctx *TestContext) TestResult {
 // testStrategyWithExpiryDate test strategy execution with expiry date
 func testStrategyWithExpiryDate(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "strategy_expiry_user",
-		Name:         "Strategy Expiry User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	if err := ctx.DB.Create(user).Error; err != nil {
+	user := createTestUser("strategy_expiry_user", "Strategy Expiry User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -192,23 +177,13 @@ func testStrategyWithExpiryDate(ctx *TestContext) TestResult {
 // testMultipleOperationsAccuracy test accuracy of quota calculations under multiple operations
 func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 	// Create test users
-	user1 := &models.UserInfo{
-		ID:           "user_ops_accuracy_1",
-		Name:         "Operations User 1",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user2 := &models.UserInfo{
-		ID:           "user_ops_accuracy_2",
-		Name:         "Operations User 2",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	user1 := createTestUser("user_ops_accuracy_1", "Operations User 1", 0)
+	user2 := createTestUser("user_ops_accuracy_2", "Operations User 2", 0)
 
-	if err := ctx.DB.Create(user1).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user1).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user1 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user2).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user2).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user2 failed: %v", err)}
 	}
 
@@ -334,14 +309,9 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 
 func testUserQuotaConsumptionOrder(ctx *TestContext) TestResult {
 	// Create test user
-	user := &models.UserInfo{
-		ID:           "user_consumption_order",
-		Name:         "Consumption Order User",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	user := createTestUser("user_consumption_order", "Consumption Order User", 0)
 
-	if err := ctx.DB.Create(user).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
@@ -432,23 +402,13 @@ func testUserQuotaConsumptionOrder(ctx *TestContext) TestResult {
 
 func testStrategyExpiryDateCoverage(ctx *TestContext) TestResult {
 	// Create test users
-	user1 := &models.UserInfo{
-		ID:           "user_strategy_coverage_1",
-		Name:         "Strategy Coverage User 1",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user2 := &models.UserInfo{
-		ID:           "user_strategy_coverage_2",
-		Name:         "Strategy Coverage User 2",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	user1 := createTestUser("user_strategy_coverage_1", "Strategy Coverage User 1", 0)
+	user2 := createTestUser("user_strategy_coverage_2", "Strategy Coverage User 2", 0)
 
-	if err := ctx.DB.Create(user1).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user1).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user1 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user2).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user2).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user2 failed: %v", err)}
 	}
 

@@ -12,23 +12,13 @@ import (
 // testTransferInStatusCases tests all different transfer in status cases
 func testTransferInStatusCases(ctx *TestContext) TestResult {
 	// Create test users
-	user1 := &models.UserInfo{
-		ID:           "user_status_1",
-		Name:         "Status User 1",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user2 := &models.UserInfo{
-		ID:           "user_status_2",
-		Name:         "Status User 2",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	user1 := createTestUser("user_status_1", "Status User 1", 0)
+	user2 := createTestUser("user_status_2", "Status User 2", 0)
 
-	if err := ctx.DB.Create(user1).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user1).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user1 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user2).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user2).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user2 failed: %v", err)}
 	}
 
@@ -110,23 +100,13 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 
 	// Test Case 2: Transfer In with Expired Quota (Partial Success)
 	// Create new users for this test
-	user3 := &models.UserInfo{
-		ID:           "user_status_3",
-		Name:         "Status User 3",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user4 := &models.UserInfo{
-		ID:           "user_status_4",
-		Name:         "Status User 4",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	user3 := createTestUser("user_status_3", "Status User 3", 0)
+	user4 := createTestUser("user_status_4", "Status User 4", 0)
 
-	if err := ctx.DB.Create(user3).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user3).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user3 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user4).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user4).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user4 failed: %v", err)}
 	}
 

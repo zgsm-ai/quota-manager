@@ -9,33 +9,18 @@ import (
 )
 
 func testConcurrentOperations(ctx *TestContext) TestResult {
-	// Create test users
-	user1 := &models.UserInfo{
-		ID:           "user_concurrent_1",
-		Name:         "Concurrent User 1",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user2 := &models.UserInfo{
-		ID:           "user_concurrent_2",
-		Name:         "Concurrent User 2",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
-	user3 := &models.UserInfo{
-		ID:           "user_concurrent_3",
-		Name:         "Concurrent User 3",
-		RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-		AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-	}
+	// Create test users using createTestUser function
+	user1 := createTestUser("concurrent_1", "Concurrent User 1", 0)
+	user2 := createTestUser("concurrent_2", "Concurrent User 2", 0)
+	user3 := createTestUser("concurrent_3", "Concurrent User 3", 0)
 
-	if err := ctx.DB.Create(user1).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user1).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user1 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user2).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user2).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user2 failed: %v", err)}
 	}
-	if err := ctx.DB.Create(user3).Error; err != nil {
+	if err := ctx.DB.AuthDB.Create(user3).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user3 failed: %v", err)}
 	}
 
@@ -78,7 +63,7 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 				},
 			}
 			_, err := ctx.QuotaService.TransferOut(&models.AuthUser{
-				ID: user1.ID, Name: user1.Name, Phone: "13800138000", Github: "user1",
+				ID: user1.ID, Name: user1.Name, Phone: user1.Phone, Github: user1.GithubID,
 			}, transferOutReq)
 			resultChan <- err
 		}

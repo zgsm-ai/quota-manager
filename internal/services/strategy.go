@@ -93,7 +93,7 @@ func (s *StrategyService) TraverseStrategy() {
 // loadUsers loads the user list
 func (s *StrategyService) loadUsers() ([]models.UserInfo, error) {
 	var users []models.UserInfo
-	if err := s.db.Find(&users).Error; err != nil {
+	if err := s.db.AuthDB.Find(&users).Error; err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
 	return users, nil

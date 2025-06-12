@@ -103,19 +103,25 @@ quota-manager/
 - `create_time`: Creation time
 - `update_time`: Update time
 
-**User Information Table (user_info)**
-- `id`: User ID
+**User Information Table (auth_users)**
+- `id`: User ID (UUID)
+- `created_at`: Creation time
+- `updated_at`: Update time
+- `access_time`: Last access time
 - `name`: Username
-- `github_username`: GitHub username
+- `github_id`: GitHub ID
+- `github_name`: GitHub username
 - `email`: Email
 - `phone`: Phone number
 - `github_star`: GitHub star project list
 - `vip`: VIP level
-- `org`: Organization ID
-- `register_time`: Registration time
-- `access_time`: Last access time
-- `create_time`: Creation time
-- `update_time`: Update time
+- `company`: Company
+- `location`: Location
+- `user_code`: User code
+- `external_accounts`: External accounts
+- `employee_number`: Employee number
+- `password`: Password
+- `devices`: Devices (JSON)
 
 ## Authentication System
 
@@ -484,7 +490,19 @@ voucher:
      password: "password"
      dbname: "quota_manager"
      sslmode: "disable"
+
+   auth_database:
+     host: "localhost"
+     port: 5432
+     user: "postgres"
+     password: "password"
+     dbname: "auth"
+     sslmode: "disable"
    ```
+
+   The system uses a separated database architecture:
+   - `database`: Contains quota-related tables (quota_strategy, quota_execute, quota, quota_audit, voucher_redemption)
+   - `auth_database`: Contains user authentication data (auth_users table)
 
 3. **Start Services**
    ```bash
@@ -534,6 +552,14 @@ database:
   user: "postgres"
   password: "password"
   dbname: "quota_manager"
+  sslmode: "disable"
+
+auth_database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "password"
+  dbname: "auth"
   sslmode: "disable"
 
 aigateway:

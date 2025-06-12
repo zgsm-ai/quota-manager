@@ -7,6 +7,7 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
+	"strings"
 	"time"
 )
 
@@ -18,7 +19,7 @@ func main() {
 	}
 
 	// Connect to database
-	db, err := database.NewDB(&cfg.Database)
+	db, err := database.NewDB(cfg)
 	if err != nil {
 		log.Fatalf("Failed to connect database: %v", err)
 	}
@@ -52,83 +53,110 @@ func generateUsers(db *database.DB) error {
 
 	users := []models.UserInfo{
 		{
-			ID:             "user001",
-			Name:           "John Doe",
-			GithubUsername: "zhangsan",
-			Email:          "zhangsan@example.com",
-			Phone:          "13800138001",
-			GithubStar:     "zgsm,openai/gpt-4,microsoft/vscode",
-			VIP:            1,
-			Org:            "org001",
-			RegisterTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
-			AccessTime:     time.Now().Add(-time.Hour * 2),
+			ID:               "85054712",
+			CreatedAt:        time.Now().Add(-30 * 24 * time.Hour),
+			UpdatedAt:        time.Now().Add(-1 * time.Hour),
+			AccessTime:       time.Now().Add(-1 * time.Hour),
+			Name:             "stoneHeartNew",
+			GithubID:         "stoneheartnew",
+			GithubName:       "stoneHeartNew",
+			VIP:              1,
+			Phone:            "13800138000",
+			Email:            "2232078249@qq.com",
+			Password:         "",
+			Company:          "Sangfor",
+			Location:         "Shenzhen",
+			UserCode:         "EMP85054712",
+			ExternalAccounts: "",
+			EmployeeNumber:   "SF85054712",
+			GithubStar:       "zgsm-ai.zgsm,zgsm-ai.casdoor,RooCodeInc.Roo-Code",
+			Devices:          "{}",
 		},
 		{
-			ID:             "user002",
-			Name:           "Jane Smith",
-			GithubUsername: "lisi",
-			Email:          "lisi@example.com",
-			Phone:          "13800138002",
-			GithubStar:     "zgsm,facebook/react",
-			VIP:            2,
-			Org:            "org001",
-			RegisterTime:   time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
-			AccessTime:     time.Now().Add(-time.Hour * 1),
+			ID:               "12345678",
+			CreatedAt:        time.Now().Add(-60 * 24 * time.Hour),
+			UpdatedAt:        time.Now().Add(-2 * time.Hour),
+			AccessTime:       time.Now().Add(-2 * time.Hour),
+			Name:             "testUser1",
+			GithubID:         "testuser1",
+			GithubName:       "testuser1",
+			VIP:              0,
+			Phone:            "13900139001",
+			Email:            "test1@example.com",
+			Password:         "",
+			Company:          "TestOrg1",
+			Location:         "Beijing",
+			UserCode:         "TEST001",
+			ExternalAccounts: "",
+			EmployeeNumber:   "T12345678",
+			GithubStar:       "openai.gpt-4,microsoft.vscode",
+			Devices:          "{}",
 		},
 		{
-			ID:             "user003",
-			Name:           "Bob Wilson",
-			GithubUsername: "wangwu",
-			Email:          "wangwu@example.com",
-			Phone:          "13800138003",
-			GithubStar:     "google/tensorflow,pytorch/pytorch",
-			VIP:            0,
-			Org:            "org002",
-			RegisterTime:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-			AccessTime:     time.Now().Add(-time.Hour * 3),
-		},
-		{
-			ID:             "user004",
-			Name:           "Alice Brown",
-			GithubUsername: "zhaoliu",
-			Email:          "zhaoliu@example.com",
-			Phone:          "13800138004",
-			GithubStar:     "zgsm,kubernetes/kubernetes",
-			VIP:            3,
-			Org:            "org002",
-			RegisterTime:   time.Date(2022, 12, 1, 0, 0, 0, 0, time.UTC),
-			AccessTime:     time.Now().Add(-time.Minute * 30),
-		},
-		{
-			ID:             "user005",
-			Name:           "Charlie Davis",
-			GithubUsername: "sunqi",
-			Email:          "sunqi@example.com",
-			Phone:          "13800138005",
-			GithubStar:     "",
-			VIP:            0,
-			Org:            "",
-			RegisterTime:   time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC),
-			AccessTime:     time.Now().Add(-time.Hour * 24),
+			ID:               "87654321",
+			CreatedAt:        time.Now().Add(-90 * 24 * time.Hour),
+			UpdatedAt:        time.Now().Add(-3 * time.Hour),
+			AccessTime:       time.Now().Add(-3 * time.Hour),
+			Name:             "testUser2",
+			GithubID:         "testuser2",
+			GithubName:       "testuser2",
+			VIP:              2,
+			Phone:            "13900139002",
+			Email:            "test2@example.com",
+			Password:         "",
+			Company:          "Enterprise",
+			Location:         "Shanghai",
+			UserCode:         "ENT001",
+			ExternalAccounts: "",
+			EmployeeNumber:   "E87654321",
+			GithubStar:       "zgsm-ai.zgsm,facebook.react,google.tensorflow",
+			Devices:          "{}",
 		},
 	}
 
 	// Generate more random users
 	for i := 6; i <= 20; i++ {
-		user := models.UserInfo{
-			ID:             fmt.Sprintf("user%03d", i),
-			Name:           fmt.Sprintf("User%d", i),
-			GithubUsername: fmt.Sprintf("user%d", i),
-			Email:          fmt.Sprintf("user%d@example.com", i),
-			Phone:          fmt.Sprintf("138%08d", rand.Intn(100000000)),
-			VIP:            rand.Intn(4),
-			RegisterTime:   time.Date(2023, time.Month(rand.Intn(12)+1), rand.Intn(28)+1, 0, 0, 0, 0, time.UTC),
-			AccessTime:     time.Now().Add(-time.Duration(rand.Intn(168)) * time.Hour),
+		// Define possible GitHub project list
+		possibleStars := []string{
+			"zgsm-ai.zgsm",
+			"zgsm-ai.casdoor",
+			"RooCodeInc.Roo-Code",
+			"openai.gpt-4",
+			"microsoft.vscode",
+			"facebook.react",
+			"google.tensorflow",
+			"kubernetes.kubernetes",
+			"docker.docker",
+			"golang.go",
 		}
 
-		// Randomly assign organization
-		if rand.Float32() < 0.7 {
-			user.Org = fmt.Sprintf("org%03d", rand.Intn(5)+1)
+		// Randomly select several projects
+		numStars := rand.Intn(4) + 1 // 1-4 projects
+		selectedIndices := rand.Perm(len(possibleStars))[:numStars]
+		var selectedStars []string
+		for _, idx := range selectedIndices {
+			selectedStars = append(selectedStars, possibleStars[idx])
+		}
+
+		user := models.UserInfo{
+			ID:               fmt.Sprintf("user%03d", i),
+			CreatedAt:        time.Now().Add(-time.Duration(rand.Intn(365*24)) * time.Hour),
+			UpdatedAt:        time.Now().Add(-time.Duration(rand.Intn(24)) * time.Hour),
+			AccessTime:       time.Now().Add(-time.Duration(rand.Intn(24)) * time.Hour),
+			Name:             fmt.Sprintf("User%d", i),
+			GithubID:         fmt.Sprintf("user%d", i),
+			GithubName:       fmt.Sprintf("user%d", i),
+			VIP:              rand.Intn(4),
+			Phone:            fmt.Sprintf("138%08d", rand.Intn(100000000)),
+			Email:            fmt.Sprintf("user%d@example.com", i),
+			Password:         "",
+			Company:          fmt.Sprintf("org%03d", rand.Intn(5)+1),
+			Location:         fmt.Sprintf("%d, %d", rand.Intn(90)+10, rand.Intn(90)+10),
+			UserCode:         fmt.Sprintf("EMP%08d", rand.Intn(100000000)),
+			ExternalAccounts: "",
+			EmployeeNumber:   fmt.Sprintf("E%08d", rand.Intn(100000000)),
+			GithubStar:       strings.Join(selectedStars, ","),
+			Devices:          "{}",
 		}
 
 		// Randomly assign GitHub star
@@ -145,10 +173,10 @@ func generateUsers(db *database.DB) error {
 		users = append(users, user)
 	}
 
-	// Batch insert user data
+	// Create users in auth database
 	for _, user := range users {
-		if err := db.Create(&user).Error; err != nil {
-			fmt.Printf("Warning: Failed to create user %s: %v\n", user.ID, err)
+		if err := db.AuthDB.Create(&user).Error; err != nil {
+			log.Fatalf("Failed to create user %s: %v", user.ID, err)
 		}
 	}
 

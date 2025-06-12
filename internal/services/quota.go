@@ -624,6 +624,12 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 	var status TransferStatus
 	var message string
 	totalQuotas := len(voucherData.QuotaList)
+	expiredCount := 0
+	for _, result := range quotaResults {
+		if result.IsExpired {
+			expiredCount++
+		}
+	}
 
 	if successCount == 0 {
 		status = TransferStatusFailed
@@ -631,6 +637,9 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 	} else if successCount == totalQuotas {
 		status = TransferStatusSuccess
 		message = "All quota transfers completed successfully"
+	} else if successCount > 0 && expiredCount > 0 {
+		status = TransferStatusPartialSuccess
+		message = fmt.Sprintf("%d of %d quota transfers completed successfully, %d expired", successCount, totalQuotas, expiredCount)
 	} else {
 		status = TransferStatusPartialSuccess
 		message = fmt.Sprintf("%d of %d quota transfers completed successfully", successCount, totalQuotas)

@@ -8,33 +8,20 @@ import (
 
 // testBelongToCondition test belong-to condition
 func testBelongToCondition(ctx *TestContext) TestResult {
-	// Create test users
-	users := []*models.UserInfo{
-		{
-			ID:           "user_org_target",
-			Name:         "Target Org User",
-			Org:          "org001",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_org_other",
-			Name:         "Other Org User",
-			Org:          "org002",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_org_empty",
-			Name:         "No Org User",
-			Org:          "",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-	}
+	// Create test users using createTestUser function
+	userOrgTarget := createTestUser("user_org_target", "Target Org User", 0)
+	userOrgTarget.Company = "org001" // Set target organization
+
+	userOrgOther := createTestUser("user_org_other", "Other Org User", 0)
+	userOrgOther.Company = "org002" // Set different organization
+
+	userOrgEmpty := createTestUser("user_org_empty", "No Org User", 0)
+	// No organization set for this user
+
+	users := []*models.UserInfo{userOrgTarget, userOrgOther, userOrgEmpty}
 
 	for _, user := range users {
-		if err := ctx.DB.Create(user).Error; err != nil {
+		if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
@@ -54,26 +41,26 @@ func testBelongToCondition(ctx *TestContext) TestResult {
 	}
 
 	// Execute strategy
-	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
+	userList := []models.UserInfo{*userOrgTarget, *userOrgOther, *userOrgEmpty}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
 	// Check target organization user should be executed
 	var executeCount int64
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_org_target").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOrgTarget.ID).Count(&executeCount)
 
 	if executeCount != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Target organization user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
 	// Check other organization user should not be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_org_other").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOrgOther.ID).Count(&executeCount)
 
 	if executeCount != 0 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Other organization user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
 	// Check no organization user should not be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_org_empty").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOrgEmpty.ID).Count(&executeCount)
 
 	if executeCount != 0 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("No organization user expected execution 0 times, actually executed %d times", executeCount)}
@@ -84,36 +71,20 @@ func testBelongToCondition(ctx *TestContext) TestResult {
 
 // testAndCondition test and nesting condition
 func testAndCondition(ctx *TestContext) TestResult {
-	// Create test users
-	users := []*models.UserInfo{
-		{
-			ID:           "user_and_both",
-			Name:         "Both Conditions User",
-			VIP:          2,
-			GithubStar:   "zgsm,openai/gpt-4",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_and_vip_only",
-			Name:         "VIP Only User",
-			VIP:          3,
-			GithubStar:   "microsoft/vscode",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_and_star_only",
-			Name:         "Star Only User",
-			VIP:          0,
-			GithubStar:   "zgsm,facebook/react",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-	}
+	// Create test users using createTestUser function
+	userAndBoth := createTestUser("user_and_both", "Both Conditions User", 2)
+	userAndBoth.GithubStar = "zgsm,openai/gpt-4"
+
+	userAndVipOnly := createTestUser("user_and_vip_only", "VIP Only User", 3)
+	userAndVipOnly.GithubStar = "microsoft/vscode"
+
+	userAndStarOnly := createTestUser("user_and_star_only", "Star Only User", 0)
+	userAndStarOnly.GithubStar = "zgsm,facebook/react"
+
+	users := []*models.UserInfo{userAndBoth, userAndVipOnly, userAndStarOnly}
 
 	for _, user := range users {
-		if err := ctx.DB.Create(user).Error; err != nil {
+		if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
@@ -133,26 +104,26 @@ func testAndCondition(ctx *TestContext) TestResult {
 	}
 
 	// Execute strategy
-	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
+	userList := []models.UserInfo{*userAndBoth, *userAndVipOnly, *userAndStarOnly}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
 	// Check users simultaneously satisfying both conditions should be executed
 	var executeCount int64
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_and_both").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userAndBoth.ID).Count(&executeCount)
 
 	if executeCount != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Users simultaneously satisfying conditions expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
 	// Check users satisfying only VIP condition should not be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_and_vip_only").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userAndVipOnly.ID).Count(&executeCount)
 
 	if executeCount != 0 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only VIP condition expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
 	// Check users satisfying only star condition should not be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_and_star_only").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userAndStarOnly.ID).Count(&executeCount)
 
 	if executeCount != 0 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only star condition expected execution 0 times, actually executed %d times", executeCount)}
@@ -163,51 +134,31 @@ func testAndCondition(ctx *TestContext) TestResult {
 
 // testOrCondition test or nesting condition
 func testOrCondition(ctx *TestContext) TestResult {
-	// Create test users
-	users := []*models.UserInfo{
-		{
-			ID:           "user_or_both",
-			Name:         "Both Conditions User",
-			VIP:          3,
-			Org:          "org001",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_or_vip_only",
-			Name:         "VIP Only User",
-			VIP:          2,
-			Org:          "org002",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_or_org_only",
-			Name:         "Org Only User",
-			VIP:          0,
-			Org:          "org001",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_or_neither",
-			Name:         "Neither User",
-			VIP:          0,
-			Org:          "org002",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-	}
+	// Create test users using createTestUser function
+	userOrBoth := createTestUser("user_or_both", "Both Conditions User", 3)
+	userOrBoth.Company = "org001" // Both VIP and belong to org001
+
+	userOrVipOnly := createTestUser("user_or_vip_only", "VIP Only User", 2)
+	// No organization set
+
+	userOrOrgOnly := createTestUser("user_or_org_only", "Org Only User", 0)
+	userOrOrgOnly.Company = "org001" // Only belong to org001
+
+	userOrNeither := createTestUser("user_or_neither", "Neither User", 0)
+	// Neither VIP nor belong to org001
+
+	users := []*models.UserInfo{userOrBoth, userOrVipOnly, userOrOrgOnly, userOrNeither}
 
 	for _, user := range users {
-		if err := ctx.DB.Create(user).Error; err != nil {
+		if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// Create or condition strategy
+	// Create or condition strategy with unique name
+	uniqueStrategyName := fmt.Sprintf("or-condition-test-%d", time.Now().UnixNano())
 	strategy := &models.QuotaStrategy{
-		Name:      "or-condition-test",
+		Name:      uniqueStrategyName,
 		Title:     "OR Condition Test",
 		Type:      "single",
 		Amount:    55,
@@ -220,33 +171,33 @@ func testOrCondition(ctx *TestContext) TestResult {
 	}
 
 	// Execute strategy
-	userList := []models.UserInfo{*users[0], *users[1], *users[2], *users[3]}
+	userList := []models.UserInfo{*userOrBoth, *userOrVipOnly, *userOrOrgOnly, *userOrNeither}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
 	// Check users simultaneously satisfying both conditions should be executed
 	var executeCount int64
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_both").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOrBoth.ID).Count(&executeCount)
 
 	if executeCount != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Users simultaneously satisfying conditions expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
 	// Check users satisfying only VIP condition should be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_vip_only").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOrVipOnly.ID).Count(&executeCount)
 
 	if executeCount != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only VIP condition expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
 	// Check users satisfying only organization condition should be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_org_only").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOrOrgOnly.ID).Count(&executeCount)
 
 	if executeCount != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Users satisfying only organization condition expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
 	// Check users not satisfying any condition should not be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_or_neither").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOrNeither.ID).Count(&executeCount)
 
 	if executeCount != 0 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Users not satisfying any condition expected execution 0 times, actually executed %d times", executeCount)}
@@ -257,26 +208,14 @@ func testOrCondition(ctx *TestContext) TestResult {
 
 // testNotCondition test not nesting condition
 func testNotCondition(ctx *TestContext) TestResult {
-	// Create test users
-	users := []*models.UserInfo{
-		{
-			ID:           "user_not_vip",
-			Name:         "VIP User",
-			VIP:          3,
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_not_normal",
-			Name:         "Normal User",
-			VIP:          0,
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-	}
+	// Create test users using createTestUser function
+	userNotVip := createTestUser("user_not_vip", "VIP User", 3)
+	userNotNormal := createTestUser("user_not_normal", "Normal User", 0)
+
+	users := []*models.UserInfo{userNotVip, userNotNormal}
 
 	for _, user := range users {
-		if err := ctx.DB.Create(user).Error; err != nil {
+		if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
@@ -296,75 +235,55 @@ func testNotCondition(ctx *TestContext) TestResult {
 	}
 
 	// Execute strategy
-	userList := []models.UserInfo{*users[0], *users[1]}
+	userList := []models.UserInfo{*userNotVip, *userNotNormal}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
 	// Check VIP user should not be executed (excluded by NOT)
 	var executeCount int64
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_not_vip").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userNotVip.ID).Count(&executeCount)
 
 	if executeCount != 0 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("VIP user expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
 	// Check normal user should be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_not_normal").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userNotNormal.ID).Count(&executeCount)
 
 	if executeCount != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Normal user expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "not condition test succeeded"}
+	return TestResult{Passed: true, Message: "NOT condition test succeeded"}
 }
 
 // testComplexCondition test complex nesting condition
 func testComplexCondition(ctx *TestContext) TestResult {
-	// Create test users
-	users := []*models.UserInfo{
-		{
-			ID:           "user_complex_match1",
-			Name:         "Complex Match 1",
-			VIP:          3,
-			GithubStar:   "zgsm,openai/gpt-4",
-			Org:          "org001",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_complex_match2",
-			Name:         "Complex Match 2",
-			VIP:          0,
-			GithubStar:   "",
-			Org:          "org002",
-			RegisterTime: time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-		{
-			ID:           "user_complex_no_match",
-			Name:         "Complex No Match",
-			VIP:          1,
-			GithubStar:   "microsoft/vscode",
-			Org:          "org003",
-			RegisterTime: time.Now().Truncate(time.Second).Add(-time.Hour * 24),
-			AccessTime:   time.Now().Truncate(time.Second).Add(-time.Hour * 1),
-		},
-	}
+	// Create test users using createTestUser function
+	userComplexMatch1 := createTestUser("user_complex_match1", "Complex Match 1", 2)
+	userComplexMatch1.GithubStar = "zgsm,openai/gpt-4"
+
+	userComplexMatch2 := createTestUser("user_complex_match2", "Complex Match 2", 0)
+	userComplexMatch2.Company = "org001"
+
+	userComplexNoMatch := createTestUser("user_complex_no_match", "No Match User", 1)
+	userComplexNoMatch.GithubStar = "microsoft/vscode"
+
+	users := []*models.UserInfo{userComplexMatch1, userComplexMatch2, userComplexNoMatch}
 
 	for _, user := range users {
-		if err := ctx.DB.Create(user).Error; err != nil {
+		if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 		}
 	}
 
-	// Create complex nesting condition strategy
-	// (is-vip(3) AND github-star("zgsm")) OR (register-before("2024-01-01 00:00:00") AND belong-to("org002"))
+	// Create complex condition strategy: (VIP >= 2 AND github-star("zgsm")) OR belong-to("org001")
 	strategy := &models.QuotaStrategy{
 		Name:      "complex-condition-test",
 		Title:     "Complex Condition Test",
 		Type:      "single",
 		Amount:    65,
 		Model:     "test-model",
-		Condition: `or(and(is-vip(3), github-star("zgsm")), and(register-before("2024-01-01 00:00:00"), belong-to("org002")))`,
+		Condition: `or(and(is-vip(2), github-star("zgsm")), belong-to("org001"))`,
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -372,30 +291,220 @@ func testComplexCondition(ctx *TestContext) TestResult {
 	}
 
 	// Execute strategy
-	userList := []models.UserInfo{*users[0], *users[1], *users[2]}
+	userList := []models.UserInfo{*userComplexMatch1, *userComplexMatch2, *userComplexNoMatch}
 	ctx.StrategyService.ExecStrategy(strategy, userList)
 
-	// Check user satisfying first condition should be executed
+	// Check first user (VIP + github star) should be executed
 	var executeCount int64
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_complex_match1").Count(&executeCount)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userComplexMatch1.ID).Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User satisfying first condition expected execution 1 time, actually executed %d times", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with VIP+star expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// Check user satisfying second condition should be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_complex_match2").Count(&executeCount)
+	// Check second user (belong to org) should be executed
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userComplexMatch2.ID).Count(&executeCount)
 
 	if executeCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User satisfying second condition expected execution 1 time, actually executed %d times", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with org membership expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	// Check user not satisfying any condition should not be executed
-	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, "user_complex_no_match").Count(&executeCount)
+	// Check third user (no match) should not be executed
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userComplexNoMatch.ID).Count(&executeCount)
 
 	if executeCount != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User not satisfying any condition expected execution 0 times, actually executed %d times", executeCount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with no match expected execution 0 times, actually executed %d times", executeCount)}
 	}
 
 	return TestResult{Passed: true, Message: "complex condition test succeeded"}
+}
+
+// testAndOrNestingCondition tests AND and OR nested conditions
+func testAndOrNestingCondition(ctx *TestContext) TestResult {
+	// Create test users using createTestUser function
+	userAllConditions := createTestUser("user_and_or_all", "All Conditions User", 3)
+	userAllConditions.Company = "org001"
+	userAllConditions.GithubStar = "zgsm,openai/gpt-4"
+
+	userVipAndStar := createTestUser("user_and_or_vip_star", "VIP Star User", 2)
+	userVipAndStar.GithubStar = "zgsm,microsoft/vscode"
+
+	userVipAndOrg := createTestUser("user_and_or_vip_org", "VIP Org User", 2)
+	userVipAndOrg.Company = "org001"
+
+	userOnlyOrg := createTestUser("user_and_or_org", "Only Org User", 0)
+	userOnlyOrg.Company = "org001"
+
+	userOnlyStar := createTestUser("user_and_or_star", "Only Star User", 0)
+	userOnlyStar.GithubStar = "zgsm,google/tensorflow"
+
+	userNoConditions := createTestUser("user_and_or_none", "No Conditions User", 0)
+
+	users := []*models.UserInfo{
+		userAllConditions,
+		userVipAndStar,
+		userVipAndOrg,
+		userOnlyOrg,
+		userOnlyStar,
+		userNoConditions,
+	}
+
+	for _, user := range users {
+		if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+		}
+	}
+
+	// Create strategy with AND + OR nested condition
+	// Condition: (VIP >= 2 AND github-star("zgsm")) OR belong-to("org001")
+	uniqueStrategyName := fmt.Sprintf("and-or-nesting-test-%d", time.Now().UnixNano())
+	strategy := &models.QuotaStrategy{
+		Name:      uniqueStrategyName,
+		Title:     "AND + OR Nesting Test",
+		Type:      "single",
+		Amount:    100,
+		Model:     "test-model",
+		Condition: `or(and(is-vip(2), github-star("zgsm")), belong-to("org001"))`,
+		Status:    true,
+	}
+	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
+	}
+
+	// Execute strategy
+	userList := make([]models.UserInfo, len(users))
+	for i, user := range users {
+		userList[i] = *user
+	}
+	ctx.StrategyService.ExecStrategy(strategy, userList)
+
+	// Check execution results
+	// 1. User with all conditions should be executed (satisfies both AND and OR parts)
+	var executeCount int64
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userAllConditions.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with all conditions expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// 2. User with VIP and Star should be executed (satisfies AND part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userVipAndStar.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with VIP and Star expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// 3. User with VIP and Org should be executed (satisfies OR part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userVipAndOrg.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with VIP and Org expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// 4. User with only Org should be executed (satisfies OR part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOnlyOrg.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with only Org expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// 5. User with only Star should not be executed (doesn't satisfy either part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userOnlyStar.ID).Count(&executeCount)
+	if executeCount != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with only Star expected execution 0 times, actually executed %d times", executeCount)}
+	}
+
+	// 6. User with no conditions should not be executed
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userNoConditions.ID).Count(&executeCount)
+	if executeCount != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("User with no conditions expected execution 0 times, actually executed %d times", executeCount)}
+	}
+
+	return TestResult{Passed: true, Message: "AND + OR nesting condition test succeeded"}
+}
+
+// testOrNotNestingCondition tests OR and NOT nested conditions
+func testOrNotNestingCondition(ctx *TestContext) TestResult {
+	// Create test users using createTestUser function
+	userVipNoStar := createTestUser("user_or_not_vip_no_star", "VIP No Star User", 3)
+	userVipNoStar.GithubStar = "microsoft/vscode,google/tensorflow"
+
+	userVipWithStar := createTestUser("user_or_not_vip_star", "VIP With Star User", 3)
+	userVipWithStar.GithubStar = "zgsm,openai/gpt-4"
+
+	userLowVipNoStar := createTestUser("user_or_not_low_vip_no_star", "Low VIP No Star User", 1)
+	userLowVipNoStar.GithubStar = "microsoft/vscode"
+
+	userLowVipWithStar := createTestUser("user_or_not_low_vip_star", "Low VIP With Star User", 1)
+	userLowVipWithStar.GithubStar = "zgsm,facebook/react"
+
+	userNoVipNoStar := createTestUser("user_or_not_no_vip_no_star", "No VIP No Star User", 0)
+	userNoVipNoStar.GithubStar = "microsoft/vscode"
+
+	users := []*models.UserInfo{
+		userVipNoStar,
+		userVipWithStar,
+		userLowVipNoStar,
+		userLowVipWithStar,
+		userNoVipNoStar,
+	}
+
+	for _, user := range users {
+		if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+		}
+	}
+
+	// Create strategy with OR + NOT nested condition
+	// Condition: is-vip(3) OR not(github-star("zgsm"))
+	uniqueStrategyName := fmt.Sprintf("or-not-nesting-test-%d", time.Now().UnixNano())
+	strategy := &models.QuotaStrategy{
+		Name:      uniqueStrategyName,
+		Title:     "OR + NOT Nesting Test",
+		Type:      "single",
+		Amount:    100,
+		Model:     "test-model",
+		Condition: `or(is-vip(3), not(github-star("zgsm")))`,
+		Status:    true,
+	}
+	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
+	}
+
+	// Execute strategy
+	userList := make([]models.UserInfo, len(users))
+	for i, user := range users {
+		userList[i] = *user
+	}
+	ctx.StrategyService.ExecStrategy(strategy, userList)
+
+	// Check execution results
+	// 1. VIP user without star should be executed (satisfies both parts)
+	var executeCount int64
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userVipNoStar.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("VIP user without star expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// 2. VIP user with star should be executed (satisfies VIP part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userVipWithStar.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("VIP user with star expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// 3. Low VIP user without star should be executed (satisfies NOT part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userLowVipNoStar.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Low VIP user without star expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	// 4. Low VIP user with star should not be executed (doesn't satisfy either part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userLowVipWithStar.ID).Count(&executeCount)
+	if executeCount != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Low VIP user with star expected execution 0 times, actually executed %d times", executeCount)}
+	}
+
+	// 5. No VIP user without star should be executed (satisfies NOT part)
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, userNoVipNoStar.ID).Count(&executeCount)
+	if executeCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("No VIP user without star expected execution 1 time, actually executed %d times", executeCount)}
+	}
+
+	return TestResult{Passed: true, Message: "OR + NOT nesting condition test succeeded"}
 }

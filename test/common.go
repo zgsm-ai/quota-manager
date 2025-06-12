@@ -2,23 +2,33 @@ package main
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
+	"quota-manager/internal/condition"
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
 	"quota-manager/internal/services"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
+
+	"github.com/google/uuid"
 )
 
 // testClearData test clear data
 func testClearData(ctx *TestContext) TestResult {
-	// Clear all tables
-	tables := []string{"voucher_redemption", "quota_audit", "quota", "quota_execute", "quota_strategy", "user_info"}
-	for _, table := range tables {
+	// Clear quota-related tables from main database
+	quotaTables := []string{"voucher_redemption", "quota_audit", "quota", "quota_execute", "quota_strategy"}
+	for _, table := range quotaTables {
 		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
 		}
+	}
+
+	// Clear auth_users table from auth database
+	if err := ctx.DB.AuthDB.Exec("DELETE FROM auth_users").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Clear table auth_users failed: %v", err)}
 	}
 
 	// Reset mock storage
@@ -56,14 +66,19 @@ func setupTestEnvironment() (*TestContext, error) {
 	}
 
 	// Connect to database
-	db, err := database.NewDB(&cfg.Database)
+	db, err := database.NewDB(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
-	// Auto migrate
-	if err := models.AutoMigrate(db.DB); err != nil {
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	// Auto migrate - ensure all tables exist in test environment
+	if err := db.DB.AutoMigrate(&models.QuotaStrategy{}, &models.QuotaExecute{}, &models.Quota{}, &models.QuotaAudit{}, &models.VoucherRedemption{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate main tables: %w", err)
+	}
+
+	// Auto migrate auth tables
+	if err := db.AuthDB.AutoMigrate(&models.UserInfo{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate auth tables: %w", err)
 	}
 
 	// Create successful mock server
@@ -88,6 +103,9 @@ func setupTestEnvironment() (*TestContext, error) {
 	quotaService := services.NewQuotaService(db.DB, mockAiGatewayConfig, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService)
 
+	// Create quota querier
+	quotaQuerier := condition.NewAiGatewayQuotaQuerier(gateway)
+
 	return &TestContext{
 		DB:              db,
 		StrategyService: strategyService,
@@ -96,6 +114,7 @@ func setupTestEnvironment() (*TestContext, error) {
 		Gateway:         gateway,
 		MockServer:      mockServer,
 		FailServer:      failServer,
+		quotaQuerier:    quotaQuerier,
 	}, nil
 }
 
@@ -160,4 +179,34 @@ func verifyAuditRecordCount(ctx *TestContext, userID string, expectedCount int64
 	}
 
 	return nil
+}
+
+// createTestUser creates a test user with new auth_users table structure
+func createTestUser(id, name string, vip int) *models.UserInfo {
+	// Generate a valid UUID for the user ID
+	validUUID := uuid.NewString()
+
+	// Create a unique github_id by combining the id parameter with a timestamp
+	uniqueGithubID := fmt.Sprintf("%s_%d", strings.ToLower(id), time.Now().UnixNano())
+
+	return &models.UserInfo{
+		ID:               validUUID,
+		CreatedAt:        time.Now().Add(-time.Hour * 24),
+		UpdatedAt:        time.Now().Add(-time.Hour * 1),
+		AccessTime:       time.Now().Add(-time.Hour * 1),
+		Name:             name,
+		GithubID:         uniqueGithubID,
+		GithubName:       name,
+		VIP:              vip,
+		Phone:            "13800138000",
+		Email:            fmt.Sprintf("%s@test.com", strings.ToLower(name)),
+		Password:         "",
+		Company:          "TestCompany",
+		Location:         "TestCity",
+		UserCode:         fmt.Sprintf("TC%s", id),
+		ExternalAccounts: "",
+		EmployeeNumber:   fmt.Sprintf("EMP%s", id),
+		GithubStar:       "zgsm-ai.zgsm,openai.gpt-4",
+		Devices:          "{}",
+	}
 }
