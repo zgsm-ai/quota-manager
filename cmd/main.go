@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,18 +22,53 @@ import (
 )
 
 func main() {
-	// Initialize logging
+	// Parse command line flags FIRST - before any other initialization
+	var configFile string
+	var showHelp bool
+
+	flag.StringVar(&configFile, "config", "", "Path to the configuration file")
+	flag.StringVar(&configFile, "c", "", "Path to the configuration file (shorthand)")
+	flag.BoolVar(&showHelp, "help", false, "Show help message")
+	flag.BoolVar(&showHelp, "h", false, "Show help message (shorthand)")
+
+	flag.Parse()
+
+	// Show help message
+	if showHelp {
+		fmt.Println("Quota Manager - Quota Management Service")
+		fmt.Println()
+		fmt.Println("Usage:")
+		fmt.Printf("  %s [options]\n", os.Args[0])
+		fmt.Println()
+		fmt.Println("Options:")
+		flag.PrintDefaults()
+		return
+	}
+
+	// Determine config file to use
+	if configFile == "" {
+		// Default config file selection logic
+		if _, err := os.Stat("config_local.yaml"); err == nil {
+			configFile = "config_local.yaml"
+			fmt.Println("Using local config: config_local.yaml")
+		} else {
+			configFile = "config.yaml"
+			fmt.Println("Using default config: config.yaml")
+		}
+	} else {
+		// Check if the specified configuration file exists
+		if _, err := os.Stat(configFile); os.IsNotExist(err) {
+			log.Fatalf("Specified configuration file not found: %s", configFile)
+		}
+		fmt.Printf("Using specified config: %s\n", configFile)
+	}
+
+	// Initialize logging AFTER config file is determined
 	if err := logger.Init(); err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 
 	// Load configuration
-	configFile := "config.yaml"
-	if _, err := os.Stat("config_local.yaml"); err == nil {
-		configFile = "config_local.yaml"
-		fmt.Println("Using local config: config_local.yaml")
-	}
-
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
 		logger.Error("Failed to load config", zap.Error(err))
@@ -129,8 +165,8 @@ func main() {
 		}
 	}()
 
-	logger.Info("Starting server", zap.Int("port", cfg.Server.Port))
-	fmt.Printf("Server starting on port %d\n", cfg.Server.Port)
+	logger.Info("Starting server", zap.Int("port", cfg.Server.Port), zap.String("config", configFile))
+	fmt.Printf("Server starting on port %d with config: %s\n", cfg.Server.Port, configFile)
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("Failed to start server", zap.Error(err))

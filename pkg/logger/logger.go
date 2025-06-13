@@ -1,6 +1,11 @@
 package logger
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -8,14 +13,25 @@ import (
 var Logger *zap.Logger
 
 func Init() error {
+	// Ensure logs directory exists
+	logsDir := "logs"
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create logs directory: %v", err)
+	}
+
+	// Generate log file name (including date)
+	now := time.Now()
+	logFileName := fmt.Sprintf("quota-manager-%s.log", now.Format("2006-01-02"))
+	logFilePath := filepath.Join(logsDir, logFileName)
+
 	config := zap.Config{
-		Level:       zap.NewAtomicLevelAt(zap.InfoLevel),
+		Level:       zap.NewAtomicLevelAt(zap.InfoLevel), // Changed to Info level
 		Development: false,
 		Sampling: &zap.SamplingConfig{
 			Initial:    100,
 			Thereafter: 100,
 		},
-		Encoding: "json",
+		Encoding: "console", // Use console format for better readability
 		EncoderConfig: zapcore.EncoderConfig{
 			TimeKey:        "timestamp",
 			LevelKey:       "level",
@@ -24,13 +40,13 @@ func Init() error {
 			MessageKey:     "message",
 			StacktraceKey:  "stacktrace",
 			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.LowercaseLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeLevel:    zapcore.CapitalColorLevelEncoder, // Colorized level encoding
+			EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05"),
 			EncodeDuration: zapcore.SecondsDurationEncoder,
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		},
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
+		OutputPaths:      []string{"stdout", logFilePath}, // Output to console and file simultaneously
+		ErrorOutputPaths: []string{"stderr", logFilePath},
 	}
 
 	var err error
