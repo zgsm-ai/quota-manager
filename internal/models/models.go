@@ -10,7 +10,7 @@ import (
 
 // AuthUser struct for parsing user info from JWT
 type AuthUser struct {
-	ID      string `json:"id"`
+	ID      string `json:"universal_id"`
 	Name    string `json:"name"`
 	StaffID string `json:"staffID"`
 	Github  string `json:"github"`
