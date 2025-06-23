@@ -532,9 +532,11 @@ The project includes a complete AiGateway mock service (`scripts/aigateway-mock/
 ### Configuration
 ```yaml
 aigateway:
-  base_url: "http://localhost:1002"
+  host: "localhost"
+  port: 1002
   admin_path: "/v1/chat/completions"
-  credential: "credential3"
+  auth_header: "x-admin-key"
+  auth_value: "12345678"
 ```
 
 ## Configuration
@@ -563,9 +565,11 @@ auth_database:
   sslmode: "disable"
 
 aigateway:
-  base_url: "http://localhost:1002"
+  host: "127.0.0.1"
+  port: 8002
   admin_path: "/v1/chat/completions"
-  credential: "credential3"
+  auth_header: "x-admin-key"
+  auth_value: "12345678"
 
 voucher:
   signing_key: "your-secret-signing-key-at-least-32-bytes-long-for-security"

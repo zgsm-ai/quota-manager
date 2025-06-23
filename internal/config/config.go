@@ -13,6 +13,7 @@ type Config struct {
 	Server       ServerConfig    `mapstructure:"server"`
 	Scheduler    SchedulerConfig `mapstructure:"scheduler"`
 	Voucher      VoucherConfig   `mapstructure:"voucher"`
+	Log          LogConfig       `mapstructure:"log"`
 }
 
 type DatabaseConfig struct {
@@ -25,7 +26,8 @@ type DatabaseConfig struct {
 }
 
 type AiGatewayConfig struct {
-	BaseURL    string `mapstructure:"base_url"`
+	Host       string `mapstructure:"host"`
+	Port       int    `mapstructure:"port"`
 	AdminPath  string `mapstructure:"admin_path"`
 	AuthHeader string `mapstructure:"auth_header"`
 	AuthValue  string `mapstructure:"auth_value"`
@@ -45,14 +47,18 @@ type VoucherConfig struct {
 	SigningKey string `mapstructure:"signing_key"`
 }
 
+type LogConfig struct {
+	Level string `mapstructure:"level"`
+}
+
 func (d *DatabaseConfig) DSN() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode)
 }
 
 func (a *AiGatewayConfig) GetBaseURL() string {
-	if a.BaseURL != "" {
-		return a.BaseURL
+	if a.Host != "" && a.Port > 0 {
+		return fmt.Sprintf("http://%s:%d", a.Host, a.Port)
 	}
 	return "http://localhost:8002"
 }

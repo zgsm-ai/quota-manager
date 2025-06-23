@@ -20,7 +20,6 @@ aigateway:
   admin_path: "/v1/chat/completions"
   auth_header: "x-admin-key"
   auth_value: "12345678"
-  credential: "credential3"
 
 server:
   port: 8099
@@ -32,3 +31,6 @@ scheduler:
 
 voucher:
   signing_key: "your-secret-signing-key-at-least-32-bytes-long-for-security"
+
+log:
+  level: "warn"

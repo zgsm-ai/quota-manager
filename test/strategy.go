@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 	"time"
 
 	"quota-manager/internal/config"
@@ -191,8 +193,25 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 	}
 
 	// Create mock AiGateway config pointing to the fail server
+	failURL, err := url.Parse(ctx.FailServer.URL)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to parse fail server URL: %v", err)}
+	}
+
+	failHost := failURL.Hostname()
+	failPort := failURL.Port()
+	if failPort == "" {
+		failPort = "80"
+	}
+
+	failPortInt := 80
+	if port, err := strconv.Atoi(failPort); err == nil {
+		failPortInt = port
+	}
+
 	failAiGatewayConfig := &config.AiGatewayConfig{
-		BaseURL:    ctx.FailServer.URL,
+		Host:       failHost,
+		Port:       failPortInt,
 		AdminPath:  "/v1/chat/completions",
 		AuthHeader: "X-Auth-Key",
 		AuthValue:  "credential3",
@@ -223,7 +242,7 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 
 	// Check execution record exists but status is failed
 	var execute models.QuotaExecute
-	err := ctx.DB.Where("strategy_id = ? AND user_id = ? AND status = 'failed'", strategy.ID, user.ID).First(&execute).Error
+	err = ctx.DB.Where("strategy_id = ? AND user_id = ? AND status = 'failed'", strategy.ID, user.ID).First(&execute).Error
 
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Execution record not found: %v", err)}

@@ -18,7 +18,7 @@ func NewDB(cfg *config.Config) (*DB, error) {
 	// Connect to main database (quota_manager)
 	mainDSN := cfg.Database.DSN()
 	mainDB, err := gorm.Open(postgres.Open(mainDSN), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect main database: %w", err)
@@ -27,7 +27,7 @@ func NewDB(cfg *config.Config) (*DB, error) {
 	// Connect to auth database (auth) - read-only access
 	authDSN := cfg.AuthDatabase.DSN()
 	authDB, err := gorm.Open(postgres.Open(authDSN), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect auth database: %w", err)

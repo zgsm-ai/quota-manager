@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,12 +89,31 @@ func setupTestEnvironment() (*TestContext, error) {
 	// Create failure mock server
 	failServer := createMockServer(true)
 
+	// Parse mock server URL to get host and port
+	mockURL, err := url.Parse(mockServer.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse mock server URL: %w", err)
+	}
+
+	// Extract host and port from the URL
+	mockHost := mockURL.Hostname()
+	mockPort := mockURL.Port()
+	if mockPort == "" {
+		mockPort = "80" // Default HTTP port
+	}
+
+	mockPortInt := 80
+	if port, err := strconv.Atoi(mockPort); err == nil {
+		mockPortInt = port
+	}
+
 	// Create AiGateway client with mock server URL
 	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions", "X-Auth-Key", "credential3")
 
-	// Create mock AiGateway config for QuotaService
+	// Create mock AiGateway config for QuotaService using actual mock server host/port
 	mockAiGatewayConfig := &config.AiGatewayConfig{
-		BaseURL:    mockServer.URL,
+		Host:       mockHost,
+		Port:       mockPortInt,
 		AdminPath:  "/v1/chat/completions",
 		AuthHeader: "X-Auth-Key",
 		AuthValue:  "credential3",

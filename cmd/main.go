@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -58,28 +57,34 @@ func main() {
 	} else {
 		// Check if the specified configuration file exists
 		if _, err := os.Stat(configFile); os.IsNotExist(err) {
-			log.Fatalf("Specified configuration file not found: %s", configFile)
+			fmt.Printf("Specified configuration file not found: %s\n", configFile)
+			os.Exit(1)
 		}
 		fmt.Printf("Using specified config: %s\n", configFile)
-	}
-
-	// Initialize logging AFTER config file is determined
-	if err := logger.Init(); err != nil {
-		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 
 	// Load configuration
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
-		logger.Error("Failed to load config", zap.Error(err))
-		log.Fatalf("Failed to load config: %v", err)
+		fmt.Printf("Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize logging with configured level
+	logLevel := cfg.Log.Level
+	if logLevel == "" {
+		logLevel = "warn" // Default level if not configured
+	}
+	if err := logger.InitWithLevel(logLevel); err != nil {
+		fmt.Printf("Failed to initialize logger with level %s: %v\n", logLevel, err)
+		os.Exit(1)
 	}
 
 	// Initialize database
 	db, err := database.NewDB(cfg)
 	if err != nil {
 		logger.Error("Failed to connect database", zap.Error(err))
-		log.Fatalf("Failed to connect database: %v", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -100,7 +105,7 @@ func main() {
 	// Start scheduler service (includes strategy scan)
 	if err := schedulerService.Start(); err != nil {
 		logger.Error("Failed to start scheduler service", zap.Error(err))
-		log.Fatalf("Failed to start scheduler service: %v", err)
+		os.Exit(1)
 	}
 	defer schedulerService.Stop()
 
@@ -165,11 +170,12 @@ func main() {
 		}
 	}()
 
+	// Start server with single console message
 	logger.Info("Starting server", zap.Int("port", cfg.Server.Port), zap.String("config", configFile))
-	fmt.Printf("Server starting on port %d with config: %s\n", cfg.Server.Port, configFile)
+	fmt.Printf("Server starting on port %d\n", cfg.Server.Port)
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("Failed to start server", zap.Error(err))
-		log.Fatalf("Failed to start server: %v", err)
+		os.Exit(1)
 	}
 }

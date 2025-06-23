@@ -13,6 +13,10 @@ import (
 var Logger *zap.Logger
 
 func Init() error {
+	return InitWithLevel("warn") // Default to info level
+}
+
+func InitWithLevel(level string) error {
 	// Ensure logs directory exists
 	logsDir := "logs"
 	if err := os.MkdirAll(logsDir, 0755); err != nil {
@@ -24,8 +28,23 @@ func Init() error {
 	logFileName := fmt.Sprintf("quota-manager-%s.log", now.Format("2006-01-02"))
 	logFilePath := filepath.Join(logsDir, logFileName)
 
+	// Convert string level to zap level
+	var zapLevel zap.AtomicLevel
+	switch level {
+	case "debug":
+		zapLevel = zap.NewAtomicLevelAt(zap.DebugLevel)
+	case "info":
+		zapLevel = zap.NewAtomicLevelAt(zap.InfoLevel)
+	case "warn":
+		zapLevel = zap.NewAtomicLevelAt(zap.WarnLevel)
+	case "error":
+		zapLevel = zap.NewAtomicLevelAt(zap.ErrorLevel)
+	default:
+		zapLevel = zap.NewAtomicLevelAt(zap.InfoLevel)
+	}
+
 	config := zap.Config{
-		Level:       zap.NewAtomicLevelAt(zap.InfoLevel), // Changed to Info level
+		Level:       zapLevel,
 		Development: false,
 		Sampling: &zap.SamplingConfig{
 			Initial:    100,
