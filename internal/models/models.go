@@ -50,7 +50,7 @@ func ParseUserInfoFromToken(accessToken string) (*AuthUser, error) {
 
 	// Extract user ID
 	var userInfo AuthUser
-	if id, ok := claims["id"].(string); ok {
+	if id, ok := claims["universal_id"].(string); ok {
 		userInfo.ID = id
 	} else {
 		return nil, fmt.Errorf("user ID not found in JWT token")
