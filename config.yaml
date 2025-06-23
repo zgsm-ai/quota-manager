@@ -24,11 +24,11 @@ aigateway:
 
 server:
   port: 8099
-  mode: "debug"
+  mode: "release"
   token_header: "authorization"
 
 scheduler:
-  scan_interval: "0 0 * * * *" # Scan every hour
+  scan_interval: "0 0 * * * *" # Scan every hour (6 fields: second minute hour day month weekday)
 
 voucher:
   signing_key: "your-secret-signing-key-at-least-32-bytes-long-for-security"

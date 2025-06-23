@@ -95,7 +95,7 @@ func main() {
 	voucherService := services.NewVoucherService(cfg.Voucher.SigningKey)
 	quotaService := services.NewQuotaService(db.DB, &cfg.AiGateway, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService)
-	schedulerService := services.NewSchedulerService(quotaService, strategyService)
+	schedulerService := services.NewSchedulerService(quotaService, strategyService, cfg)
 
 	// Start scheduler service (includes strategy scan)
 	if err := schedulerService.Start(); err != nil {

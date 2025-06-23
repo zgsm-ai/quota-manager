@@ -19,7 +19,6 @@ type StrategyService struct {
 	gateway      *aigateway.Client
 	quotaQuerier condition.QuotaQuerier
 	quotaService *QuotaService
-	cron         *cron.Cron
 }
 
 func NewStrategyService(db *database.DB, gateway *aigateway.Client, quotaService *QuotaService) *StrategyService {
@@ -28,30 +27,11 @@ func NewStrategyService(db *database.DB, gateway *aigateway.Client, quotaService
 		gateway:      gateway,
 		quotaQuerier: condition.NewAiGatewayQuotaQuerier(gateway),
 		quotaService: quotaService,
-		cron:         cron.New(),
 	}
-}
-
-// Start starts the strategy scan service
-func (s *StrategyService) Start() error {
-	// Add task to scan every hour
-	_, err := s.cron.AddFunc("0 * * * *", s.TraverseStrategy)
-	if err != nil {
-		return fmt.Errorf("failed to add cron job: %w", err)
-	}
-
-	s.cron.Start()
-	logger.Info("Strategy service started")
-	return nil
-}
-
-// Stop stops the strategy scan service
-func (s *StrategyService) Stop() {
-	s.cron.Stop()
-	logger.Info("Strategy service stopped")
 }
 
 // TraverseStrategy traverses the strategy table
+// This method is called by SchedulerService based on configured interval
 func (s *StrategyService) TraverseStrategy() {
 	logger.Info("Starting strategy traversal")
 

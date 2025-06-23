@@ -1,3 +1,8 @@
+server:
+  port: 8099
+  mode: "debug"
+  token_header: "authorization"
+
 database:
   host: "127.0.0.1"
   port: 5432
@@ -15,17 +20,16 @@ auth_database:
   sslmode: "disable"
 
 aigateway:
-  host: "127.0.0.1"
-  port: 1002
+  base_url: "http://localhost:8002"
   admin_path: "/v1/chat/completions"
-  credential: "credential3"
-
-server:
-  port: 8099
-  mode: "debug"
+  auth_header: "x-admin-key"
+  auth_value: "12345678"
 
 scheduler:
-  scan_interval: "0 0 * * * *" # Scan every hour
+  scan_interval: "*/10 * * * * *" # Scan every 10 seconds for testing
 
 voucher:
-  signing_key: "test-signing-key-at-least-32-bytes-long-for-security"
+  signing_key: "test-secret-signing-key-at-least-32-bytes-long-for-local-dev"
+
+log:
+  level: "debug"
