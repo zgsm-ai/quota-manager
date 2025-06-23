@@ -57,7 +57,7 @@ quota-manager/
 - `title`: Strategy title
 - `type`: Strategy type (periodic/single)
 - `amount`: Recharge amount
-- `model`: Model name
+- `model`: Model name (optional)
 - `periodic_expr`: Cron expression for periodic strategies
 - `condition`: Condition expression
 - `status`: Strategy status (BOOLEAN: true=enabled, false=disabled)

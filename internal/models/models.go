@@ -66,7 +66,7 @@ type QuotaStrategy struct {
 	Title        string    `gorm:"not null" json:"title"`
 	Type         string    `gorm:"not null" json:"type"` // periodic/single
 	Amount       int       `gorm:"not null" json:"amount"`
-	Model        string    `gorm:"not null" json:"model"`
+	Model        string    `json:"model"`
 	PeriodicExpr string    `gorm:"column:periodic_expr" json:"periodic_expr"`
 	Condition    string    `json:"condition"`
 	Status       bool      `gorm:"not null;default:true" json:"status"` // true=enabled, false=disabled

@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS quota_strategy (
     title VARCHAR(255) NOT NULL,
     type VARCHAR(50) NOT NULL,
     amount INTEGER NOT NULL,
-    model VARCHAR(255) NOT NULL,
+    model VARCHAR(255),
     periodic_expr VARCHAR(255),
     condition TEXT,
     status BOOLEAN DEFAULT true NOT NULL,  -- Status field: true=enabled, false=disabled
