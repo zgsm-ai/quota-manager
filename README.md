@@ -149,6 +149,25 @@ server:
 
 ## API Documentation
 
+### Response Format
+
+All API endpoints return responses in the following standard format:
+
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Operation successful",
+  "success": true,
+  "data": { ... }
+}
+```
+
+**Response Fields:**
+- `code`: Status code (string format with meaningful identifiers)
+- `message`: Response message in English
+- `success`: Operation success status (boolean)
+- `data`: Response data (optional, omitted when null)
+
 ### Authentication
 All endpoints require JWT token in request headers:
 ```
@@ -171,7 +190,26 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   "status": true
 }
 ```
-- **Response**: Strategy object with generated ID
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Strategy created successfully",
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "test-strategy",
+    "title": "Test Strategy",
+    "type": "single",
+    "amount": 10,
+    "model": "gpt-3.5-turbo",
+    "condition": "github-star(\"zgsm\")",
+    "status": true,
+    "create_time": "2025-01-15T10:00:00Z",
+    "update_time": "2025-01-15T10:00:00Z"
+  }
+}
+```
 
 #### Get Strategy List
 - **GET** `/quota-manager/api/v1/strategies`
@@ -180,14 +218,38 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "strategies": [...],
-  "total": 5
+  "code": "quota-manager.success",
+  "message": "Strategies retrieved successfully",
+  "success": true,
+  "data": {
+    "strategies": [...],
+    "total": 5
+  }
 }
 ```
 
 #### Get Single Strategy
 - **GET** `/quota-manager/api/v1/strategies/:id`
-- **Response**: Strategy object
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Strategy retrieved successfully",
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "test-strategy",
+    "title": "Test Strategy",
+    "type": "single",
+    "amount": 10,
+    "model": "gpt-3.5-turbo",
+    "condition": "github-star(\"zgsm\")",
+    "status": true,
+    "create_time": "2025-01-15T10:00:00Z",
+    "update_time": "2025-01-15T10:00:00Z"
+  }
+}
+```
 
 #### Update Strategy
 - **PUT** `/quota-manager/api/v1/strategies/:id`
@@ -195,7 +257,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "message": "strategy updated successfully"
+  "code": "quota-manager.success",
+  "message": "Strategy updated successfully",
+  "success": true
 }
 ```
 
@@ -205,7 +269,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "message": "strategy enabled/disabled successfully"
+  "code": "quota-manager.success",
+  "message": "Strategy enabled successfully",
+  "success": true
 }
 ```
 
@@ -214,7 +280,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "message": "strategy deleted successfully"
+  "code": "quota-manager.success",
+  "message": "Strategy deleted successfully",
+  "success": true
 }
 ```
 
@@ -223,7 +291,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "message": "strategy scan triggered"
+  "code": "quota-manager.success",
+  "message": "Strategy scan triggered successfully",
+  "success": true
 }
 ```
 
@@ -234,18 +304,23 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "total_quota": 150,
-  "used_quota": 50,
-  "quota_list": [
-    {
-      "amount": 50,
-      "expiry_date": "2025-06-30T23:59:59Z"
-    },
-    {
-      "amount": 100,
-      "expiry_date": "2025-07-31T23:59:59Z"
-    }
-  ]
+  "code": "quota-manager.success",
+  "message": "User quota retrieved successfully",
+  "success": true,
+  "data": {
+    "total_quota": 150,
+    "used_quota": 50,
+    "quota_list": [
+      {
+        "amount": 50,
+        "expiry_date": "2025-06-30T23:59:59Z"
+      },
+      {
+        "amount": 100,
+        "expiry_date": "2025-07-31T23:59:59Z"
+      }
+    ]
+  }
 }
 ```
 
@@ -264,19 +339,24 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "total": 25,
-  "records": [
-    {
-      "amount": 100,
-      "operation": "RECHARGE",
-      "voucher_code": "",
-      "related_user": "",
-      "strategy_name": "vip-daily-bonus",
-      "expiry_date": "2025-06-30T23:59:59Z",
-      "details": {...},
-      "create_time": "2025-05-15T10:00:00Z"
-    }
-  ]
+  "code": "quota-manager.success",
+  "message": "Quota audit records retrieved successfully",
+  "success": true,
+  "data": {
+    "total": 25,
+    "records": [
+      {
+        "amount": 100,
+        "operation": "RECHARGE",
+        "voucher_code": "",
+        "related_user": "",
+        "strategy_name": "vip-daily-bonus",
+        "expiry_date": "2025-06-30T23:59:59Z",
+        "details": {...},
+        "create_time": "2025-05-15T10:00:00Z"
+      }
+    ]
+  }
 }
 ```
 
@@ -313,19 +393,24 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "voucher_code": "eyJnaXZlcl9pZCI6InVzZXIxMjMiTC...",
-  "related_user": "user456",
-  "operation": "TRANSFER_OUT",
-  "quota_list": [
-    {
-      "amount": 10,
-      "expiry_date": "2025-06-30T23:59:59Z"
-    },
-    {
-      "amount": 20,
-      "expiry_date": "2025-07-31T23:59:59Z"
-    }
-  ]
+  "code": "quota-manager.success",
+  "message": "Quota transferred out successfully",
+  "success": true,
+  "data": {
+    "voucher_code": "eyJnaXZlcl9pZCI6InVzZXIxMjMiTC...",
+    "related_user": "user456",
+    "operation": "TRANSFER_OUT",
+    "quota_list": [
+      {
+        "amount": 10,
+        "expiry_date": "2025-06-30T23:59:59Z"
+      },
+      {
+        "amount": 20,
+        "expiry_date": "2025-07-31T23:59:59Z"
+      }
+    ]
+  }
 }
 ```
 
@@ -348,30 +433,35 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "giver_id": "user123",
-  "giver_name": "John Doe",
-  "giver_phone": "13800138000",
-  "giver_github": "johndoe",
-  "receiver_id": "user456",
-  "quota_list": [
-    {
-      "amount": 10,
-      "expiry_date": "2025-06-30T23:59:59Z",
-      "is_expired": false,
-      "success": true
-    },
-    {
-      "amount": 20,
-      "expiry_date": "2025-07-31T23:59:59Z",
-      "is_expired": false,
-      "success": true
-    }
-  ],
-  "voucher_code": "eyJnaXZlcl9pZCI6InVzZXIxMjMiLC...",
-  "operation": "TRANSFER_IN",
-  "amount": 30,
-  "status": "SUCCESS",
-  "message": "All quota transfers completed successfully"
+  "code": "quota-manager.success",
+  "message": "Quota transferred in successfully",
+  "success": true,
+  "data": {
+    "giver_id": "user123",
+    "giver_name": "John Doe",
+    "giver_phone": "13800138000",
+    "giver_github": "johndoe",
+    "receiver_id": "user456",
+    "quota_list": [
+      {
+        "amount": 10,
+        "expiry_date": "2025-06-30T23:59:59Z",
+        "is_expired": false,
+        "success": true
+      },
+      {
+        "amount": 20,
+        "expiry_date": "2025-07-31T23:59:59Z",
+        "is_expired": false,
+        "success": true
+      }
+    ],
+    "voucher_code": "eyJnaXZlcl9pZCI6InVzZXIxMjMiLC...",
+    "operation": "TRANSFER_IN",
+    "amount": 30,
+    "status": "SUCCESS",
+    "message": "All quota transfers completed successfully"
+  }
 }
 ```
 
@@ -398,9 +488,45 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**:
 ```json
 {
-  "status": "ok"
+  "code": "quota-manager.success",
+  "message": "Service is running",
+  "success": true,
+  "data": {
+    "status": "ok"
+  }
 }
 ```
+
+### Error Responses
+
+All error responses follow the same format:
+
+```json
+{
+  "code": "quota-manager.bad_request",
+  "message": "Invalid request parameters",
+  "success": false
+}
+```
+
+**Common Error Codes:**
+- `quota-manager.bad_request`: Bad Request - Invalid request parameters
+- `quota-manager.unauthorized`: Unauthorized - Authentication failed
+- `quota-manager.token_invalid`: Token Invalid - Invalid or missing JWT token
+- `quota-manager.not_found`: Not Found - Resource not found
+- `quota-manager.strategy_not_found`: Strategy Not Found - Strategy with specified ID not found
+- `quota-manager.invalid_strategy_id`: Invalid Strategy ID - Strategy ID format is invalid
+- `quota-manager.insufficient_quota`: Insufficient Quota - User does not have enough quota
+- `quota-manager.voucher_invalid`: Voucher Invalid - Voucher code is invalid or malformed
+- `quota-manager.voucher_expired`: Voucher Expired - Voucher code has expired
+- `quota-manager.voucher_already_redeemed`: Voucher Already Redeemed - Voucher has been used
+- `quota-manager.quota_transfer_failed`: Quota Transfer Failed - Failed to transfer quota
+- `quota-manager.strategy_create_failed`: Strategy Create Failed - Failed to create strategy
+- `quota-manager.strategy_update_failed`: Strategy Update Failed - Failed to update strategy
+- `quota-manager.strategy_delete_failed`: Strategy Delete Failed - Failed to delete strategy
+- `quota-manager.database_error`: Database Error - Database operation failed
+- `quota-manager.aigateway_error`: AiGateway Error - AiGateway service error
+- `quota-manager.internal_error`: Internal Server Error - Unexpected server error
 
 ## Condition Expressions
 

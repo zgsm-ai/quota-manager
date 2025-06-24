@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"quota-manager/internal/config"
 	"quota-manager/internal/models"
+	"quota-manager/internal/response"
 	"quota-manager/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -52,30 +53,27 @@ func (h *QuotaHandler) getUserIDFromToken(c *gin.Context) (string, error) {
 func (h *QuotaHandler) GetUserQuota(c *gin.Context) {
 	userID, err := h.getUserIDFromToken(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "failed to get user from token: " + err.Error(),
-		})
+		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
+			"Failed to extract user from token: " + err.Error()))
 		return
 	}
 
 	quotaInfo, err := h.quotaService.GetUserQuota(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get user quota: " + err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.InternalErrorCode,
+			"Failed to retrieve user quota: " + err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, quotaInfo)
+	c.JSON(http.StatusOK, response.NewSuccessResponse(quotaInfo, "User quota retrieved successfully"))
 }
 
 // GetQuotaAuditRecords handles GET /quota-manager/api/v1/quota/audit
 func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 	userID, err := h.getUserIDFromToken(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "failed to get user from token: " + err.Error(),
-		})
+		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
+			"Failed to extract user from token: " + err.Error()))
 		return
 	}
 
@@ -85,9 +83,8 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request: " + err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"Invalid query parameters: " + err.Error()))
 		return
 	}
 
@@ -101,74 +98,69 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 
 	records, total, err := h.quotaService.GetQuotaAuditRecords(userID, req.Page, req.PageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get quota audit records: " + err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.DatabaseErrorCode,
+			"Failed to retrieve quota audit records: " + err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	data := gin.H{
 		"total":   total,
 		"records": records,
-	})
+	}
+
+	c.JSON(http.StatusOK, response.NewSuccessResponse(data, "Quota audit records retrieved successfully"))
 }
 
 // TransferOut handles POST /quota-manager/api/v1/quota/transfer-out
 func (h *QuotaHandler) TransferOut(c *gin.Context) {
 	giver, err := h.getUserFromToken(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "failed to get user from token: " + err.Error(),
-		})
+		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
+			"Failed to extract user from token: " + err.Error()))
 		return
 	}
 
 	var req services.TransferOutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request: " + err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"Invalid request body: " + err.Error()))
 		return
 	}
 
-	response, err := h.quotaService.TransferOut(giver, &req)
+	resp, err := h.quotaService.TransferOut(giver, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to transfer out quota: " + err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.QuotaTransferFailedCode,
+			"Failed to transfer out quota: " + err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response.NewSuccessResponse(resp, "Quota transferred out successfully"))
 }
 
 // TransferIn handles POST /quota-manager/api/v1/quota/transfer-in
 func (h *QuotaHandler) TransferIn(c *gin.Context) {
 	receiver, err := h.getUserFromToken(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "failed to get user from token: " + err.Error(),
-		})
+		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
+			"Failed to extract user from token: " + err.Error()))
 		return
 	}
 
 	var req services.TransferInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request: " + err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"Invalid request body: " + err.Error()))
 		return
 	}
 
-	response, err := h.quotaService.TransferIn(receiver, &req)
+	resp, err := h.quotaService.TransferIn(receiver, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to transfer in quota: " + err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.QuotaTransferFailedCode,
+			"Failed to transfer in quota: " + err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response.NewSuccessResponse(resp, "Quota transferred in successfully"))
 }
 
 // RegisterQuotaRoutes registers quota-related routes

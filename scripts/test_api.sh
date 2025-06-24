@@ -45,7 +45,7 @@ STRATEGY_RESPONSE=$(curl -s -X POST "$BASE_URL/quota-manager/api/v1/strategies" 
     "status": false
   }')
 echo "$STRATEGY_RESPONSE" | jq .
-STRATEGY_ID=$(echo "$STRATEGY_RESPONSE" | jq -r '.id')
+STRATEGY_ID=$(echo "$STRATEGY_RESPONSE" | jq -r '.data.id')
 echo "Created strategy ID: $STRATEGY_ID"
 echo ""
 
@@ -107,9 +107,9 @@ echo ""
 # 16. Test Boolean String Query
 echo "16. Test Boolean String Query..."
 echo "16a. Query Enabled Strategies (?status=true):"
-curl -s "$BASE_URL/quota-manager/api/v1/strategies?status=true" | jq '.total'
+curl -s "$BASE_URL/quota-manager/api/v1/strategies?status=true" | jq '.data.total'
 echo "16b. Query Disabled Strategies (?status=false):"
-curl -s "$BASE_URL/quota-manager/api/v1/strategies?status=false" | jq '.total'
+curl -s "$BASE_URL/quota-manager/api/v1/strategies?status=false" | jq '.data.total'
 echo ""
 
 # 17. Test Quota Management APIs

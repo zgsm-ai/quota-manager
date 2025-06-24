@@ -10,6 +10,7 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/handlers"
+	"quota-manager/internal/response"
 	"quota-manager/internal/services"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
@@ -124,7 +125,7 @@ func main() {
 	{
 		// Health check
 		quotaManager.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+			c.JSON(http.StatusOK, response.NewSuccessResponse(gin.H{"status": "ok"}, "Service is running"))
 		})
 
 		// API routes

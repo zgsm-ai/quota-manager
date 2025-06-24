@@ -6,6 +6,7 @@ replace quota-manager => ../
 
 require (
 	github.com/gin-gonic/gin v1.9.1
+	github.com/google/uuid v1.6.0
 	quota-manager v0.0.0-00010101000000-000000000000
 )
 
@@ -19,7 +20,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.14.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect

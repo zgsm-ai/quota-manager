@@ -49,15 +49,16 @@ func main() {
 	printTestResults(results)
 }
 
-// runAllTests run all tests
+// runAllTests run all tests (service layer + API layer)
 func runAllTests(ctx *TestContext) []TestResult {
 	var results []TestResult
 
-	// Test case list - Currently testing only the first test case
+	// Test case list - All tests (service layer + API layer)
 	testCases := []struct {
 		name string
 		fn   func(*TestContext) TestResult
 	}{
+		// Service layer tests
 		{"Clear Data Test", testClearData},
 		{"Condition Expression - Empty Condition Test", testEmptyCondition},
 		{"Condition Expression - Match User Test", testMatchUserCondition},
@@ -111,6 +112,15 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Batch Quota Expiry Consistency Test", testBatchQuotaExpiryConsistency},
 		{"Transfer Out Expiry Date Validation Test", testTransferOutExpiryDateValidation},
 		{"Concurrent Operations Test", testConcurrentOperations},
+
+		// API layer tests
+		{"API Health Check", testAPIHealthCheck},
+		{"API Create Strategy", testAPICreateStrategy},
+		{"API Create Strategy Invalid Data", testAPICreateStrategyInvalidData},
+		{"API Get Strategy Not Found", testAPIGetStrategyNotFound},
+		{"API Invalid Strategy ID", testAPIInvalidStrategyID},
+		{"API Get Strategies", testAPIGetStrategies},
+		{"API Quota Unauthorized", testAPIQuotaUnauthorized},
 	}
 
 	for _, tc := range testCases {
