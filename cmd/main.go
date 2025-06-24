@@ -119,33 +119,37 @@ func main() {
 	// Create routes
 	router := gin.Default()
 
-	// Health check
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
-
-	// API routes
-	v1 := router.Group("/api/v1")
+	// Wrap all routes under /quota-manager prefix
+	quotaManager := router.Group("/quota-manager")
 	{
-		// Strategy management API
-		strategies := v1.Group("/strategies")
+		// Health check
+		quotaManager.GET("/health", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		})
+
+		// API routes
+		v1 := quotaManager.Group("/api/v1")
 		{
-			strategies.POST("", strategyHandler.CreateStrategy)
-			strategies.GET("", strategyHandler.GetStrategies)
-			strategies.GET("/:id", strategyHandler.GetStrategy)
-			strategies.PUT("/:id", strategyHandler.UpdateStrategy)
-			strategies.DELETE("/:id", strategyHandler.DeleteStrategy)
+			// Strategy management API
+			strategies := v1.Group("/strategies")
+			{
+				strategies.POST("", strategyHandler.CreateStrategy)
+				strategies.GET("", strategyHandler.GetStrategies)
+				strategies.GET("/:id", strategyHandler.GetStrategy)
+				strategies.PUT("/:id", strategyHandler.UpdateStrategy)
+				strategies.DELETE("/:id", strategyHandler.DeleteStrategy)
 
-			// Strategy status management
-			strategies.POST("/:id/enable", strategyHandler.EnableStrategy)
-			strategies.POST("/:id/disable", strategyHandler.DisableStrategy)
+				// Strategy status management
+				strategies.POST("/:id/enable", strategyHandler.EnableStrategy)
+				strategies.POST("/:id/disable", strategyHandler.DisableStrategy)
 
-			// Manually trigger strategy scan
-			strategies.POST("/scan", strategyHandler.TriggerScan)
+				// Manually trigger strategy scan
+				strategies.POST("/scan", strategyHandler.TriggerScan)
+			}
+
+			// Quota management API
+			handlers.RegisterQuotaRoutes(v1, quotaHandler)
 		}
-
-		// Quota management API
-		handlers.RegisterQuotaRoutes(v1, quotaHandler)
 	}
 
 	// Start HTTP server

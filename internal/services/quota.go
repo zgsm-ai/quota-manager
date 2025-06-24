@@ -912,7 +912,7 @@ func (s *QuotaService) MergeQuotaRecords() error {
 // Helper methods for AiGateway communication
 
 func (s *QuotaService) getQuotaFromAiGateway(userID string) (int, error) {
-	url := fmt.Sprintf("%s%s/quota?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
+	url := fmt.Sprintf("%s%s?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -949,7 +949,7 @@ func (s *QuotaService) getQuotaFromAiGateway(userID string) (int, error) {
 }
 
 func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
-	url := fmt.Sprintf("%s%s/quota/used?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
+	url := fmt.Sprintf("%s%s/used?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -986,7 +986,7 @@ func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
 }
 
 func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
-	reqURL := fmt.Sprintf("%s%s/quota/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
+	reqURL := fmt.Sprintf("%s%s/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)
@@ -1019,7 +1019,7 @@ func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
 }
 
 func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta int) error {
-	reqURL := fmt.Sprintf("%s%s/quota/used/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
+	reqURL := fmt.Sprintf("%s%s/used/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)

@@ -108,13 +108,13 @@ func setupTestEnvironment() (*TestContext, error) {
 	}
 
 	// Create AiGateway client with mock server URL
-	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions", "X-Auth-Key", "credential3")
+	gateway := aigateway.NewClient(mockServer.URL, "/v1/chat/completions/quota", "X-Auth-Key", "credential3")
 
 	// Create mock AiGateway config for QuotaService using actual mock server host/port
 	mockAiGatewayConfig := &config.AiGatewayConfig{
 		Host:       mockHost,
 		Port:       mockPortInt,
-		AdminPath:  "/v1/chat/completions",
+		AdminPath:  "/v1/chat/completions/quota",
 		AuthHeader: "X-Auth-Key",
 		AuthValue:  "credential3",
 	}

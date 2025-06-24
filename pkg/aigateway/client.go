@@ -38,7 +38,7 @@ func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
 
 // RefreshQuota refreshes user quota
 func (c *Client) RefreshQuota(userID string, quota int) error {
-	apiUrl := fmt.Sprintf("%s%s/quota/refresh", c.BaseURL, c.AdminPath)
+	apiUrl := fmt.Sprintf("%s%s/refresh", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)
@@ -71,7 +71,7 @@ func (c *Client) RefreshQuota(userID string, quota int) error {
 
 // QueryQuota queries user quota
 func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
-	apiUrl := fmt.Sprintf("%s%s/quota?user_id=%s", c.BaseURL, c.AdminPath, userID)
+	apiUrl := fmt.Sprintf("%s%s?user_id=%s", c.BaseURL, c.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
@@ -108,7 +108,7 @@ func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
 
 // DeltaQuota increases or decreases user quota
 func (c *Client) DeltaQuota(userID string, value int) error {
-	apiUrl := fmt.Sprintf("%s%s/quota/delta", c.BaseURL, c.AdminPath)
+	apiUrl := fmt.Sprintf("%s%s/delta", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)

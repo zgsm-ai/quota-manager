@@ -48,7 +48,7 @@ func (h *QuotaHandler) getUserIDFromToken(c *gin.Context) (string, error) {
 	return authUser.ID, nil
 }
 
-// GetUserQuota handles GET /api/v1/quota
+// GetUserQuota handles GET /quota-manager/api/v1/quota
 func (h *QuotaHandler) GetUserQuota(c *gin.Context) {
 	userID, err := h.getUserIDFromToken(c)
 	if err != nil {
@@ -69,7 +69,7 @@ func (h *QuotaHandler) GetUserQuota(c *gin.Context) {
 	c.JSON(http.StatusOK, quotaInfo)
 }
 
-// GetQuotaAuditRecords handles GET /api/v1/quota/audit
+// GetQuotaAuditRecords handles GET /quota-manager/api/v1/quota/audit
 func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 	userID, err := h.getUserIDFromToken(c)
 	if err != nil {
@@ -113,7 +113,7 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 	})
 }
 
-// TransferOut handles POST /api/v1/quota/transfer-out
+// TransferOut handles POST /quota-manager/api/v1/quota/transfer-out
 func (h *QuotaHandler) TransferOut(c *gin.Context) {
 	giver, err := h.getUserFromToken(c)
 	if err != nil {
@@ -142,7 +142,7 @@ func (h *QuotaHandler) TransferOut(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// TransferIn handles POST /api/v1/quota/transfer-in
+// TransferIn handles POST /quota-manager/api/v1/quota/transfer-in
 func (h *QuotaHandler) TransferIn(c *gin.Context) {
 	receiver, err := h.getUserFromToken(c)
 	if err != nil {

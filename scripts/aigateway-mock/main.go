@@ -73,8 +73,8 @@ func main() {
 
 	// Middleware: Verify Authorization
 	authMiddleware := func(c *gin.Context) {
-		auth := c.GetHeader("Authorization")
-		if auth != "Bearer credential3" {
+		auth := c.GetHeader("x-admin-key")
+		if auth != "credential3" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
 			c.Abort()
 			return
@@ -118,11 +118,11 @@ func main() {
 
 // refreshQuota refreshes the quota
 func refreshQuota(c *gin.Context) {
-	consumer := c.PostForm("consumer")
+	userID := c.PostForm("user_id")
 	quotaStr := c.PostForm("quota")
 
-	if consumer == "" || quotaStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer and quota are required"})
+	if userID == "" || quotaStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and quota are required"})
 		return
 	}
 
@@ -132,43 +132,43 @@ func refreshQuota(c *gin.Context) {
 		return
 	}
 
-	key := fmt.Sprintf("chat_quota:%s", consumer)
+	key := fmt.Sprintf("chat_quota:%s", userID)
 	store.SetQuota(key, quota)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "quota refreshed",
-		"consumer": consumer,
-		"quota":    quota,
+		"message": "quota refreshed",
+		"user_id": userID,
+		"quota":   quota,
 	})
 }
 
 // queryQuota queries the quota
 func queryQuota(c *gin.Context) {
-	consumer := c.Query("consumer")
-	if consumer == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer is required"})
+	userID := c.Query("user_id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
 		return
 	}
 
-	key := fmt.Sprintf("chat_quota:%s", consumer)
+	key := fmt.Sprintf("chat_quota:%s", userID)
 	quota, exists := store.GetQuota(key)
 	if !exists {
 		quota = 0 // Default quota is 0
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"quota":    quota,
-		"consumer": consumer,
+		"quota":   quota,
+		"user_id": userID,
 	})
 }
 
 // deltaQuota increases or decreases the quota
 func deltaQuota(c *gin.Context) {
-	consumer := c.PostForm("consumer")
+	userID := c.PostForm("user_id")
 	valueStr := c.PostForm("value")
 
-	if consumer == "" || valueStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer and value are required"})
+	if userID == "" || valueStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and value are required"})
 		return
 	}
 
@@ -178,12 +178,12 @@ func deltaQuota(c *gin.Context) {
 		return
 	}
 
-	key := fmt.Sprintf("chat_quota:%s", consumer)
+	key := fmt.Sprintf("chat_quota:%s", userID)
 	newQuota := store.IncrQuota(key, value)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "quota updated",
-		"consumer":  consumer,
+		"user_id":   userID,
 		"delta":     value,
 		"new_quota": newQuota,
 	})
@@ -191,31 +191,31 @@ func deltaQuota(c *gin.Context) {
 
 // queryUsedQuota queries the used quota
 func queryUsedQuota(c *gin.Context) {
-	consumer := c.Query("consumer")
-	if consumer == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer is required"})
+	userID := c.Query("user_id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
 		return
 	}
 
-	key := fmt.Sprintf("chat_quota:%s", consumer)
+	key := fmt.Sprintf("chat_quota:%s", userID)
 	used, exists := store.GetUsed(key)
 	if !exists {
 		used = 0 // Default used quota is 0
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"quota":    used,
-		"consumer": consumer,
+		"quota":   used,
+		"user_id": userID,
 	})
 }
 
 // deltaUsedQuota increases or decreases the used quota
 func deltaUsedQuota(c *gin.Context) {
-	consumer := c.PostForm("consumer")
+	userID := c.PostForm("user_id")
 	valueStr := c.PostForm("value")
 
-	if consumer == "" || valueStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer and value are required"})
+	if userID == "" || valueStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and value are required"})
 		return
 	}
 
@@ -225,12 +225,12 @@ func deltaUsedQuota(c *gin.Context) {
 		return
 	}
 
-	key := fmt.Sprintf("chat_quota:%s", consumer)
+	key := fmt.Sprintf("chat_quota:%s", userID)
 	newUsed := store.IncrUsed(key, value)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "used quota updated",
-		"consumer": consumer,
+		"user_id":  userID,
 		"delta":    value,
 		"new_used": newUsed,
 	})
@@ -238,11 +238,11 @@ func deltaUsedQuota(c *gin.Context) {
 
 // refreshUsedQuota refreshes the used quota
 func refreshUsedQuota(c *gin.Context) {
-	consumer := c.PostForm("consumer")
+	userID := c.PostForm("user_id")
 	quotaStr := c.PostForm("quota")
 
-	if consumer == "" || quotaStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "consumer and quota are required"})
+	if userID == "" || quotaStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and quota are required"})
 		return
 	}
 
@@ -252,12 +252,12 @@ func refreshUsedQuota(c *gin.Context) {
 		return
 	}
 
-	key := fmt.Sprintf("chat_quota:%s", consumer)
+	key := fmt.Sprintf("chat_quota:%s", userID)
 	store.SetUsed(key, quota)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "used quota refreshed",
-		"consumer": consumer,
-		"quota":    quota,
+		"message": "used quota refreshed",
+		"user_id": userID,
+		"quota":   quota,
 	})
 }

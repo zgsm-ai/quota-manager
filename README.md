@@ -158,7 +158,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### Strategy Management
 
 #### Create Strategy
-- **POST** `/api/v1/strategies`
+- **POST** `/quota-manager/api/v1/strategies`
 - **Request Body**:
 ```json
 {
@@ -174,7 +174,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - **Response**: Strategy object with generated ID
 
 #### Get Strategy List
-- **GET** `/api/v1/strategies`
+- **GET** `/quota-manager/api/v1/strategies`
 - **Query Parameters**:
   - `status=enabled|disabled|true|false` - Filter by status
 - **Response**:
@@ -186,11 +186,11 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 #### Get Single Strategy
-- **GET** `/api/v1/strategies/:id`
+- **GET** `/quota-manager/api/v1/strategies/:id`
 - **Response**: Strategy object
 
 #### Update Strategy
-- **PUT** `/api/v1/strategies/:id`
+- **PUT** `/quota-manager/api/v1/strategies/:id`
 - **Request Body**: Partial strategy object
 - **Response**:
 ```json
@@ -200,8 +200,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 #### Strategy Status Control
-- **POST** `/api/v1/strategies/:id/enable` - Enable strategy
-- **POST** `/api/v1/strategies/:id/disable` - Disable strategy
+- **POST** `/quota-manager/api/v1/strategies/:id/enable` - Enable strategy
+- **POST** `/quota-manager/api/v1/strategies/:id/disable` - Disable strategy
 - **Response**:
 ```json
 {
@@ -210,7 +210,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 #### Delete Strategy
-- **DELETE** `/api/v1/strategies/:id`
+- **DELETE** `/quota-manager/api/v1/strategies/:id`
 - **Response**:
 ```json
 {
@@ -219,7 +219,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 #### Manual Strategy Scan
-- **POST** `/api/v1/strategies/scan`
+- **POST** `/quota-manager/api/v1/strategies/scan`
 - **Response**:
 ```json
 {
@@ -230,7 +230,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### Quota Management
 
 #### Get User Quota
-- **GET** `/api/v1/quota`
+- **GET** `/quota-manager/api/v1/quota`
 - **Response**:
 ```json
 {
@@ -257,7 +257,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   - `expiry_date`: Quota expiry timestamp
 
 #### Get Quota Audit Records
-- **GET** `/api/v1/quota/audit?page=1&page_size=10`
+- **GET** `/quota-manager/api/v1/quota/audit?page=1&page_size=10`
 - **Query Parameters**:
   - `page`: Page number (default: 1)
   - `page_size`: Page size (default: 10)
@@ -293,7 +293,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   - `create_time`: Operation timestamp
 
 #### Transfer Out Quota
-- **POST** `/api/v1/quota/transfer-out`
+- **POST** `/quota-manager/api/v1/quota/transfer-out`
 - **Request Body**:
 ```json
 {
@@ -338,7 +338,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   - `expiry_date`: Quota expiry timestamp
 
 #### Transfer In Quota
-- **POST** `/api/v1/quota/transfer-in`
+- **POST** `/quota-manager/api/v1/quota/transfer-in`
 - **Request Body**:
 ```json
 {
@@ -394,7 +394,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `message`: Status description
 
 ### Health Check
-- **GET** `/health`
+- **GET** `/quota-manager/health`
 - **Response**:
 ```json
 {
@@ -534,7 +534,7 @@ The project includes a complete AiGateway mock service (`scripts/aigateway-mock/
 aigateway:
   host: "localhost"
   port: 1002
-  admin_path: "/v1/chat/completions"
+  admin_path: "/v1/chat/completions/quota"
   auth_header: "x-admin-key"
   auth_value: "12345678"
 ```
@@ -567,7 +567,7 @@ auth_database:
 aigateway:
   host: "127.0.0.1"
   port: 8002
-  admin_path: "/v1/chat/completions"
+  admin_path: "/v1/chat/completions/quota"
   auth_header: "x-admin-key"
   auth_value: "12345678"
 

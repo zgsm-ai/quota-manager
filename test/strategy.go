@@ -212,7 +212,7 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 	failAiGatewayConfig := &config.AiGatewayConfig{
 		Host:       failHost,
 		Port:       failPortInt,
-		AdminPath:  "/v1/chat/completions",
+		AdminPath:  "/v1/chat/completions/quota",
 		AuthHeader: "X-Auth-Key",
 		AuthValue:  "credential3",
 	}

@@ -22,7 +22,7 @@ auth_database:
 aigateway:
   host: "127.0.0.1"
   port: 8002
-  admin_path: "/v1/chat/completions"
+  admin_path: "/v1/chat/completions/quota"
   auth_header: "x-admin-key"
   auth_value: "12345678"
 
