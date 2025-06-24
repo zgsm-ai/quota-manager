@@ -24,6 +24,16 @@ type QuotaResponse struct {
 	UserID string `json:"user_id"`
 }
 
+type StarResponse struct {
+	UserID    string `json:"user_id"`
+	StarValue bool   `json:"star_value"`
+}
+
+type StarSetRequest struct {
+	UserID    string `json:"user_id"`
+	StarValue bool   `json:"star_value"`
+}
+
 func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
 	return &Client{
 		BaseURL:    baseURL,
@@ -147,4 +157,74 @@ func (c *Client) QueryQuotaValue(userID string) (int, error) {
 		return 0, err
 	}
 	return resp.Quota, nil
+}
+
+// QueryGithubStar queries user's GitHub star status for zgsm-ai.zgsm project
+func (c *Client) QueryGithubStar(userID string) (*StarResponse, error) {
+	apiUrl := fmt.Sprintf("%s%s/star?user_id=%s", c.BaseURL, c.AdminPath, userID)
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set admin key header if configured
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var starResp StarResponse
+	if err := json.Unmarshal(body, &starResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &starResp, nil
+}
+
+// SetGithubStar sets user's GitHub star status for zgsm-ai.zgsm project
+func (c *Client) SetGithubStar(userID string, starValue bool) error {
+	apiUrl := fmt.Sprintf("%s%s/star/set", c.BaseURL, c.AdminPath)
+
+	data := url.Values{}
+	data.Set("user_id", userID)
+	data.Set("star_value", strconv.FormatBool(starValue))
+
+	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set admin key header if configured
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
 }

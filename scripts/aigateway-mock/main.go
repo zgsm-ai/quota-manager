@@ -12,8 +12,9 @@ import (
 
 // In-memory storage, simulating Redis
 type MemoryStore struct {
-	quotaData map[string]int // Total quota
-	usedData  map[string]int // Used quota
+	quotaData map[string]int  // Total quota
+	usedData  map[string]int  // Used quota
+	starData  map[string]bool // GitHub star status
 	mu        sync.RWMutex
 }
 
@@ -21,6 +22,7 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		quotaData: make(map[string]int),
 		usedData:  make(map[string]int),
+		starData:  make(map[string]bool),
 		mu:        sync.RWMutex{},
 	}
 }
@@ -63,6 +65,19 @@ func (m *MemoryStore) IncrUsed(key string, delta int) int {
 	defer m.mu.Unlock()
 	m.usedData[key] += delta
 	return m.usedData[key]
+}
+
+func (m *MemoryStore) GetStar(key string) (bool, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	value, exists := m.starData[key]
+	return value, exists
+}
+
+func (m *MemoryStore) SetStar(key string, value bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.starData[key] = value
 }
 
 var store = NewMemoryStore()
@@ -108,6 +123,12 @@ func main() {
 
 		// Refresh used quota
 		v1.POST("/quota/used/refresh", refreshUsedQuota)
+
+		// Query GitHub star status
+		v1.GET("/quota/star", queryGithubStar)
+
+		// Set GitHub star status
+		v1.POST("/quota/star/set", setGithubStar)
 	}
 
 	fmt.Println("AiGateway Mock Service starting on port 1002")
@@ -259,5 +280,51 @@ func refreshUsedQuota(c *gin.Context) {
 		"message": "used quota refreshed",
 		"user_id": userID,
 		"quota":   quota,
+	})
+}
+
+// queryGithubStar queries the GitHub star status
+func queryGithubStar(c *gin.Context) {
+	userID := c.Query("user_id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+		return
+	}
+
+	key := fmt.Sprintf("chat_quota:%s", userID)
+	star, exists := store.GetStar(key)
+	if !exists {
+		star = false // Default star status is false
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"star_value": star,
+		"user_id":    userID,
+	})
+}
+
+// setGithubStar sets the GitHub star status
+func setGithubStar(c *gin.Context) {
+	userID := c.PostForm("user_id")
+	starValueStr := c.PostForm("star_value")
+
+	if userID == "" || starValueStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and star_value are required"})
+		return
+	}
+
+	starValue, err := strconv.ParseBool(starValueStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid star_value format"})
+		return
+	}
+
+	key := fmt.Sprintf("chat_quota:%s", userID)
+	store.SetStar(key, starValue)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "star status updated",
+		"user_id":    userID,
+		"star_value": starValue,
 	})
 }

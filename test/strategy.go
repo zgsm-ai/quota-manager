@@ -218,8 +218,8 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 	}
 
 	// Create services using failed gateway configuration
-	failQuotaService := services.NewQuotaService(ctx.DB.DB, failAiGatewayConfig, ctx.VoucherService)
-	failGateway := aigateway.NewClient(ctx.FailServer.URL, "/v1/chat/completions", "X-Auth-Key", "credential3")
+	failGateway := aigateway.NewClient(ctx.FailServer.URL, "/v1/chat/completions/quota", "X-Auth-Key", "credential3")
+	failQuotaService := services.NewQuotaService(ctx.DB, failAiGatewayConfig, failGateway, ctx.VoucherService)
 	failStrategyService := services.NewStrategyService(ctx.DB, failGateway, failQuotaService)
 
 	// Create strategy

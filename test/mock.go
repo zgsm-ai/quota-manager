@@ -8,10 +8,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// SetStarCall represents a SetGithubStar call for testing
+type SetStarCall struct {
+	UserID    string
+	StarValue bool
+}
+
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
-	data     map[string]int // Total quota
-	usedData map[string]int // Used quota
+	data         map[string]int  // Total quota
+	usedData     map[string]int  // Used quota
+	starData     map[string]bool // GitHub star status
+	setStarCalls []SetStarCall   // Track SetGithubStar calls
 }
 
 func (m *MockQuotaStore) GetQuota(consumer string) int {
@@ -46,9 +54,27 @@ func (m *MockQuotaStore) DeltaUsed(consumer string, delta int) int {
 	return m.usedData[consumer]
 }
 
+func (m *MockQuotaStore) SetGithubStar(userID string, starValue bool) {
+	m.starData[userID] = starValue
+	m.setStarCalls = append(m.setStarCalls, SetStarCall{
+		UserID:    userID,
+		StarValue: starValue,
+	})
+}
+
+func (m *MockQuotaStore) GetSetStarCalls() []SetStarCall {
+	return m.setStarCalls
+}
+
+func (m *MockQuotaStore) ClearSetStarCalls() {
+	m.setStarCalls = []SetStarCall{}
+}
+
 var mockStore = &MockQuotaStore{
-	data:     make(map[string]int),
-	usedData: make(map[string]int),
+	data:         make(map[string]int),
+	usedData:     make(map[string]int),
+	starData:     make(map[string]bool),
+	setStarCalls: []SetStarCall{},
 }
 
 // createMockServer create mock server
@@ -177,6 +203,50 @@ func createMockServer(shouldFail bool) *httptest.Server {
 					"message":  "success",
 					"user_id":  userID,
 					"new_used": newUsed,
+				})
+			})
+
+			// GitHub star related APIs
+			quota.GET("/star", func(c *gin.Context) {
+				if shouldFail {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					return
+				}
+
+				userID := c.Query("user_id")
+				if userID == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "missing user_id parameter"})
+					return
+				}
+
+				// For testing, always return true for starred status
+				c.JSON(http.StatusOK, gin.H{
+					"star_value": true,
+					"user_id":    userID,
+				})
+			})
+
+			quota.POST("/star/set", func(c *gin.Context) {
+				if shouldFail {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					return
+				}
+
+				userID := c.PostForm("user_id")
+				starValueStr := c.PostForm("star_value")
+
+				if userID == "" || starValueStr == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
+					return
+				}
+
+				starValue := starValueStr == "true"
+				mockStore.SetGithubStar(userID, starValue)
+
+				c.JSON(http.StatusOK, gin.H{
+					"message":    "success",
+					"user_id":    userID,
+					"star_value": starValue,
 				})
 			})
 		}

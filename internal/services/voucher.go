@@ -13,13 +13,14 @@ import (
 
 // VoucherData represents the data structure in voucher code
 type VoucherData struct {
-	GiverID     string             `json:"giver_id"`
-	GiverName   string             `json:"giver_name"`
-	GiverPhone  string             `json:"giver_phone"`
-	GiverGithub string             `json:"giver_github"`
-	ReceiverID  string             `json:"receiver_id"`
-	QuotaList   []VoucherQuotaItem `json:"quota_list"`
-	Timestamp   int64              `json:"timestamp"`
+	GiverID         string             `json:"giver_id"`
+	GiverName       string             `json:"giver_name"`
+	GiverPhone      string             `json:"giver_phone"`
+	GiverGithub     string             `json:"giver_github"`
+	GiverGithubStar bool               `json:"giver_github_star"` // Whether giver starred zgsm-ai.zgsm
+	ReceiverID      string             `json:"receiver_id"`
+	QuotaList       []VoucherQuotaItem `json:"quota_list"`
+	Timestamp       int64              `json:"timestamp"`
 }
 
 // VoucherQuotaItem represents quota item in voucher

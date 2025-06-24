@@ -260,9 +260,9 @@ func generateStrategies(db *database.DB) error {
 	// Batch insert strategy data
 	for _, strategy := range strategies {
 		if err := db.Create(&strategy).Error; err != nil {
-			fmt.Printf("Warning: Failed to create strategy %s: %v\n", strategy.Name, err)
+			log.Printf("Warning: Failed to create strategy %s: %v", strategy.Name, err)
 		} else {
-			fmt.Printf("Created strategy: %s (status: %t)\n", strategy.Name, strategy.Status)
+			log.Printf("Created strategy: %s (status: %t)", strategy.Name, strategy.Status)
 		}
 	}
 
@@ -339,7 +339,7 @@ func generateQuotas(db *database.DB) error {
 	// Batch insert quota data
 	for _, quota := range quotas {
 		if err := db.Create(&quota).Error; err != nil {
-			fmt.Printf("Warning: Failed to create quota for %s: %v\n", quota.UserID, err)
+			log.Printf("Warning: Failed to create quota for %s: %v", quota.UserID, err)
 		}
 	}
 
@@ -428,7 +428,7 @@ func generateAudits(db *database.DB) error {
 	// Batch insert audit data
 	for _, audit := range audits {
 		if err := db.Create(&audit).Error; err != nil {
-			fmt.Printf("Warning: Failed to create audit for %s: %v\n", audit.UserID, err)
+			log.Printf("Warning: Failed to create audit for %s: %v", audit.UserID, err)
 		}
 	}
 

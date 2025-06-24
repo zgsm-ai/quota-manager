@@ -35,6 +35,9 @@ func testClearData(ctx *TestContext) TestResult {
 
 	// Reset mock storage
 	mockStore.data = make(map[string]int)
+	mockStore.usedData = make(map[string]int)
+	mockStore.starData = make(map[string]bool)
+	mockStore.setStarCalls = []SetStarCall{}
 
 	return TestResult{Passed: true, Message: "Data cleared successfully"}
 }
@@ -121,10 +124,8 @@ func setupTestEnvironment() (*TestContext, error) {
 
 	// Create services
 	voucherService := services.NewVoucherService("test-signing-key-at-least-32-bytes-long")
-	quotaService := services.NewQuotaService(db.DB, mockAiGatewayConfig, voucherService)
+	quotaService := services.NewQuotaService(db, mockAiGatewayConfig, gateway, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService)
-
-	// Create quota querier
 	quotaQuerier := condition.NewAiGatewayQuotaQuerier(gateway)
 
 	return &TestContext{

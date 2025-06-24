@@ -98,7 +98,7 @@ func main() {
 
 	// Initialize services
 	voucherService := services.NewVoucherService(cfg.Voucher.SigningKey)
-	quotaService := services.NewQuotaService(db.DB, &cfg.AiGateway, voucherService)
+	quotaService := services.NewQuotaService(db, &cfg.AiGateway, gateway, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService)
 	schedulerService := services.NewSchedulerService(quotaService, strategyService, cfg)
 

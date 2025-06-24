@@ -6,27 +6,39 @@ import (
 	"net/http"
 	"net/url"
 	"quota-manager/internal/config"
+	"quota-manager/internal/database"
 	"quota-manager/internal/models"
+	"quota-manager/pkg/aigateway"
+	"quota-manager/pkg/logger"
 	"strconv"
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // QuotaService handles quota-related operations
 type QuotaService struct {
-	db            *gorm.DB
-	aiGatewayConf *config.AiGatewayConfig
-	voucherSvc    *VoucherService
+	db              *database.DB
+	aiGatewayConf   *config.AiGatewayConfig
+	aiGatewayClient interface {
+		QueryGithubStar(userID string) (*aigateway.StarResponse, error)
+		SetGithubStar(userID string, starValue bool) error
+	}
+	voucherSvc *VoucherService
 }
 
 // NewQuotaService creates a new quota service
-func NewQuotaService(db *gorm.DB, aiGatewayConf *config.AiGatewayConfig, voucherSvc *VoucherService) *QuotaService {
+func NewQuotaService(db *database.DB, aiGatewayConf *config.AiGatewayConfig, aiGatewayClient interface {
+	QueryGithubStar(userID string) (*aigateway.StarResponse, error)
+	SetGithubStar(userID string, starValue bool) error
+}, voucherSvc *VoucherService) *QuotaService {
 	return &QuotaService{
-		db:            db,
-		aiGatewayConf: aiGatewayConf,
-		voucherSvc:    voucherSvc,
+		db:              db,
+		aiGatewayConf:   aiGatewayConf,
+		aiGatewayClient: aiGatewayClient,
+		voucherSvc:      voucherSvc,
 	}
 }
 
@@ -138,7 +150,7 @@ func (s *QuotaService) GetUserQuota(userID string) (*QuotaInfo, error) {
 
 	// Get quota list from database
 	var quotas []models.Quota
-	if err := s.db.Where("user_id = ? AND status = ?", userID, models.StatusValid).
+	if err := s.db.DB.Where("user_id = ? AND status = ?", userID, models.StatusValid).
 		Order("expiry_date ASC").Find(&quotas).Error; err != nil {
 		return nil, fmt.Errorf("failed to get quota list: %w", err)
 	}
@@ -182,12 +194,12 @@ func (s *QuotaService) GetQuotaAuditRecords(userID string, page, pageSize int) (
 	offset := (page - 1) * pageSize
 
 	// Get total count
-	if err := s.db.Model(&models.QuotaAudit{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+	if err := s.db.DB.Model(&models.QuotaAudit{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count audit records: %w", err)
 	}
 
 	// Get records with pagination
-	if err := s.db.Where("user_id = ?", userID).
+	if err := s.db.DB.Where("user_id = ?", userID).
 		Order("create_time DESC, id DESC").
 		Offset(offset).
 		Limit(pageSize).
@@ -236,7 +248,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 
 	// Get quota list ordered by expiry date to check availability
 	var quotas []models.Quota
-	if err := s.db.Where("user_id = ? AND status = ?", giver.ID, models.StatusValid).
+	if err := s.db.DB.Where("user_id = ? AND status = ?", giver.ID, models.StatusValid).
 		Order("expiry_date ASC").Find(&quotas).Error; err != nil {
 		return nil, fmt.Errorf("failed to get quota list: %w", err)
 	}
@@ -263,7 +275,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 	}
 
 	// Start transaction
-	tx := s.db.Begin()
+	tx := s.db.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -312,13 +324,31 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		}
 	}
 
+	// Check if giver has starred zgsm-ai.zgsm project
+	var giverGithubStar bool
+	// First check from user's GithubStar field in database
+	var userInfo models.UserInfo
+	if err := s.db.AuthDB.Where("id = ?", giver.ID).First(&userInfo).Error; err == nil {
+		// Check if user has starred zgsm-ai.zgsm project
+		if userInfo.GithubStar != "" {
+			stars := strings.Split(userInfo.GithubStar, ",")
+			for _, star := range stars {
+				if strings.TrimSpace(star) == "zgsm-ai.zgsm" {
+					giverGithubStar = true
+					break
+				}
+			}
+		}
+	}
+
 	voucherData := &VoucherData{
-		GiverID:     giver.ID,
-		GiverName:   giver.Name,
-		GiverPhone:  giver.Phone,
-		GiverGithub: giver.Github,
-		ReceiverID:  req.ReceiverID,
-		QuotaList:   voucherQuotaList,
+		GiverID:         giver.ID,
+		GiverName:       giver.Name,
+		GiverPhone:      giver.Phone,
+		GiverGithub:     giver.Github,
+		GiverGithubStar: giverGithubStar,
+		ReceiverID:      req.ReceiverID,
+		QuotaList:       voucherQuotaList,
 	}
 
 	voucherCode, err := s.voucherSvc.GenerateVoucher(voucherData)
@@ -433,7 +463,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 
 	// Check if voucher has already been redeemed
 	var existingRedemption models.VoucherRedemption
-	if err := s.db.Where("voucher_code = ?", req.VoucherCode).First(&existingRedemption).Error; err == nil {
+	if err := s.db.DB.Where("voucher_code = ?", req.VoucherCode).First(&existingRedemption).Error; err == nil {
 		return &TransferInResponse{
 			GiverID:     voucherData.GiverID,
 			GiverName:   voucherData.GiverName,
@@ -448,7 +478,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 	}
 
 	// Start transaction
-	tx := s.db.Begin()
+	tx := s.db.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -618,6 +648,17 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 		}
 	}
 
+	// Check and handle GitHub star status if giver has starred zgsm-ai.zgsm project
+	if voucherData.GiverGithubStar && s.aiGatewayClient != nil {
+		// If giver starred the project, set GitHub star status in AiGateway for receiver
+		// This is best effort - we don't want to fail the transfer if AI Gateway call fails
+		if err := s.aiGatewayClient.SetGithubStar(receiver.ID, true); err != nil {
+			logger.Warn("Failed to set GitHub star status in AiGateway",
+				zap.String("user_id", receiver.ID),
+				zap.Error(err))
+		}
+	}
+
 	tx.Commit()
 
 	// Determine overall transfer status
@@ -675,7 +716,7 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyNa
 	}
 
 	// Start transaction
-	tx := s.db.Begin()
+	tx := s.db.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -768,7 +809,7 @@ func (s *QuotaService) ExpireQuotas() error {
 
 	// Find expired but still valid quotas
 	var expiredQuotas []models.Quota
-	if err := s.db.Where("status = ? AND expiry_date < ?", models.StatusValid, now).Find(&expiredQuotas).Error; err != nil {
+	if err := s.db.DB.Where("status = ? AND expiry_date < ?", models.StatusValid, now).Find(&expiredQuotas).Error; err != nil {
 		return fmt.Errorf("failed to find expired quotas: %w", err)
 	}
 
@@ -783,19 +824,19 @@ func (s *QuotaService) ExpireQuotas() error {
 	}
 
 	// Start transaction
-	tx := s.db.Begin()
+	tx := s.db.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
 
-	// Mark quotas as expired
+	// Update status to expired
 	if err := tx.Model(&models.Quota{}).
 		Where("status = ? AND expiry_date < ?", models.StatusValid, now).
 		Update("status", models.StatusExpired).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("failed to expire quotas: %w", err)
+		return fmt.Errorf("failed to update quota status: %w", err)
 	}
 
 	// Process each user
@@ -854,15 +895,7 @@ func (s *QuotaService) ExpireQuotas() error {
 
 // MergeQuotaRecords merges quota records for the same user and expiry date
 func (s *QuotaService) MergeQuotaRecords() error {
-	// Start transaction
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Find all quota records grouped by user_id and expiry_date
+	// QuotaGroup represents quota records grouped by user and expiry date
 	type QuotaGroup struct {
 		UserID      string    `gorm:"column:user_id"`
 		ExpiryDate  time.Time `gorm:"column:expiry_date"`
@@ -871,15 +904,25 @@ func (s *QuotaService) MergeQuotaRecords() error {
 		RecordCount int       `gorm:"column:record_count"`
 	}
 
+	// Find groups with multiple records
 	var groups []QuotaGroup
-	if err := tx.Model(&models.Quota{}).
+	result := s.db.DB.Model(&models.Quota{}).
 		Select("user_id, expiry_date, status, SUM(amount) as total_amount, COUNT(*) as record_count").
 		Group("user_id, expiry_date, status").
 		Having("COUNT(*) > 1").
-		Scan(&groups).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to find duplicate quota records: %w", err)
+		Scan(&groups)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to find quota groups: %w", result.Error)
 	}
+
+	// Start transaction
+	tx := s.db.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
 	// Process each group that has duplicates
 	for _, group := range groups {
