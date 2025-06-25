@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"quota-manager/internal/models"
 	"quota-manager/internal/response"
 	"quota-manager/internal/services"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,8 +26,34 @@ func (h *StrategyHandler) CreateStrategy(c *gin.Context) {
 		return
 	}
 
-	// status is bool type, no additional validation needed, JSON parsing will handle it automatically
+	// Validate required fields - these are client-side validation errors, should return 400
+	if strategy.Name == "" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy name is required"))
+		return
+	}
 
+	if strategy.Title == "" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy title is required"))
+		return
+	}
+
+	if strategy.Type != "single" && strategy.Type != "periodic" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy type must be 'single' or 'periodic'"))
+		return
+	}
+
+	if strategy.Amount <= 0 {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy amount must be greater than 0"))
+		return
+	}
+
+	// For periodic strategies, periodic_expr is required
+	if strategy.Type == "periodic" && strategy.PeriodicExpr == "" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Periodic expression is required for periodic strategies"))
+		return
+	}
+
+	// Server-side errors (database, service layer) should return 500
 	if err := h.service.CreateStrategy(&strategy); err != nil {
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.StrategyCreateFailedCode, "Failed to create strategy: "+err.Error()))
 		return

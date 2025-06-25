@@ -8,6 +8,8 @@ import (
 	"quota-manager/internal/response"
 	"quota-manager/internal/services"
 
+	"strings"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,14 +56,14 @@ func (h *QuotaHandler) GetUserQuota(c *gin.Context) {
 	userID, err := h.getUserIDFromToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
-			"Failed to extract user from token: " + err.Error()))
+			"Failed to extract user from token: "+err.Error()))
 		return
 	}
 
 	quotaInfo, err := h.quotaService.GetUserQuota(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.InternalErrorCode,
-			"Failed to retrieve user quota: " + err.Error()))
+			"Failed to retrieve user quota: "+err.Error()))
 		return
 	}
 
@@ -73,7 +75,7 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 	userID, err := h.getUserIDFromToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
-			"Failed to extract user from token: " + err.Error()))
+			"Failed to extract user from token: "+err.Error()))
 		return
 	}
 
@@ -84,7 +86,7 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"Invalid query parameters: " + err.Error()))
+			"Invalid query parameters: "+err.Error()))
 		return
 	}
 
@@ -99,7 +101,7 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 	records, total, err := h.quotaService.GetQuotaAuditRecords(userID, req.Page, req.PageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.DatabaseErrorCode,
-			"Failed to retrieve quota audit records: " + err.Error()))
+			"Failed to retrieve quota audit records: "+err.Error()))
 		return
 	}
 
@@ -116,21 +118,46 @@ func (h *QuotaHandler) TransferOut(c *gin.Context) {
 	giver, err := h.getUserFromToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
-			"Failed to extract user from token: " + err.Error()))
+			"Failed to extract user from token: "+err.Error()))
 		return
 	}
 
 	var req services.TransferOutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"Invalid request body: " + err.Error()))
+			"Invalid request body: "+err.Error()))
+		return
+	}
+
+	// Validate receiver_id is not empty (this is client-side validation)
+	if req.ReceiverID == "" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"Receiver ID is required"))
+		return
+	}
+
+	// Validate quota list is not empty
+	if len(req.QuotaList) == 0 {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"Quota list cannot be empty"))
 		return
 	}
 
 	resp, err := h.quotaService.TransferOut(giver, &req)
 	if err != nil {
+		// Check if it's a business logic error (insufficient quota, etc.) - should be 400
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "receiver_id cannot be empty") ||
+			strings.Contains(errMsg, "insufficient") ||
+			strings.Contains(errMsg, "quota not found") {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.QuotaTransferFailedCode,
+				"Transfer validation failed: "+err.Error()))
+			return
+		}
+
+		// Otherwise it's a server-side error (database, AiGateway, etc.)
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.QuotaTransferFailedCode,
-			"Failed to transfer out quota: " + err.Error()))
+			"Failed to transfer out quota: "+err.Error()))
 		return
 	}
 
@@ -142,21 +169,38 @@ func (h *QuotaHandler) TransferIn(c *gin.Context) {
 	receiver, err := h.getUserFromToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
-			"Failed to extract user from token: " + err.Error()))
+			"Failed to extract user from token: "+err.Error()))
 		return
 	}
 
 	var req services.TransferInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"Invalid request body: " + err.Error()))
+			"Invalid request body: "+err.Error()))
+		return
+	}
+
+	// Validate voucher code is not empty (this is client-side validation)
+	if req.VoucherCode == "" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"Voucher code is required"))
 		return
 	}
 
 	resp, err := h.quotaService.TransferIn(receiver, &req)
 	if err != nil {
+		// For TransferIn, service layer returns TransferInResponse even for business logic errors
+		// Only database/system errors return actual errors
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.QuotaTransferFailedCode,
-			"Failed to transfer in quota: " + err.Error()))
+			"Failed to transfer in quota: "+err.Error()))
+		return
+	}
+
+	// Check if the transfer had business logic issues (voucher validation, etc.)
+	if resp.Status == services.TransferStatusFailed {
+		// These are business logic failures, should return 400
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.QuotaTransferFailedCode,
+			resp.Message))
 		return
 	}
 

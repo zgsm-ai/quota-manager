@@ -18,9 +18,9 @@ import (
 // APITestContext holds the HTTP test context
 type APITestContext struct {
 	*TestContext
-	Router         *gin.Engine
+	Router          *gin.Engine
 	StrategyHandler *handlers.StrategyHandler
-	QuotaHandler   *handlers.QuotaHandler
+	QuotaHandler    *handlers.QuotaHandler
 }
 
 // setupAPITestContext creates an API test context with HTTP handlers
@@ -67,9 +67,9 @@ func setupAPITestContext(ctx *TestContext) *APITestContext {
 
 	return &APITestContext{
 		TestContext:     ctx,
-		Router:         router,
+		Router:          router,
 		StrategyHandler: strategyHandler,
-		QuotaHandler:   quotaHandler,
+		QuotaHandler:    quotaHandler,
 	}
 }
 
@@ -203,9 +203,9 @@ func testAPICreateStrategyInvalidData(ctx *TestContext) TestResult {
 	// Perform request
 	apiCtx.Router.ServeHTTP(w, req)
 
-	// Check status code (should be 500 for database constraint error)
-	if w.Code != http.StatusInternalServerError {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected status 500, got %d", w.Code)}
+	// Check status code (should be 400 for invalid request parameters)
+	if w.Code != http.StatusBadRequest {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected status 400, got %d", w.Code)}
 	}
 
 	// Parse response
@@ -215,8 +215,8 @@ func testAPICreateStrategyInvalidData(ctx *TestContext) TestResult {
 	}
 
 	// Verify error response format
-	if resp.Code != response.StrategyCreateFailedCode {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected code %s, got %s", response.StrategyCreateFailedCode, resp.Code)}
+	if resp.Code != response.BadRequestCode {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected code %s, got %s", response.BadRequestCode, resp.Code)}
 	}
 
 	if resp.Success {
@@ -416,4 +416,3 @@ func createTestJWTToken() string {
 	payload, _ := json.Marshal(userInfo)
 	return "Bearer " + string(payload) // Simplified for testing
 }
-
