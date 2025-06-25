@@ -19,6 +19,14 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
+// ResponseData defines the standard API response format from AI Gateway
+type ResponseData struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+}
+
 type QuotaResponse struct {
 	Quota  int    `json:"quota"`
 	UserID string `json:"user_id"`
@@ -72,8 +80,19 @@ func (c *Client) RefreshQuota(userID string, quota int) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	// Parse the response to check for success
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if !respData.Success {
+		return fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
 	}
 
 	return nil
@@ -99,21 +118,35 @@ func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var quotaResp QuotaResponse
-	if err := json.Unmarshal(body, &quotaResp); err != nil {
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	return &quotaResp, nil
+	if !respData.Success {
+		return nil, fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
+	}
+
+	// Parse the data field
+	dataMap, ok := respData.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response data format")
+	}
+
+	quota, ok := dataMap["quota"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid quota format in response")
+	}
+
+	return &QuotaResponse{
+		Quota:  int(quota),
+		UserID: userID,
+	}, nil
 }
 
 // DeltaQuota increases or decreases user quota
@@ -142,8 +175,19 @@ func (c *Client) DeltaQuota(userID string, value int) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	// Parse the response to check for success
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if !respData.Success {
+		return fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
 	}
 
 	return nil
@@ -179,21 +223,37 @@ func (c *Client) QueryGithubStar(userID string) (*StarResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var starResp StarResponse
-	if err := json.Unmarshal(body, &starResp); err != nil {
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	return &starResp, nil
+	if !respData.Success {
+		return nil, fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
+	}
+
+	// Parse the data field
+	dataMap, ok := respData.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response data format")
+	}
+
+	starValueStr, ok := dataMap["star_value"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid star_value format in response")
+	}
+
+	starValue := starValueStr == "true"
+
+	return &StarResponse{
+		UserID:    userID,
+		StarValue: starValue,
+	}, nil
 }
 
 // SetGithubStar sets user's GitHub star status for zgsm-ai.zgsm project
@@ -222,8 +282,19 @@ func (c *Client) SetGithubStar(userID string, starValue bool) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	// Parse the response to check for success
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if !respData.Success {
+		return fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
 	}
 
 	return nil

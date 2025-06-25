@@ -118,22 +118,45 @@ func createMockServer(shouldFail bool) *httptest.Server {
 
 			quota.GET("", func(c *gin.Context) {
 				if shouldFail {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					c.JSON(http.StatusServiceUnavailable, gin.H{
+						"code":    "ai-gateway.error",
+						"message": "redis error: connection failed",
+						"success": false,
+					})
 					return
 				}
 
 				userID := c.Query("user_id")
+				if userID == "" {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code":    "ai-gateway.invalid_params",
+						"message": "user_id is required",
+						"success": false,
+					})
+					return
+				}
+
 				quota := mockStore.GetQuota(userID)
 
 				c.JSON(http.StatusOK, gin.H{
-					"quota":   quota,
-					"user_id": userID,
+					"code":    "ai-gateway.queryquota",
+					"message": "query quota successful",
+					"success": true,
+					"data": gin.H{
+						"user_id": userID,
+						"quota":   quota,
+						"type":    "total_quota",
+					},
 				})
 			})
 
 			quota.POST("/delta", func(c *gin.Context) {
 				if shouldFail {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					c.JSON(http.StatusServiceUnavailable, gin.H{
+						"code":    "ai-gateway.error",
+						"message": "redis error: connection failed",
+						"success": false,
+					})
 					return
 				}
 
@@ -141,44 +164,75 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				value := c.PostForm("value")
 
 				if userID == "" || value == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code":    "ai-gateway.invalid_params",
+						"message": "user_id and value are required",
+						"success": false,
+					})
 					return
 				}
 
 				// Simulate quota increase
 				var delta int
 				if _, err := fmt.Sscanf(value, "%d", &delta); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid value"})
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code":    "ai-gateway.invalid_params",
+						"message": "value must be integer",
+						"success": false,
+					})
 					return
 				}
 
-				newQuota := mockStore.DeltaQuota(userID, delta)
+				mockStore.DeltaQuota(userID, delta)
 
 				c.JSON(http.StatusOK, gin.H{
-					"message":   "success",
-					"user_id":   userID,
-					"new_quota": newQuota,
+					"code":    "ai-gateway.deltaquota",
+					"message": "delta quota successful",
+					"success": true,
 				})
 			})
 
 			quota.GET("/used", func(c *gin.Context) {
 				if shouldFail {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					c.JSON(http.StatusServiceUnavailable, gin.H{
+						"code":    "ai-gateway.error",
+						"message": "redis error: connection failed",
+						"success": false,
+					})
 					return
 				}
 
 				userID := c.Query("user_id")
+				if userID == "" {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code":    "ai-gateway.invalid_params",
+						"message": "user_id is required",
+						"success": false,
+					})
+					return
+				}
+
 				used := mockStore.GetUsed(userID)
 
 				c.JSON(http.StatusOK, gin.H{
-					"quota":   used,
-					"user_id": userID,
+					"code":    "ai-gateway.queryquota",
+					"message": "query quota successful",
+					"success": true,
+					"data": gin.H{
+						"user_id": userID,
+						"quota":   used,
+						"type":    "used_quota",
+					},
 				})
 			})
 
 			quota.POST("/used/delta", func(c *gin.Context) {
 				if shouldFail {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					c.JSON(http.StatusServiceUnavailable, gin.H{
+						"code":    "ai-gateway.error",
+						"message": "redis error: connection failed",
+						"success": false,
+					})
 					return
 				}
 
@@ -186,23 +240,31 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				value := c.PostForm("value")
 
 				if userID == "" || value == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code":    "ai-gateway.invalid_params",
+						"message": "user_id and value are required",
+						"success": false,
+					})
 					return
 				}
 
 				// Parse and update used quota
 				var delta int
 				if _, err := fmt.Sscanf(value, "%d", &delta); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid value"})
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code":    "ai-gateway.invalid_params",
+						"message": "value must be integer",
+						"success": false,
+					})
 					return
 				}
 
-				newUsed := mockStore.DeltaUsed(userID, delta)
+				mockStore.DeltaUsed(userID, delta)
 
 				c.JSON(http.StatusOK, gin.H{
-					"message":  "success",
-					"user_id":  userID,
-					"new_used": newUsed,
+					"code":    "ai-gateway.deltausedquota",
+					"message": "delta used quota successful",
+					"success": true,
 				})
 			})
 

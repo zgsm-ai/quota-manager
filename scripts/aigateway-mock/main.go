@@ -10,6 +10,33 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ResponseData defines the standard API response format matching the AI Gateway documentation
+type ResponseData struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+}
+
+// NewSuccessResponse creates a success response
+func NewSuccessResponse(code, message string, data any) ResponseData {
+	return ResponseData{
+		Code:    code,
+		Message: message,
+		Success: true,
+		Data:    data,
+	}
+}
+
+// NewErrorResponse creates an error response
+func NewErrorResponse(code, message string) ResponseData {
+	return ResponseData{
+		Code:    code,
+		Message: message,
+		Success: false,
+	}
+}
+
 // In-memory storage, simulating Redis
 type MemoryStore struct {
 	quotaData map[string]int  // Total quota
@@ -90,7 +117,7 @@ func main() {
 	authMiddleware := func(c *gin.Context) {
 		auth := c.GetHeader("x-admin-key")
 		if auth != "credential3" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
+			c.JSON(http.StatusForbidden, NewErrorResponse("ai-gateway.unauthorized", "Management API authentication failed"))
 			c.Abort()
 			return
 		}
@@ -143,31 +170,27 @@ func refreshQuota(c *gin.Context) {
 	quotaStr := c.PostForm("quota")
 
 	if userID == "" || quotaStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and quota are required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id and quota are required"))
 		return
 	}
 
 	quota, err := strconv.Atoi(quotaStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quota value"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "quota must be integer"))
 		return
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", userID)
 	store.SetQuota(key, quota)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "quota refreshed",
-		"user_id": userID,
-		"quota":   quota,
-	})
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.refreshquota", "refresh quota successful", nil))
 }
 
 // queryQuota queries the quota
 func queryQuota(c *gin.Context) {
 	userID := c.Query("user_id")
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id is required"))
 		return
 	}
 
@@ -177,10 +200,13 @@ func queryQuota(c *gin.Context) {
 		quota = 0 // Default quota is 0
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"quota":   quota,
+	data := map[string]interface{}{
 		"user_id": userID,
-	})
+		"quota":   quota,
+		"type":    "total_quota",
+	}
+
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.queryquota", "query quota successful", data))
 }
 
 // deltaQuota increases or decreases the quota
@@ -189,32 +215,27 @@ func deltaQuota(c *gin.Context) {
 	valueStr := c.PostForm("value")
 
 	if userID == "" || valueStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and value are required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id and value are required"))
 		return
 	}
 
 	value, err := strconv.Atoi(valueStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid value"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "value must be integer"))
 		return
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", userID)
-	newQuota := store.IncrQuota(key, value)
+	store.IncrQuota(key, value)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":   "quota updated",
-		"user_id":   userID,
-		"delta":     value,
-		"new_quota": newQuota,
-	})
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.deltaquota", "delta quota successful", nil))
 }
 
 // queryUsedQuota queries the used quota
 func queryUsedQuota(c *gin.Context) {
 	userID := c.Query("user_id")
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id is required"))
 		return
 	}
 
@@ -224,10 +245,13 @@ func queryUsedQuota(c *gin.Context) {
 		used = 0 // Default used quota is 0
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"quota":   used,
+	data := map[string]interface{}{
 		"user_id": userID,
-	})
+		"quota":   used,
+		"type":    "used_quota",
+	}
+
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.queryquota", "query quota successful", data))
 }
 
 // deltaUsedQuota increases or decreases the used quota
@@ -236,25 +260,20 @@ func deltaUsedQuota(c *gin.Context) {
 	valueStr := c.PostForm("value")
 
 	if userID == "" || valueStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and value are required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id and value are required"))
 		return
 	}
 
 	value, err := strconv.Atoi(valueStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid value"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "value must be integer"))
 		return
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", userID)
-	newUsed := store.IncrUsed(key, value)
+	store.IncrUsed(key, value)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "used quota updated",
-		"user_id":  userID,
-		"delta":    value,
-		"new_used": newUsed,
-	})
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.deltausedquota", "delta used quota successful", nil))
 }
 
 // refreshUsedQuota refreshes the used quota
@@ -263,44 +282,44 @@ func refreshUsedQuota(c *gin.Context) {
 	quotaStr := c.PostForm("quota")
 
 	if userID == "" || quotaStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and quota are required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id and quota are required"))
 		return
 	}
 
 	quota, err := strconv.Atoi(quotaStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quota value"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "quota must be integer"))
 		return
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", userID)
 	store.SetUsed(key, quota)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "used quota refreshed",
-		"user_id": userID,
-		"quota":   quota,
-	})
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.refreshusedquota", "refresh used quota successful", nil))
 }
 
 // queryGithubStar queries the GitHub star status
 func queryGithubStar(c *gin.Context) {
 	userID := c.Query("user_id")
 	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id is required"))
 		return
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", userID)
 	star, exists := store.GetStar(key)
-	if !exists {
-		star = false // Default star status is false
+	starValue := "false"
+	if exists && star {
+		starValue = "true"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"star_value": star,
+	data := map[string]string{
 		"user_id":    userID,
-	})
+		"star_value": starValue,
+		"type":       "star_status",
+	}
+
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.querystar", "query star status successful", data))
 }
 
 // setGithubStar sets the GitHub star status
@@ -309,22 +328,24 @@ func setGithubStar(c *gin.Context) {
 	starValueStr := c.PostForm("star_value")
 
 	if userID == "" || starValueStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id and star_value are required"})
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "user_id and star_value are required"))
 		return
 	}
 
-	starValue, err := strconv.ParseBool(starValueStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid star_value format"})
+	// Convert string to boolean - accept "true" and "false" strings
+	var starValue bool
+	switch starValueStr {
+	case "true":
+		starValue = true
+	case "false":
+		starValue = false
+	default:
+		c.JSON(http.StatusBadRequest, NewErrorResponse("ai-gateway.invalid_params", "star_value must be 'true' or 'false'"))
 		return
 	}
 
 	key := fmt.Sprintf("chat_quota:%s", userID)
 	store.SetStar(key, starValue)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":    "star status updated",
-		"user_id":    userID,
-		"star_value": starValue,
-	})
+	c.JSON(http.StatusOK, NewSuccessResponse("ai-gateway.setstar", "set star status successful", nil))
 }

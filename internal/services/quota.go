@@ -974,21 +974,26 @@ func (s *QuotaService) getQuotaFromAiGateway(userID string) (int, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("AiGateway returned status %d", resp.StatusCode)
+	var result struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Success bool   `json:"success"`
+		Data    struct {
+			UserID string  `json:"user_id"`
+			Quota  float64 `json:"quota"`
+			Type   string  `json:"type"`
+		} `json:"data"`
 	}
 
-	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	quota, ok := result["quota"].(float64)
-	if !ok {
-		return 0, fmt.Errorf("invalid quota response format")
+	if !result.Success {
+		return 0, fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
 	}
 
-	return int(quota), nil
+	return int(result.Data.Quota), nil
 }
 
 func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
@@ -1011,21 +1016,26 @@ func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("AiGateway returned status %d", resp.StatusCode)
+	var result struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Success bool   `json:"success"`
+		Data    struct {
+			UserID string  `json:"user_id"`
+			Quota  float64 `json:"quota"`
+			Type   string  `json:"type"`
+		} `json:"data"`
 	}
 
-	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	quota, ok := result["quota"].(float64)
-	if !ok {
-		return 0, fmt.Errorf("invalid used quota response format")
+	if !result.Success {
+		return 0, fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
 	}
 
-	return int(quota), nil
+	return int(result.Data.Quota), nil
 }
 
 func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
@@ -1054,8 +1064,18 @@ func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("AiGateway returned status %d", resp.StatusCode)
+	var result struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Success bool   `json:"success"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if !result.Success {
+		return fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
 	}
 
 	return nil
@@ -1087,8 +1107,18 @@ func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta int) error
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("AiGateway returned status %d", resp.StatusCode)
+	var result struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Success bool   `json:"success"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if !result.Success {
+		return fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
 	}
 
 	return nil
