@@ -1128,3 +1128,50 @@ func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta int) error
 func (s *QuotaService) DeltaUsedQuotaInAiGateway(userID string, delta int) error {
 	return s.deltaUsedQuotaInAiGateway(userID, delta)
 }
+
+// GetUserQuotaAuditRecords gets quota audit records for a specific user (admin function)
+func (s *QuotaService) GetUserQuotaAuditRecords(userID string, page, pageSize int) ([]QuotaAuditRecord, int64, error) {
+	var auditRecords []models.QuotaAudit
+	var total int64
+
+	// Get total count
+	if err := s.db.Model(&models.QuotaAudit{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count quota audit records: %w", err)
+	}
+
+	// Get records with pagination
+	offset := (page - 1) * pageSize
+	if err := s.db.Where("user_id = ?", userID).
+		Order("create_time DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&auditRecords).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to query quota audit records: %w", err)
+	}
+
+	// Convert to response format
+	var records []QuotaAuditRecord
+	for _, record := range auditRecords {
+		auditRecord := QuotaAuditRecord{
+			Amount:       record.Amount,
+			Operation:    record.Operation,
+			VoucherCode:  record.VoucherCode,
+			RelatedUser:  record.RelatedUser,
+			StrategyName: record.StrategyName,
+			ExpiryDate:   record.ExpiryDate,
+			CreateTime:   record.CreateTime,
+		}
+
+		// Unmarshal details if present
+		if record.Details != "" {
+			details, err := record.UnmarshalDetails()
+			if err == nil {
+				auditRecord.Details = details
+			}
+		}
+
+		records = append(records, auditRecord)
+	}
+
+	return records, total, nil
+}

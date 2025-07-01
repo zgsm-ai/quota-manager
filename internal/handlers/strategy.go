@@ -191,3 +191,44 @@ func (h *StrategyHandler) TriggerScan(c *gin.Context) {
 	go h.service.TraverseStrategy()
 	c.JSON(http.StatusOK, response.NewSuccessResponse(nil, "Strategy scan triggered successfully"))
 }
+
+// GetStrategyExecuteRecords gets execution records for a strategy
+func (h *StrategyHandler) GetStrategyExecuteRecords(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.InvalidStrategyIDCode, "Invalid strategy ID format"))
+		return
+	}
+
+	var req struct {
+		Page     int `form:"page"`
+		PageSize int `form:"page_size"`
+	}
+
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid query parameters: "+err.Error()))
+		return
+	}
+
+	// Set default values
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 10
+	}
+
+	records, total, err := h.service.GetStrategyExecuteRecords(id, req.Page, req.PageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.DatabaseErrorCode, "Failed to retrieve execution records: "+err.Error()))
+		return
+	}
+
+	data := gin.H{
+		"total":   total,
+		"records": records,
+	}
+
+	c.JSON(http.StatusOK, response.NewSuccessResponse(data, "Strategy execution records retrieved successfully"))
+}

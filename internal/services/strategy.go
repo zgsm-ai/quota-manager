@@ -339,8 +339,28 @@ func (s *StrategyService) DisableStrategy(id int) error {
 
 // DeleteStrategy deletes a strategy
 func (s *StrategyService) DeleteStrategy(id int) error {
-	if err := s.db.Delete(&models.QuotaStrategy{}, id).Error; err != nil {
-		return fmt.Errorf("failed to delete strategy: %w", err)
+	return s.db.Delete(&models.QuotaStrategy{}, id).Error
+}
+
+// GetStrategyExecuteRecords gets execution records for a strategy
+func (s *StrategyService) GetStrategyExecuteRecords(strategyID int, page, pageSize int) ([]models.QuotaExecute, int64, error) {
+	var records []models.QuotaExecute
+	var total int64
+
+	// Get total count
+	if err := s.db.Model(&models.QuotaExecute{}).Where("strategy_id = ?", strategyID).Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count execution records: %w", err)
 	}
-	return nil
+
+	// Get records with pagination
+	offset := (page - 1) * pageSize
+	if err := s.db.Where("strategy_id = ?", strategyID).
+		Order("create_time DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&records).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to query execution records: %w", err)
+	}
+
+	return records, total, nil
 }

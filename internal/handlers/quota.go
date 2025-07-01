@@ -207,6 +207,46 @@ func (h *QuotaHandler) TransferIn(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewSuccessResponse(resp, "Quota transferred in successfully"))
 }
 
+// GetUserQuotaAuditRecordsAdmin gets quota audit records for a specific user (admin function)
+func (h *QuotaHandler) GetUserQuotaAuditRecordsAdmin(c *gin.Context) {
+	userID := c.Param("user_id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "User ID is required"))
+		return
+	}
+
+	var req struct {
+		Page     int `form:"page"`
+		PageSize int `form:"page_size"`
+	}
+
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid query parameters: "+err.Error()))
+		return
+	}
+
+	// Set default values
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 10
+	}
+
+	records, total, err := h.quotaService.GetUserQuotaAuditRecords(userID, req.Page, req.PageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.DatabaseErrorCode, "Failed to retrieve quota audit records: "+err.Error()))
+		return
+	}
+
+	data := gin.H{
+		"total":   total,
+		"records": records,
+	}
+
+	c.JSON(http.StatusOK, response.NewSuccessResponse(data, "User quota audit records retrieved successfully"))
+}
+
 // RegisterQuotaRoutes registers quota-related routes
 func RegisterQuotaRoutes(r *gin.RouterGroup, quotaHandler *QuotaHandler) {
 	quota := r.Group("/quota")
@@ -215,5 +255,6 @@ func RegisterQuotaRoutes(r *gin.RouterGroup, quotaHandler *QuotaHandler) {
 		quota.GET("/audit", quotaHandler.GetQuotaAuditRecords)
 		quota.POST("/transfer-out", quotaHandler.TransferOut)
 		quota.POST("/transfer-in", quotaHandler.TransferIn)
+		quota.GET("/audit/:user_id", quotaHandler.GetUserQuotaAuditRecordsAdmin)
 	}
 }

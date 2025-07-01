@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -120,6 +121,36 @@ func main() {
 	// Create routes
 	router := gin.Default()
 
+	// Configure CORS
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = []string{
+		"http://localhost:3000",
+		"http://localhost:3001",
+		"http://localhost:3002",
+		"http://127.0.0.1:3000",
+		"http://127.0.0.1:3001",
+		"http://127.0.0.1:3002",
+	}
+	corsConfig.AllowCredentials = true
+	corsConfig.AllowHeaders = []string{
+		"Origin",
+		"Content-Length",
+		"Content-Type",
+		"Authorization",
+		"Accept",
+		"Cache-Control",
+		"X-Requested-With",
+	}
+	corsConfig.AllowMethods = []string{
+		"GET",
+		"POST",
+		"PUT",
+		"DELETE",
+		"OPTIONS",
+		"PATCH",
+	}
+	router.Use(cors.New(corsConfig))
+
 	// Wrap all routes under /quota-manager prefix
 	quotaManager := router.Group("/quota-manager")
 	{
@@ -146,6 +177,9 @@ func main() {
 
 				// Manually trigger strategy scan
 				strategies.POST("/scan", strategyHandler.TriggerScan)
+
+				// Strategy execution records
+				strategies.GET("/:id/executions", strategyHandler.GetStrategyExecuteRecords)
 			}
 
 			// Quota management API
