@@ -123,15 +123,8 @@ func main() {
 
 	// Configure CORS
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = []string{
-		"http://localhost:3000",
-		"http://localhost:3001",
-		"http://localhost:3002",
-		"http://127.0.0.1:3000",
-		"http://127.0.0.1:3001",
-		"http://127.0.0.1:3002",
-	}
-	corsConfig.AllowCredentials = true
+	corsConfig.AllowOrigins = []string{"*"}
+	corsConfig.AllowCredentials = false
 	corsConfig.AllowHeaders = []string{
 		"Origin",
 		"Content-Length",
