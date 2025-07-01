@@ -143,9 +143,20 @@ The system extracts user information from JWT tokens without signature verificat
 ```yaml
 server:
   port: 8099
-  mode: "debug"
-  token_header: "authorization"  # Customizable token header name
+  mode: "release"  # gin模式: debug, release, test
+  token_header: "authorization"
+  timezone: "Asia/Shanghai"  # 时区设置，默认为北京时间 (UTC+8)
 ```
+
+**时区配置说明：**
+- `timezone`: 应用程序使用的时区，支持 IANA 时区名称
+- 常用时区：
+  - `Asia/Shanghai`: 北京时间 (UTC+8)
+  - `UTC`: 协调世界时
+  - `America/New_York`: 纽约时间
+  - `Europe/London`: 伦敦时间
+- 如果不设置，默认使用 `Asia/Shanghai`
+- 修改时区后需要重启应用生效
 
 ## API Documentation
 
@@ -671,8 +682,9 @@ aigateway:
 ```yaml
 server:
   port: 8099
-  mode: "debug"
+  mode: "release"  # gin模式: debug, release, test
   token_header: "authorization"
+  timezone: "Asia/Shanghai"  # 时区设置，默认为北京时间 (UTC+8)
 
 database:
   host: "localhost"

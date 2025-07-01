@@ -42,7 +42,7 @@ func (s *StrategyService) TraverseStrategy() {
 		return
 	}
 
-	// 2. Get enabled strategy list
+	// 2. Get enabled strategy list (snapshot at this moment)
 	strategies, err := s.loadEnabledStrategies()
 	if err != nil {
 		logger.Error("Failed to load enabled strategies", zap.Error(err))
@@ -51,10 +51,13 @@ func (s *StrategyService) TraverseStrategy() {
 
 	logger.Info("Found enabled strategies", zap.Int("count", len(strategies)))
 
-	// 3. Execute strategies
+	// 3. Execute strategies based on current snapshot
+	// Note: We use the strategy data from the snapshot to avoid redundant database queries
+	// and ensure consistent execution within this traversal cycle
 	for _, strategy := range strategies {
 		logger.Info("Processing strategy",
 			zap.String("strategy", strategy.Name),
+			zap.String("type", strategy.Type),
 			zap.Bool("status", strategy.Status))
 
 		switch strategy.Type {
@@ -114,24 +117,57 @@ func (s *StrategyService) shouldExecutePeriodic(strategy *models.QuotaStrategy) 
 	}
 
 	now := time.Now().Truncate(time.Second)
-	next := schedule.Next(now.Add(-time.Hour))
 
-	// If next execution time is before or equal to current time, it should be executed
-	return next.Before(now) || next.Equal(now)
+	// Get the current batch number (based on current time)
+	currentBatch := s.generateBatchNumber()
+
+	// Check if this strategy has already been executed in the current batch
+	var executeCount int64
+	err = s.db.Model(&models.QuotaExecute{}).
+		Where("strategy_id = ? AND batch_number = ?", strategy.ID, currentBatch).
+		Count(&executeCount).Error
+
+	if err != nil {
+		logger.Error("Failed to check strategy execution status",
+			zap.String("strategy", strategy.Name),
+			zap.Error(err))
+		return false
+	}
+
+	// If already executed in this batch, don't execute again
+	if executeCount > 0 {
+		logger.Debug("Strategy already executed in current batch",
+			zap.String("strategy", strategy.Name),
+			zap.String("batch", currentBatch))
+		return false
+	}
+
+	// Check if current time matches the cron schedule
+	// Get the last scheduled time before now
+	lastScheduledTime := schedule.Next(now.Add(-24 * time.Hour))
+
+	// If the last scheduled time is within the current hour, execute the strategy
+	currentHourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
+	nextHourStart := currentHourStart.Add(time.Hour)
+
+	shouldExecute := lastScheduledTime.After(currentHourStart.Add(-time.Minute)) &&
+		lastScheduledTime.Before(nextHourStart)
+
+	if shouldExecute {
+		logger.Info("Periodic strategy should execute",
+			zap.String("strategy", strategy.Name),
+			zap.Time("scheduled_time", lastScheduledTime),
+			zap.Time("current_time", now))
+	}
+
+	return shouldExecute
 }
 
 // ExecStrategy executes a strategy
 func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []models.UserInfo) {
-	// Get the latest strategy status from the database
-	var latestStrategy models.QuotaStrategy
-	if err := s.db.First(&latestStrategy, strategy.ID).Error; err != nil {
-		logger.Error("Failed to get latest strategy status", zap.Error(err))
-		return
-	}
-
-	// Use the latest strategy status for checking
-	if !latestStrategy.IsEnabled() {
-		logger.Warn("Skipping disabled strategy", zap.String("strategy", latestStrategy.Name))
+	// Validate strategy status (should already be enabled since we got it from loadEnabledStrategies)
+	if !strategy.IsEnabled() {
+		logger.Warn("Skipping disabled strategy", zap.String("strategy", strategy.Name))
 		return
 	}
 
@@ -139,8 +175,13 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 
 	for _, user := range users {
 		// For single strategy, check if it has already been executed
-		if latestStrategy.Type == "single" {
-			if s.hasExecuted(latestStrategy.ID, user.ID) {
+		if strategy.Type == "single" {
+			if s.hasExecuted(strategy.ID, user.ID) {
+				continue
+			}
+		} else if strategy.Type == "periodic" {
+			// For periodic strategy, check if this user has been processed in current batch
+			if s.hasExecutedInBatch(strategy.ID, user.ID, batchNumber) {
 				continue
 			}
 		}
@@ -149,11 +190,11 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 		ctx := &condition.EvaluationContext{
 			QuotaQuerier: s.quotaQuerier,
 		}
-		match, err := condition.CalcCondition(&user, latestStrategy.Condition, ctx)
+		match, err := condition.CalcCondition(&user, strategy.Condition, ctx)
 		if err != nil {
 			logger.Error("Failed to calculate condition",
 				zap.String("user", user.ID),
-				zap.String("strategy", latestStrategy.Name),
+				zap.String("strategy", strategy.Name),
 				zap.Error(err))
 			continue
 		}
@@ -163,10 +204,10 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 		}
 
 		// Execute recharge
-		if err := s.executeRecharge(&latestStrategy, &user, batchNumber); err != nil {
+		if err := s.executeRecharge(strategy, &user, batchNumber); err != nil {
 			logger.Error("Failed to execute recharge",
 				zap.String("user", user.ID),
-				zap.String("strategy", latestStrategy.Name),
+				zap.String("strategy", strategy.Name),
 				zap.Error(err))
 		}
 	}
@@ -206,15 +247,28 @@ func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 	return count > 0
 }
 
-// executeRecharge executes recharge
-func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *models.UserInfo, batchNumber string) error {
-	// Check strategy status again
-	var latestStrategy models.QuotaStrategy
-	if err := s.db.First(&latestStrategy, strategy.ID).Error; err != nil {
-		return fmt.Errorf("failed to get latest strategy status: %w", err)
+// hasExecutedInBatch checks if a user has been processed in the current batch
+func (s *StrategyService) hasExecutedInBatch(strategyID int, userID string, batchNumber string) bool {
+	var count int64
+
+	// Check if there is a completed or processing record in the current batch
+	err := s.db.Model(&models.QuotaExecute{}).
+		Where("strategy_id = ? AND user_id = ? AND status IN (?) AND batch_number = ?",
+			strategyID, userID, []string{"completed", "processing"}, batchNumber).
+		Count(&count).Error
+
+	if err != nil {
+		logger.Error("Failed to check execution status", zap.Error(err))
+		return false
 	}
 
-	if !latestStrategy.IsEnabled() {
+	return count > 0
+}
+
+// executeRecharge executes recharge
+func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *models.UserInfo, batchNumber string) error {
+	// Strategy should already be validated as enabled before reaching here
+	if !strategy.IsEnabled() {
 		return fmt.Errorf("strategy is disabled")
 	}
 
@@ -232,7 +286,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 
 	// 1. Record execution status as processing
 	execute := &models.QuotaExecute{
-		StrategyID:  latestStrategy.ID,
+		StrategyID:  strategy.ID,
 		User:        user.ID,
 		BatchNumber: batchNumber,
 		Status:      "processing",
@@ -244,7 +298,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 	}
 
 	// 2. Add quota using QuotaService
-	err := s.quotaService.AddQuotaForStrategy(user.ID, latestStrategy.Amount, latestStrategy.Name)
+	err := s.quotaService.AddQuotaForStrategy(user.ID, strategy.Amount, strategy.Name)
 	if err != nil {
 		// Update execution status to failed
 		s.db.Model(execute).Update("status", "failed")
@@ -258,18 +312,18 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 
 	logger.Info("Recharge completed",
 		zap.String("user", user.ID),
-		zap.String("strategy", latestStrategy.Name),
-		zap.Int("amount", latestStrategy.Amount),
-		zap.String("model", latestStrategy.Model),
+		zap.String("strategy", strategy.Name),
+		zap.Int("amount", strategy.Amount),
+		zap.String("model", strategy.Model),
 		zap.Time("expiry_date", expiryDate))
 
 	return nil
 }
 
-// generateBatchNumber generates batch number
+// generateBatchNumber generates batch number with second precision
 func (s *StrategyService) generateBatchNumber() string {
 	now := time.Now().Truncate(time.Second)
-	return now.Format("2006010215") // YearMonthDayHour
+	return now.Format("20060102150405") // YearMonthDayHourMinuteSecond
 }
 
 // CreateStrategy creates a strategy
@@ -363,4 +417,9 @@ func (s *StrategyService) GetStrategyExecuteRecords(strategyID int, page, pageSi
 	}
 
 	return records, total, nil
+}
+
+// ShouldExecutePeriodicForTest is a public wrapper for shouldExecutePeriodic for testing purposes
+func (s *StrategyService) ShouldExecutePeriodicForTest(strategy *models.QuotaStrategy) bool {
+	return s.shouldExecutePeriodic(strategy)
 }

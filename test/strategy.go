@@ -149,6 +149,9 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Disable strategy failed: %v", err)}
 	}
 
+	// Update the in-memory strategy object to reflect the database change
+	strategy.Status = false
+
 	// Execute disabled strategy
 	users := []models.UserInfo{*user}
 	ctx.StrategyService.ExecStrategy(strategy, users)
@@ -165,6 +168,9 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 	if err := ctx.StrategyService.EnableStrategy(strategy.ID); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Enable strategy failed: %v", err)}
 	}
+
+	// Update the in-memory strategy object to reflect the database change
+	strategy.Status = true
 
 	// Execute strategy again
 	ctx.StrategyService.ExecStrategy(strategy, users)

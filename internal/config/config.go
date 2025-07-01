@@ -37,6 +37,7 @@ type ServerConfig struct {
 	Port        int    `mapstructure:"port"`
 	Mode        string `mapstructure:"mode"`
 	TokenHeader string `mapstructure:"token_header"`
+	Timezone    string `mapstructure:"timezone"`
 }
 
 type SchedulerConfig struct {

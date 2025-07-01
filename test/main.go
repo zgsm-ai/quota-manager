@@ -111,6 +111,8 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Quota Expiry During Transfer Test", testQuotaExpiryDuringTransfer},
 		{"Batch Quota Expiry Consistency Test", testBatchQuotaExpiryConsistency},
 		{"Transfer Out Expiry Date Validation Test", testTransferOutExpiryDateValidation},
+		{"Periodic Strategy Duplicate Prevention Test", testPeriodicStrategyDuplicatePrevention},
+		{"Periodic Logic Test", testShouldExecutePeriodicLogic},
 		{"Concurrent Operations Test", testConcurrentOperations},
 
 		// API layer tests

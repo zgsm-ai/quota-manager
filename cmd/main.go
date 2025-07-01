@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +22,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
+
+func setTimezone(timezone string) {
+	if timezone == "" {
+		timezone = "Asia/Shanghai" // Default to Beijing Time
+	}
+
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		log.Printf("Warning: Failed to load timezone %s: %v, using UTC", timezone, err)
+	} else {
+		time.Local = loc
+		log.Printf("Timezone set to %s", timezone)
+	}
+}
 
 func main() {
 	// Parse command line flags FIRST - before any other initialization
@@ -71,6 +86,9 @@ func main() {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Set timezone from configuration
+	setTimezone(cfg.Server.Timezone)
 
 	// Initialize logging with configured level
 	logLevel := cfg.Log.Level
