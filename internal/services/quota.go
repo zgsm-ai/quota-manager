@@ -341,13 +341,16 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		}
 	}
 
+	// Clean receiver_id to remove leading/trailing whitespace before generating voucher
+	cleanReceiverID := strings.TrimSpace(req.ReceiverID)
+
 	voucherData := &VoucherData{
 		GiverID:         giver.ID,
 		GiverName:       giver.Name,
 		GiverPhone:      giver.Phone,
 		GiverGithub:     giver.Github,
 		GiverGithubStar: giverGithubStar,
-		ReceiverID:      req.ReceiverID,
+		ReceiverID:      cleanReceiverID,
 		QuotaList:       voucherQuotaList,
 	}
 
@@ -413,7 +416,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		Amount:      -totalAmount,
 		Operation:   models.OperationTransferOut,
 		VoucherCode: voucherCode,
-		RelatedUser: req.ReceiverID,
+		RelatedUser: cleanReceiverID,
 		ExpiryDate:  earliestExpiryDate, // Use earliest expiry date for audit
 		// StrategyName is empty for transfer operations
 	}
@@ -436,7 +439,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 
 	return &TransferOutResponse{
 		VoucherCode: voucherCode,
-		RelatedUser: req.ReceiverID,
+		RelatedUser: cleanReceiverID,
 		Operation:   models.OperationTransferOut,
 		QuotaList:   req.QuotaList,
 	}, nil
