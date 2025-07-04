@@ -28,7 +28,13 @@ func NewSchedulerService(quotaService *QuotaService, strategyService *StrategySe
 
 // Start starts the scheduler service
 func (s *SchedulerService) Start() error {
-	// Determine scan interval based on priority:
+	// Start the strategy service cron for periodic strategies
+	if err := s.strategyService.StartCron(); err != nil {
+		logger.Error("Failed to start strategy cron", zap.Error(err))
+		return err
+	}
+
+	// Determine scan interval for single strategies based on priority:
 	// 1. Use configured scan_interval if present
 	// 2. If not configured, use mode-based defaults
 	var scanInterval string
@@ -36,23 +42,23 @@ func (s *SchedulerService) Start() error {
 	if s.config.Scheduler.ScanInterval != "" {
 		// Use configured scan interval directly
 		scanInterval = s.config.Scheduler.ScanInterval
-		logger.Info("Using configured scan interval", zap.String("interval", scanInterval))
+		logger.Info("Using configured scan interval for single strategies", zap.String("interval", scanInterval))
 	} else {
 		// Use mode-based defaults when scan_interval is not configured
 		if s.config.Server.Mode == "debug" {
 			scanInterval = "*/10 * * * * *" // Every 10 seconds in debug mode (6 fields with seconds)
-			logger.Info("No scan interval configured, using debug mode default: every 10 seconds")
+			logger.Info("No scan interval configured, using debug mode default for single strategies: every 10 seconds")
 		} else {
 			// Default for release mode or when mode is not configured
 			scanInterval = "0 0 * * * *" // Every hour (6 fields with seconds)
-			logger.Info("No scan interval configured, using default: every hour")
+			logger.Info("No scan interval configured, using default for single strategies: every hour")
 		}
 	}
 
-	// Add strategy scan task
-	_, err := s.cron.AddFunc(scanInterval, s.strategyService.TraverseStrategy)
+	// Add single strategy scan task (periodic strategies are handled by strategy service cron)
+	_, err := s.cron.AddFunc(scanInterval, s.strategyService.TraverseSingleStrategies)
 	if err != nil {
-		logger.Error("Failed to add strategy scan task", zap.String("interval", scanInterval), zap.Error(err))
+		logger.Error("Failed to add single strategy scan task", zap.String("interval", scanInterval), zap.Error(err))
 		return err
 	}
 
@@ -65,7 +71,7 @@ func (s *SchedulerService) Start() error {
 
 	s.cron.Start()
 	logger.Info("Scheduler service started",
-		zap.String("scan_interval", scanInterval),
+		zap.String("single_strategy_scan_interval", scanInterval),
 		zap.String("mode", s.config.Server.Mode))
 	return nil
 }
@@ -73,6 +79,7 @@ func (s *SchedulerService) Start() error {
 // Stop stops the scheduler service
 func (s *SchedulerService) Stop() {
 	s.cron.Stop()
+	s.strategyService.StopCron()
 	logger.Info("Scheduler service stopped")
 }
 

@@ -188,7 +188,7 @@ func (h *StrategyHandler) DeleteStrategy(c *gin.Context) {
 
 // TriggerScan manually triggers strategy scan
 func (h *StrategyHandler) TriggerScan(c *gin.Context) {
-	go h.service.TraverseStrategy()
+	go h.service.TraverseSingleStrategies()
 	c.JSON(http.StatusOK, response.NewSuccessResponse(nil, "Strategy scan triggered successfully"))
 }
 

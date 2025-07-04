@@ -60,6 +60,8 @@ func runAllTests(ctx *TestContext) []TestResult {
 	}{
 		// Service layer tests
 		{"Clear Data Test", testClearData},
+
+		// Condition Expression Tests
 		{"Condition Expression - Empty Condition Test", testEmptyCondition},
 		{"Condition Expression - Match User Test", testMatchUserCondition},
 		{"Condition Expression - Register Before Test", testRegisterBeforeCondition},
@@ -79,21 +81,27 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Condition Expression - Complex Nesting Test1", testComplexNestedConditions1},
 		{"Condition Expression - Complex Nesting Test2", testComplexNestedConditions2},
 		{"Condition Expression - Complex Nesting Test3", testComplexNestedConditions3},
+
+		// Quota Tests
 		{"Single Recharge Strategy Test", testSingleTypeStrategy},
 		{"Periodic Recharge Strategy Test", testPeriodicTypeStrategy},
 		{"Strategy Status Control Test", testStrategyStatusControl},
 		{"AiGateway Request Failure Test", testAiGatewayFailure},
 		{"Batch User Processing Test", testBatchUserProcessing},
 		{"Voucher Generation and Validation Test", testVoucherGenerationAndValidation},
-		{"Quota Transfer Out Test", testQuotaTransferOut},
-		{"Quota Transfer In Test", testQuotaTransferIn},
-		{"Transfer In Status Cases Test", testTransferInStatusCases},
 		{"Quota Expiry Test", testQuotaExpiry},
 		{"Quota Audit Records Test", testQuotaAuditRecords},
 		{"Strategy with Expiry Date Test", testStrategyWithExpiryDate},
 		{"Multiple Operations Accuracy Test", testMultipleOperationsAccuracy},
-		{"Transfer In User ID Mismatch Test", testTransferInUserIDMismatch},
 		{"User Quota Consumption Order Test", testUserQuotaConsumptionOrder},
+		{"Quota Transfer Out Test", testQuotaTransferOut},
+		{"Quota Transfer In Test", testQuotaTransferIn},
+		{"Quota Expiry During Transfer Test", testQuotaExpiryDuringTransfer},
+		{"Batch Quota Expiry Consistency Test", testBatchQuotaExpiryConsistency},
+
+		// Transfer Tests
+		{"Transfer In Status Cases Test", testTransferInStatusCases},
+		{"Transfer In User ID Mismatch Test", testTransferInUserIDMismatch},
 		{"Transfer Out Insufficient Available Quota Test", testTransferOutInsufficientAvailable},
 		{"Transfer In Expired Quota Test", testTransferInExpiredQuota},
 		{"Transfer In Invalid Voucher Test", testTransferInInvalidVoucher},
@@ -108,12 +116,17 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Transfer Out Empty Receiver ID Test", testTransferOutEmptyReceiverID},
 		{"Transfer Out With Expired Quota Test", testTransferOutWithExpiredQuota},
 		{"Transfer In With Expired Voucher Test", testTransferInWithExpiredVoucher},
-		{"Quota Expiry During Transfer Test", testQuotaExpiryDuringTransfer},
-		{"Batch Quota Expiry Consistency Test", testBatchQuotaExpiryConsistency},
 		{"Transfer Out Expiry Date Validation Test", testTransferOutExpiryDateValidation},
-		{"Periodic Strategy Duplicate Prevention Test", testPeriodicStrategyDuplicatePrevention},
-		{"Periodic Logic Test", testShouldExecutePeriodicLogic},
-		{"Concurrent Operations Test", testConcurrentOperations},
+
+		// Periodic Strategy Tests
+		{"Periodic Strategy Execution Test", testPeriodicStrategyExecution},
+		{"Periodic Cron Registration Test", testPeriodicStrategyCronRegistration},
+		{"Periodic Cron Expression Validation Test", testPeriodicCronExpressionValidation},
+		{"Periodic Strategy CRUD Operations Test", testPeriodicStrategyCRUDOperations},
+		{"Periodic Strategy Field Modifications Test", testPeriodicStrategyFieldModifications},
+		{"Periodic Strategy Invalid Cron Expressions Test", testPeriodicStrategyInvalidCronExpressions},
+		{"Periodic Strategy Concurrent Modifications Test", testPeriodicStrategyConcurrentModifications},
+		{"Periodic Strategy Edge Cases Test", testPeriodicStrategyEdgeCases},
 
 		// API layer tests
 		{"API Health Check", testAPIHealthCheck},
@@ -123,6 +136,9 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"API Invalid Strategy ID", testAPIInvalidStrategyID},
 		{"API Get Strategies", testAPIGetStrategies},
 		{"API Quota Unauthorized", testAPIQuotaUnauthorized},
+
+		// Sanity Tests
+		{"Concurrent Operations Test", testConcurrentOperations},
 	}
 
 	for _, tc := range testCases {

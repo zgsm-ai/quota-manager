@@ -7,6 +7,7 @@ import (
 	"quota-manager/internal/models"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
+	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -19,6 +20,9 @@ type StrategyService struct {
 	gateway      *aigateway.Client
 	quotaQuerier condition.QuotaQuerier
 	quotaService *QuotaService
+	cron         *cron.Cron
+	cronJobs     map[int]cron.EntryID // strategyID -> cronEntryID
+	mu           sync.RWMutex         // protect cronJobs map
 }
 
 func NewStrategyService(db *database.DB, gateway *aigateway.Client, quotaService *QuotaService) *StrategyService {
@@ -27,13 +31,127 @@ func NewStrategyService(db *database.DB, gateway *aigateway.Client, quotaService
 		gateway:      gateway,
 		quotaQuerier: condition.NewAiGatewayQuotaQuerier(gateway),
 		quotaService: quotaService,
+		cron:         cron.New(cron.WithSeconds()),
+		cronJobs:     make(map[int]cron.EntryID),
 	}
 }
 
-// TraverseStrategy traverses the strategy table
-// This method is called by SchedulerService based on configured interval
-func (s *StrategyService) TraverseStrategy() {
-	logger.Info("Starting strategy traversal")
+// StartCron starts the cron scheduler
+func (s *StrategyService) StartCron() error {
+	// Load all enabled periodic strategies and register them
+	strategies, err := s.loadEnabledPeriodicStrategies()
+	if err != nil {
+		return fmt.Errorf("failed to load enabled periodic strategies: %w", err)
+	}
+
+	for _, strategy := range strategies {
+		if err := s.registerPeriodicStrategy(&strategy); err != nil {
+			logger.Error("Failed to register periodic strategy",
+				zap.String("strategy", strategy.Name),
+				zap.Error(err))
+		}
+	}
+
+	s.cron.Start()
+	logger.Info("Strategy cron scheduler started", zap.Int("periodic_strategies", len(strategies)))
+	return nil
+}
+
+// StopCron stops the cron scheduler
+func (s *StrategyService) StopCron() {
+	s.cron.Stop()
+	logger.Info("Strategy cron scheduler stopped")
+}
+
+// registerPeriodicStrategy registers a periodic strategy to cron
+func (s *StrategyService) registerPeriodicStrategy(strategy *models.QuotaStrategy) error {
+	if strategy.Type != "periodic" || strategy.PeriodicExpr == "" {
+		return fmt.Errorf("strategy %s is not a valid periodic strategy", strategy.Name)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Remove existing job if any
+	if entryID, exists := s.cronJobs[strategy.ID]; exists {
+		s.cron.Remove(entryID)
+		delete(s.cronJobs, strategy.ID)
+	}
+
+	// Add new job
+	entryID, err := s.cron.AddFunc(strategy.PeriodicExpr, func() {
+		s.executePeriodicStrategy(strategy.ID)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add cron job for strategy %s: %w", strategy.Name, err)
+	}
+
+	s.cronJobs[strategy.ID] = entryID
+	logger.Info("Registered periodic strategy to cron",
+		zap.String("strategy", strategy.Name),
+		zap.String("expression", strategy.PeriodicExpr))
+	return nil
+}
+
+// unregisterPeriodicStrategy removes a periodic strategy from cron
+func (s *StrategyService) unregisterPeriodicStrategy(strategyID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if entryID, exists := s.cronJobs[strategyID]; exists {
+		s.cron.Remove(entryID)
+		delete(s.cronJobs, strategyID)
+		logger.Info("Unregistered periodic strategy from cron", zap.Int("strategy_id", strategyID))
+	}
+}
+
+// executePeriodicStrategy executes a specific periodic strategy
+func (s *StrategyService) executePeriodicStrategy(strategyID int) {
+	// Get strategy details
+	strategy, err := s.GetStrategy(strategyID)
+	if err != nil {
+		logger.Error("Failed to get strategy for execution",
+			zap.Int("strategy_id", strategyID),
+			zap.Error(err))
+		return
+	}
+
+	// Check if strategy is still enabled
+	if !strategy.IsEnabled() {
+		logger.Warn("Skipping disabled strategy", zap.String("strategy", strategy.Name))
+		return
+	}
+
+	// Get users
+	users, err := s.loadUsers()
+	if err != nil {
+		logger.Error("Failed to load users for strategy execution",
+			zap.String("strategy", strategy.Name),
+			zap.Error(err))
+		return
+	}
+
+	logger.Info("Executing periodic strategy",
+		zap.String("strategy", strategy.Name),
+		zap.Int("user_count", len(users)))
+
+	// Execute strategy
+	s.ExecStrategy(strategy, users)
+}
+
+// loadEnabledPeriodicStrategies loads enabled periodic strategies
+func (s *StrategyService) loadEnabledPeriodicStrategies() ([]models.QuotaStrategy, error) {
+	var strategies []models.QuotaStrategy
+	if err := s.db.Where("status = ? AND type = ?", true, "periodic").Find(&strategies).Error; err != nil {
+		return nil, fmt.Errorf("failed to query enabled periodic strategies: %w", err)
+	}
+	return strategies, nil
+}
+
+// TraverseSingleStrategies traverses single-type strategies only
+// Periodic strategies are now handled by cron directly
+func (s *StrategyService) TraverseSingleStrategies() {
+	logger.Info("Starting single strategy traversal")
 
 	// 1. Get user list
 	users, err := s.loadUsers()
@@ -42,35 +160,32 @@ func (s *StrategyService) TraverseStrategy() {
 		return
 	}
 
-	// 2. Get enabled strategy list (snapshot at this moment)
-	strategies, err := s.loadEnabledStrategies()
+	// 2. Get enabled single-type strategies
+	strategies, err := s.loadEnabledSingleStrategies()
 	if err != nil {
-		logger.Error("Failed to load enabled strategies", zap.Error(err))
+		logger.Error("Failed to load enabled single strategies", zap.Error(err))
 		return
 	}
 
-	logger.Info("Found enabled strategies", zap.Int("count", len(strategies)))
+	logger.Info("Found enabled single strategies", zap.Int("count", len(strategies)))
 
-	// 3. Execute strategies based on current snapshot
-	// Note: We use the strategy data from the snapshot to avoid redundant database queries
-	// and ensure consistent execution within this traversal cycle
+	// 3. Execute single strategies
 	for _, strategy := range strategies {
-		logger.Info("Processing strategy",
-			zap.String("strategy", strategy.Name),
-			zap.String("type", strategy.Type),
-			zap.Bool("status", strategy.Status))
-
-		switch strategy.Type {
-		case "periodic":
-			if s.shouldExecutePeriodic(&strategy) {
-				s.ExecStrategy(&strategy, users)
-			}
-		case "single":
-			s.ExecStrategy(&strategy, users)
-		}
+		logger.Info("Processing single strategy",
+			zap.String("strategy", strategy.Name))
+		s.ExecStrategy(&strategy, users)
 	}
 
-	logger.Info("Strategy traversal completed")
+	logger.Info("Single strategy traversal completed")
+}
+
+// loadEnabledSingleStrategies loads enabled single-type strategies
+func (s *StrategyService) loadEnabledSingleStrategies() ([]models.QuotaStrategy, error) {
+	var strategies []models.QuotaStrategy
+	if err := s.db.Where("status = ? AND type = ?", true, "single").Find(&strategies).Error; err != nil {
+		return nil, fmt.Errorf("failed to query enabled single strategies: %w", err)
+	}
+	return strategies, nil
 }
 
 // loadUsers loads the user list
@@ -91,78 +206,6 @@ func (s *StrategyService) loadStrategies() ([]models.QuotaStrategy, error) {
 	return strategies, nil
 }
 
-// loadEnabledStrategies loads enabled strategy list
-func (s *StrategyService) loadEnabledStrategies() ([]models.QuotaStrategy, error) {
-	var strategies []models.QuotaStrategy
-	if err := s.db.Where("status = ?", true).Find(&strategies).Error; err != nil {
-		return nil, fmt.Errorf("failed to query enabled strategies: %w", err)
-	}
-	return strategies, nil
-}
-
-// shouldExecutePeriodic determines if periodic strategy should be executed
-func (s *StrategyService) shouldExecutePeriodic(strategy *models.QuotaStrategy) bool {
-	if strategy.PeriodicExpr == "" {
-		return false
-	}
-
-	// Parse cron expression to determine if it should be executed
-	schedule, err := cron.ParseStandard(strategy.PeriodicExpr)
-	if err != nil {
-		logger.Error("Invalid cron expression",
-			zap.String("strategy", strategy.Name),
-			zap.String("expr", strategy.PeriodicExpr),
-			zap.Error(err))
-		return false
-	}
-
-	now := time.Now().Truncate(time.Second)
-
-	// Get the current batch number (based on current time)
-	currentBatch := s.generateBatchNumber()
-
-	// Check if this strategy has already been executed in the current batch
-	var executeCount int64
-	err = s.db.Model(&models.QuotaExecute{}).
-		Where("strategy_id = ? AND batch_number = ?", strategy.ID, currentBatch).
-		Count(&executeCount).Error
-
-	if err != nil {
-		logger.Error("Failed to check strategy execution status",
-			zap.String("strategy", strategy.Name),
-			zap.Error(err))
-		return false
-	}
-
-	// If already executed in this batch, don't execute again
-	if executeCount > 0 {
-		logger.Debug("Strategy already executed in current batch",
-			zap.String("strategy", strategy.Name),
-			zap.String("batch", currentBatch))
-		return false
-	}
-
-	// Check if current time matches the cron schedule
-	// Get the last scheduled time before now
-	lastScheduledTime := schedule.Next(now.Add(-24 * time.Hour))
-
-	// If the last scheduled time is within the current hour, execute the strategy
-	currentHourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
-	nextHourStart := currentHourStart.Add(time.Hour)
-
-	shouldExecute := lastScheduledTime.After(currentHourStart.Add(-time.Minute)) &&
-		lastScheduledTime.Before(nextHourStart)
-
-	if shouldExecute {
-		logger.Info("Periodic strategy should execute",
-			zap.String("strategy", strategy.Name),
-			zap.Time("scheduled_time", lastScheduledTime),
-			zap.Time("current_time", now))
-	}
-
-	return shouldExecute
-}
-
 // ExecStrategy executes a strategy
 func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []models.UserInfo) {
 	// Validate strategy status (should already be enabled since we got it from loadEnabledStrategies)
@@ -179,12 +222,8 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 			if s.hasExecuted(strategy.ID, user.ID) {
 				continue
 			}
-		} else if strategy.Type == "periodic" {
-			// For periodic strategy, check if this user has been processed in current batch
-			if s.hasExecutedInBatch(strategy.ID, user.ID, batchNumber) {
-				continue
-			}
 		}
+		// Periodic strategies are now handled directly by cron, no batch checking needed
 
 		// Check condition
 		ctx := &condition.EvaluationContext{
@@ -237,24 +276,6 @@ func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 	err = s.db.Model(&models.QuotaExecute{}).
 		Where("strategy_id = ? AND user_id = ? AND status = ? AND batch_number = ?",
 			strategyID, userID, "processing", currentBatch).
-		Count(&count).Error
-
-	if err != nil {
-		logger.Error("Failed to check execution status", zap.Error(err))
-		return false
-	}
-
-	return count > 0
-}
-
-// hasExecutedInBatch checks if a user has been processed in the current batch
-func (s *StrategyService) hasExecutedInBatch(strategyID int, userID string, batchNumber string) bool {
-	var count int64
-
-	// Check if there is a completed or processing record in the current batch
-	err := s.db.Model(&models.QuotaExecute{}).
-		Where("strategy_id = ? AND user_id = ? AND status IN (?) AND batch_number = ?",
-			strategyID, userID, []string{"completed", "processing"}, batchNumber).
 		Count(&count).Error
 
 	if err != nil {
@@ -326,16 +347,42 @@ func (s *StrategyService) generateBatchNumber() string {
 	return now.Format("20060102150405") // YearMonthDayHourMinuteSecond
 }
 
-// CreateStrategy creates a strategy
+// CreateStrategy creates a strategy and registers periodic ones to cron
 func (s *StrategyService) CreateStrategy(strategy *models.QuotaStrategy) error {
-	// Use GORM's default value mechanism
-	// The Status field is already defined as default:true in the model
+	// Validate cron expression for periodic strategies before saving
+	if strategy.Type == "periodic" {
+		if strategy.PeriodicExpr == "" {
+			return fmt.Errorf("periodic expression cannot be empty for periodic strategy")
+		}
+		// Test cron expression by trying to add it to a temporary cron instance
+		tempCron := cron.New(cron.WithSeconds())
+		_, err := tempCron.AddFunc(strategy.PeriodicExpr, func() {})
+		if err != nil {
+			return fmt.Errorf("invalid cron expression '%s': %w", strategy.PeriodicExpr, err)
+		}
+	}
+
+	// Create strategy in database
 	if err := s.db.Create(strategy).Error; err != nil {
 		return fmt.Errorf("failed to create strategy: %w", err)
 	}
 
 	// Reload the strategy from the database to get the default value
-	return s.db.First(strategy, strategy.ID).Error
+	if err := s.db.First(strategy, strategy.ID).Error; err != nil {
+		return fmt.Errorf("failed to reload strategy: %w", err)
+	}
+
+	// Register to cron if it's an enabled periodic strategy
+	if strategy.Type == "periodic" && strategy.IsEnabled() {
+		if err := s.registerPeriodicStrategy(strategy); err != nil {
+			logger.Error("Failed to register periodic strategy to cron",
+				zap.String("strategy", strategy.Name),
+				zap.Error(err))
+			// Don't fail the creation, just log the error
+		}
+	}
+
+	return nil
 }
 
 // GetStrategies gets strategy list
@@ -349,7 +396,11 @@ func (s *StrategyService) GetStrategies() ([]models.QuotaStrategy, error) {
 
 // GetEnabledStrategies gets enabled strategy list
 func (s *StrategyService) GetEnabledStrategies() ([]models.QuotaStrategy, error) {
-	return s.loadEnabledStrategies()
+	var strategies []models.QuotaStrategy
+	if err := s.db.Where("status = ?", true).Find(&strategies).Error; err != nil {
+		return nil, fmt.Errorf("failed to query enabled strategies: %w", err)
+	}
+	return strategies, nil
 }
 
 // GetDisabledStrategies gets disabled strategy list
@@ -373,26 +424,89 @@ func (s *StrategyService) GetStrategy(id int) (*models.QuotaStrategy, error) {
 	return &strategy, nil
 }
 
-// UpdateStrategy updates a strategy
+// UpdateStrategy updates a strategy and manages cron registration
 func (s *StrategyService) UpdateStrategy(id int, updates map[string]interface{}) error {
+	// Get current strategy
+	oldStrategy, err := s.GetStrategy(id)
+	if err != nil {
+		return fmt.Errorf("failed to get strategy: %w", err)
+	}
+
+	// Validate cron expression if being updated for periodic strategies
+	if periodicExpr, exists := updates["periodic_expr"]; exists {
+		if periodicExprStr, ok := periodicExpr.(string); ok {
+			// Check if this is a periodic strategy or being changed to periodic
+			strategyType := oldStrategy.Type
+			if newType, typeExists := updates["type"]; typeExists {
+				if newTypeStr, ok := newType.(string); ok {
+					strategyType = newTypeStr
+				}
+			}
+
+			if strategyType == "periodic" {
+				if periodicExprStr == "" {
+					return fmt.Errorf("periodic expression cannot be empty for periodic strategy")
+				}
+				// Test cron expression by trying to add it to a temporary cron instance
+				tempCron := cron.New(cron.WithSeconds())
+				_, err := tempCron.AddFunc(periodicExprStr, func() {})
+				if err != nil {
+					return fmt.Errorf("invalid cron expression '%s': %w", periodicExprStr, err)
+				}
+			}
+		}
+	}
+
+	// Update strategy in database
 	if err := s.db.Model(&models.QuotaStrategy{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return fmt.Errorf("failed to update strategy: %w", err)
 	}
+
+	// Get updated strategy
+	newStrategy, err := s.GetStrategy(id)
+	if err != nil {
+		return fmt.Errorf("failed to get updated strategy: %w", err)
+	}
+
+	// Handle cron registration changes
+	if newStrategy.Type == "periodic" {
+		if newStrategy.IsEnabled() {
+			// Register or re-register to cron
+			if err := s.registerPeriodicStrategy(newStrategy); err != nil {
+				logger.Error("Failed to register updated periodic strategy to cron",
+					zap.String("strategy", newStrategy.Name),
+					zap.Error(err))
+			}
+		} else {
+			// Unregister from cron if disabled
+			s.unregisterPeriodicStrategy(newStrategy.ID)
+		}
+	} else if oldStrategy.Type == "periodic" {
+		// Strategy type changed from periodic to single, unregister
+		s.unregisterPeriodicStrategy(id)
+	}
+
 	return nil
 }
 
-// EnableStrategy enables a strategy
+// EnableStrategy enables a strategy and registers periodic ones to cron
 func (s *StrategyService) EnableStrategy(id int) error {
+	// UpdateStrategy already handles cron registration for periodic strategies
 	return s.UpdateStrategy(id, map[string]interface{}{"status": true})
 }
 
-// DisableStrategy disables a strategy
+// DisableStrategy disables a strategy and unregisters periodic ones from cron
 func (s *StrategyService) DisableStrategy(id int) error {
+	// UpdateStrategy already handles cron unregistration for periodic strategies
 	return s.UpdateStrategy(id, map[string]interface{}{"status": false})
 }
 
-// DeleteStrategy deletes a strategy
+// DeleteStrategy deletes a strategy and unregisters periodic ones from cron
 func (s *StrategyService) DeleteStrategy(id int) error {
+	// Unregister from cron first
+	s.unregisterPeriodicStrategy(id)
+
+	// Then delete from database
 	return s.db.Delete(&models.QuotaStrategy{}, id).Error
 }
 
@@ -417,9 +531,4 @@ func (s *StrategyService) GetStrategyExecuteRecords(strategyID int, page, pageSi
 	}
 
 	return records, total, nil
-}
-
-// ShouldExecutePeriodicForTest is a public wrapper for shouldExecutePeriodic for testing purposes
-func (s *StrategyService) ShouldExecutePeriodicForTest(strategy *models.QuotaStrategy) bool {
-	return s.shouldExecutePeriodic(strategy)
 }

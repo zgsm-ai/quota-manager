@@ -79,8 +79,8 @@ func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
 		Type:         "periodic",
 		Amount:       75,
 		Model:        "test-model",
-		PeriodicExpr: "* * * * *", // Execute every minute
-		Condition:    "",          // Empty condition, all users match
+		PeriodicExpr: "0 * * * * *", // Execute every minute
+		Condition:    "",            // Empty condition, all users match
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
