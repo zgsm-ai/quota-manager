@@ -5,9 +5,8 @@
 BASE_URL="http://localhost:8099"
 AIGATEWAY_URL="http://localhost:1002"
 
-# Test JWT token (base64url encoded without signature verification)
-# Contains: {"id":"user001","name":"John Doe","staffID":"emp001","github":"johndoe","phone":"13800138001"}
-TEST_TOKEN="eyJpZCI6InVzZXIwMDEiLCJuYW1lIjoiSm9obiBEb2UiLCJzdGFmZklEIjoiZW1wMDAxIiwiZ2l0aHViIjoiam9obmRvZSIsInBob25lIjoiMTM4MDAxMzgwMDEifQ"
+# JWT token for authentication (contains universal_id field in correct JWT format)
+TEST_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bml2ZXJzYWxfaWQiOiJ1c2VyMDAxIiwibmFtZSI6IkpvaG4gRG9lIiwic3RhZmZJRCI6ImVtcDAwMSIsImdpdGh1YiI6ImpvaG5kb2UiLCJwaG9uZSI6IjEzODAwMTM4MDAxIn0.signature"
 
 echo "=== Quota Manager API Test ==="
 

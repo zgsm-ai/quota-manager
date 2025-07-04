@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"quota-manager/internal/config"
 	"quota-manager/internal/handlers"
@@ -415,4 +416,59 @@ func createTestJWTToken() string {
 
 	payload, _ := json.Marshal(userInfo)
 	return "Bearer " + string(payload) // Simplified for testing
+}
+
+// testAPICreateStrategyInvalidCondition tests strategy creation with invalid condition expression
+func testAPICreateStrategyInvalidCondition(ctx *TestContext) TestResult {
+	apiCtx := setupAPITestContext(ctx)
+
+	// Test with valid strategy data but invalid condition
+	strategy := map[string]interface{}{
+		"name":      "invalid-condition-test",
+		"title":     "Invalid Condition Test Strategy",
+		"type":      "single",
+		"amount":    100,
+		"model":     "gpt-3.5-turbo",
+		"condition": "invalid-function(\"test\")", // Invalid function name
+		"status":    true,
+	}
+
+	body, _ := json.Marshal(strategy)
+	req, _ := http.NewRequest("POST", "/quota-manager/api/v1/strategies", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Perform request
+	apiCtx.Router.ServeHTTP(w, req)
+
+	// Check status code (should be 400 for invalid condition)
+	if w.Code != http.StatusBadRequest {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected status 400, got %d", w.Code)}
+	}
+
+	// Parse response
+	var resp response.ResponseData
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to parse response: %v", err)}
+	}
+
+	// Verify error response format
+	if resp.Code != response.BadRequestCode {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected code %s, got %s", response.BadRequestCode, resp.Code)}
+	}
+
+	if resp.Success {
+		return TestResult{Passed: false, Message: "Expected success to be false"}
+	}
+
+	if resp.Data != nil {
+		return TestResult{Passed: false, Message: "Expected data to be nil for error response"}
+	}
+
+	// Verify the error message contains condition validation error
+	if !strings.Contains(resp.Message, "Invalid condition expression") {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected error message to contain 'Invalid condition expression', got '%s'", resp.Message)}
+	}
+
+	return TestResult{Passed: true, Message: "API Create Strategy Invalid Condition Test Succeeded"}
 }

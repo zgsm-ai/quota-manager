@@ -7,6 +7,7 @@ import (
 	"quota-manager/internal/models"
 	"quota-manager/internal/response"
 	"quota-manager/internal/services"
+	"quota-manager/internal/validation"
 
 	"strings"
 
@@ -90,13 +91,14 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 		return
 	}
 
-	// Set default values
-	if req.Page <= 0 {
-		req.Page = 1
+	// Validate and set default values using validation package
+	page, pageSize, err := validation.ValidatePageParams(req.Page, req.PageSize)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
 	}
-	if req.PageSize <= 0 {
-		req.PageSize = 10
-	}
+	req.Page = page
+	req.PageSize = pageSize
 
 	records, total, err := h.quotaService.GetQuotaAuditRecords(userID, req.Page, req.PageSize)
 	if err != nil {
@@ -129,10 +131,16 @@ func (h *QuotaHandler) TransferOut(c *gin.Context) {
 		return
 	}
 
-	// Validate receiver_id is not empty (this is client-side validation)
-	if req.ReceiverID == "" {
+	// Validate receiver_id is not empty
+	if err := validation.ValidateRequiredString(req.ReceiverID, "receiver_id"); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
+	}
+
+	// Validate receiver_id is valid UUID format
+	if !validation.IsValidUUID(req.ReceiverID) {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"Receiver ID is required"))
+			"receiver_id must be a valid UUID format"))
 		return
 	}
 
@@ -141,6 +149,22 @@ func (h *QuotaHandler) TransferOut(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
 			"Quota list cannot be empty"))
 		return
+	}
+
+	// Validate each quota item in the list
+	for i, quota := range req.QuotaList {
+		if !validation.IsPositiveInteger(quota.Amount) {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+				fmt.Sprintf("Quota item %d: amount must be a positive integer", i+1)))
+			return
+		}
+
+		// Validate expiry date is not zero time
+		if quota.ExpiryDate.IsZero() {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+				fmt.Sprintf("Quota item %d: expiry_date is required", i+1)))
+			return
+		}
 	}
 
 	resp, err := h.quotaService.TransferOut(giver, &req)
@@ -180,10 +204,15 @@ func (h *QuotaHandler) TransferIn(c *gin.Context) {
 		return
 	}
 
-	// Validate voucher code is not empty (this is client-side validation)
-	if req.VoucherCode == "" {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"Voucher code is required"))
+	// Validate voucher code is not empty
+	if err := validation.ValidateRequiredString(req.VoucherCode, "voucher_code"); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
+	}
+
+	// Validate voucher code length (should be a reasonable JWT-like string)
+	if err := validation.ValidateStringLength(req.VoucherCode, "voucher_code", 10, 2000); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
 
@@ -207,11 +236,26 @@ func (h *QuotaHandler) TransferIn(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewSuccessResponse(resp, "Quota transferred in successfully"))
 }
 
+// GetUserQuotaAuditRecordsAdminEmptyID handles the case when user_id is empty
+func (h *QuotaHandler) GetUserQuotaAuditRecordsAdminEmptyID(c *gin.Context) {
+	c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+		"user_id is required and cannot be empty"))
+}
+
 // GetUserQuotaAuditRecordsAdmin gets quota audit records for a specific user (admin function)
 func (h *QuotaHandler) GetUserQuotaAuditRecordsAdmin(c *gin.Context) {
 	userID := c.Param("user_id")
-	if userID == "" {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "User ID is required"))
+
+	// Validate user_id is not empty
+	if err := validation.ValidateRequiredString(userID, "user_id"); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
+	}
+
+	// Validate user_id is valid UUID format
+	if !validation.IsValidUUID(userID) {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"user_id must be a valid UUID format"))
 		return
 	}
 
@@ -225,13 +269,14 @@ func (h *QuotaHandler) GetUserQuotaAuditRecordsAdmin(c *gin.Context) {
 		return
 	}
 
-	// Set default values
-	if req.Page <= 0 {
-		req.Page = 1
+	// Validate and set default values using validation package
+	page, pageSize, err := validation.ValidatePageParams(req.Page, req.PageSize)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
 	}
-	if req.PageSize <= 0 {
-		req.PageSize = 10
-	}
+	req.Page = page
+	req.PageSize = pageSize
 
 	records, total, err := h.quotaService.GetUserQuotaAuditRecords(userID, req.Page, req.PageSize)
 	if err != nil {
@@ -255,6 +300,8 @@ func RegisterQuotaRoutes(r *gin.RouterGroup, quotaHandler *QuotaHandler) {
 		quota.GET("/audit", quotaHandler.GetQuotaAuditRecords)
 		quota.POST("/transfer-out", quotaHandler.TransferOut)
 		quota.POST("/transfer-in", quotaHandler.TransferIn)
+		// Handle empty user_id case (must be before parameterized route)
+		quota.GET("/audit/", quotaHandler.GetUserQuotaAuditRecordsAdminEmptyID)
 		quota.GET("/audit/:user_id", quotaHandler.GetUserQuotaAuditRecordsAdmin)
 	}
 }

@@ -58,8 +58,13 @@ func runAllTests(ctx *TestContext) []TestResult {
 		name string
 		fn   func(*TestContext) TestResult
 	}{
-		// Service layer tests
 		{"Clear Data Test", testClearData},
+
+		// Validation tests
+		{"Validation Utils Test", testValidationUtils},
+		{"API Validation Create Strategy Test", testAPIValidationCreateStrategy},
+		{"API Validation Transfer Out Test", testAPIValidationTransferOut},
+		{"API Validation User ID Test", testAPIValidationUserID},
 
 		// Condition Expression Tests
 		{"Condition Expression - Empty Condition Test", testEmptyCondition},
@@ -132,6 +137,7 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"API Health Check", testAPIHealthCheck},
 		{"API Create Strategy", testAPICreateStrategy},
 		{"API Create Strategy Invalid Data", testAPICreateStrategyInvalidData},
+		{"API Create Strategy Invalid Condition", testAPICreateStrategyInvalidCondition},
 		{"API Get Strategy Not Found", testAPIGetStrategyNotFound},
 		{"API Invalid Strategy ID", testAPIInvalidStrategyID},
 		{"API Get Strategies", testAPIGetStrategies},

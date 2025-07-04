@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"quota-manager/internal/condition"
 	"quota-manager/internal/models"
 	"quota-manager/internal/response"
 	"quota-manager/internal/services"
+	"quota-manager/internal/validation"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -27,30 +29,68 @@ func (h *StrategyHandler) CreateStrategy(c *gin.Context) {
 	}
 
 	// Validate required fields - these are client-side validation errors, should return 400
-	if strategy.Name == "" {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy name is required"))
+	if err := validation.ValidateRequiredString(strategy.Name, "strategy name"); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
 
-	if strategy.Title == "" {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy title is required"))
+	if err := validation.ValidateRequiredString(strategy.Title, "strategy title"); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
 
-	if strategy.Type != "single" && strategy.Type != "periodic" {
+	// Validate strategy name length (1-100 characters)
+	if err := validation.ValidateStringLength(strategy.Name, "strategy name", 1, 100); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
+	}
+
+	// Validate strategy title length (1-200 characters)
+	if err := validation.ValidateStringLength(strategy.Title, "strategy title", 1, 200); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
+	}
+
+	// Validate strategy type
+	if !validation.IsValidStrategyType(strategy.Type) {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy type must be 'single' or 'periodic'"))
 		return
 	}
 
-	if strategy.Amount <= 0 {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy amount must be greater than 0"))
+	// Validate amount is positive integer
+	if !validation.IsPositiveInteger(strategy.Amount) {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy amount must be a positive integer"))
 		return
 	}
 
-	// For periodic strategies, periodic_expr is required
-	if strategy.Type == "periodic" && strategy.PeriodicExpr == "" {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Periodic expression is required for periodic strategies"))
-		return
+	// For periodic strategies, periodic_expr is required and must be valid cron expression
+	if strategy.Type == "periodic" {
+		if err := validation.ValidateRequiredString(strategy.PeriodicExpr, "periodic expression"); err != nil {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+			return
+		}
+
+		if err := validation.IsValidCronExpr(strategy.PeriodicExpr); err != nil {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid periodic expression: "+err.Error()))
+			return
+		}
+	}
+
+	// Validate model field if provided
+	if strategy.Model != "" {
+		if err := validation.ValidateStringLength(strategy.Model, "model", 1, 100); err != nil {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+			return
+		}
+	}
+
+	// Validate condition expression syntax (only if condition is not empty)
+	if strategy.Condition != "" {
+		parser := condition.NewParser(strategy.Condition)
+		if _, err := parser.Parse(); err != nil {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid condition expression: "+err.Error()))
+			return
+		}
 	}
 
 	// Server-side errors (database, service layer) should return 500
@@ -125,7 +165,76 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 		return
 	}
 
-	// status is bool type, JSON parsing will handle it automatically, no additional validation needed
+	// Validate each field that is being updated
+	if name, exists := updates["name"]; exists {
+		if nameStr, ok := name.(string); ok {
+			if err := validation.ValidateRequiredString(nameStr, "strategy name"); err != nil {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+				return
+			}
+			if err := validation.ValidateStringLength(nameStr, "strategy name", 1, 100); err != nil {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+				return
+			}
+		}
+	}
+
+	if title, exists := updates["title"]; exists {
+		if titleStr, ok := title.(string); ok {
+			if err := validation.ValidateRequiredString(titleStr, "strategy title"); err != nil {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+				return
+			}
+			if err := validation.ValidateStringLength(titleStr, "strategy title", 1, 200); err != nil {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+				return
+			}
+		}
+	}
+
+	if strategyType, exists := updates["type"]; exists {
+		if typeStr, ok := strategyType.(string); ok {
+			if !validation.IsValidStrategyType(typeStr) {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy type must be 'single' or 'periodic'"))
+				return
+			}
+		}
+	}
+
+	if amount, exists := updates["amount"]; exists {
+		if !validation.IsPositiveInteger(amount) {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy amount must be a positive integer"))
+			return
+		}
+	}
+
+	if periodicExpr, exists := updates["periodic_expr"]; exists {
+		if exprStr, ok := periodicExpr.(string); ok {
+			if err := validation.IsValidCronExpr(exprStr); err != nil {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid periodic expression: "+err.Error()))
+				return
+			}
+		}
+	}
+
+	if model, exists := updates["model"]; exists {
+		if modelStr, ok := model.(string); ok && modelStr != "" {
+			if err := validation.ValidateStringLength(modelStr, "model", 1, 100); err != nil {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+				return
+			}
+		}
+	}
+
+	if conditionValue, exists := updates["condition"]; exists {
+		if conditionStr, ok := conditionValue.(string); ok && conditionStr != "" {
+			parser := condition.NewParser(conditionStr)
+			if _, err := parser.Parse(); err != nil {
+				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid condition expression: "+err.Error()))
+				return
+			}
+		}
+	}
 
 	if err := h.service.UpdateStrategy(id, updates); err != nil {
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.StrategyUpdateFailedCode, "Failed to update strategy: "+err.Error()))
