@@ -506,8 +506,20 @@ func (s *StrategyService) DeleteStrategy(id int) error {
 	// Unregister from cron first
 	s.unregisterPeriodicStrategy(id)
 
-	// Then delete from database
-	return s.db.Delete(&models.QuotaStrategy{}, id).Error
+	// Use transaction to ensure data consistency
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// First, delete all related execution records
+		if err := tx.Where("strategy_id = ?", id).Delete(&models.QuotaExecute{}).Error; err != nil {
+			return fmt.Errorf("failed to delete related execution records: %w", err)
+		}
+
+		// Then delete the strategy itself
+		if err := tx.Delete(&models.QuotaStrategy{}, id).Error; err != nil {
+			return fmt.Errorf("failed to delete strategy: %w", err)
+		}
+
+		return nil
+	})
 }
 
 // GetStrategyExecuteRecords gets execution records for a strategy
