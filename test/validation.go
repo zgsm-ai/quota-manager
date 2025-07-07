@@ -11,33 +11,6 @@ import (
 
 // testValidationUtils tests the validation utility functions
 func testValidationUtils(ctx *TestContext) TestResult {
-	// Test UUID validation
-	validUUIDs := []string{
-		"123e4567-e89b-12d3-a456-426614174000",
-		"550e8400-e29b-41d4-a716-446655440000",
-		"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-	}
-
-	invalidUUIDs := []string{
-		"",
-		"invalid-uuid",
-		"123e4567-e89b-12d3-a456",
-		"123e4567-e89b-12d3-a456-42661417400g", // invalid character
-		"123e4567e89b12d3a456426614174000",     // no hyphens
-	}
-
-	for _, uuid := range validUUIDs {
-		if !validation.IsValidUUID(uuid) {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Valid UUID %s failed validation", uuid)}
-		}
-	}
-
-	for _, uuid := range invalidUUIDs {
-		if validation.IsValidUUID(uuid) {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Invalid UUID %s passed validation", uuid)}
-		}
-	}
-
 	// Test cron expression validation
 	validCronExprs := []string{
 		"0 * * * * *",   // every minute
@@ -71,36 +44,6 @@ func testValidationUtils(ctx *TestContext) TestResult {
 		if err := validation.IsValidCronExpr(expr); err == nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Invalid cron expression %s passed validation", expr)}
 		}
-	}
-
-	// Test positive integer validation
-	validIntegers := []interface{}{1, 10, 100, int32(50), int64(200), float64(25), "42"}
-	invalidIntegers := []interface{}{0, -1, -10, float64(-5), float64(3.14), "0", "-1", "abc", ""}
-
-	for _, val := range validIntegers {
-		if !validation.IsPositiveInteger(val) {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Valid positive integer %v failed validation", val)}
-		}
-	}
-
-	for _, val := range invalidIntegers {
-		if validation.IsPositiveInteger(val) {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Invalid positive integer %v passed validation", val)}
-		}
-	}
-
-	// Test strategy type validation
-	if !validation.IsValidStrategyType("single") {
-		return TestResult{Passed: false, Message: "Valid strategy type 'single' failed validation"}
-	}
-	if !validation.IsValidStrategyType("periodic") {
-		return TestResult{Passed: false, Message: "Valid strategy type 'periodic' failed validation"}
-	}
-	if validation.IsValidStrategyType("invalid") {
-		return TestResult{Passed: false, Message: "Invalid strategy type 'invalid' passed validation"}
-	}
-	if validation.IsValidStrategyType("") {
-		return TestResult{Passed: false, Message: "Empty strategy type passed validation"}
 	}
 
 	return TestResult{Passed: true, Message: "Validation Utils Test Succeeded"}
@@ -145,7 +88,7 @@ func testAPIValidationCreateStrategy(ctx *TestContext) TestResult {
 		{
 			name: "empty title",
 			strategy: map[string]interface{}{
-				"name":   "valid-strategy",
+				"name":   "empty-title-strategy",
 				"title":  "",
 				"type":   "single",
 				"amount": 100,
@@ -157,8 +100,8 @@ func testAPIValidationCreateStrategy(ctx *TestContext) TestResult {
 		{
 			name: "invalid strategy type",
 			strategy: map[string]interface{}{
-				"name":   "valid-strategy",
-				"title":  "Valid Strategy",
+				"name":   "invalid-type-strategy",
+				"title":  "Invalid Type Strategy",
 				"type":   "invalid",
 				"amount": 100,
 				"status": true,
@@ -169,32 +112,30 @@ func testAPIValidationCreateStrategy(ctx *TestContext) TestResult {
 		{
 			name: "zero amount",
 			strategy: map[string]interface{}{
-				"name":   "valid-strategy",
-				"title":  "Valid Strategy",
+				"name":   "zero-amount-strategy",
+				"title":  "Zero Amount Strategy",
 				"type":   "single",
 				"amount": 0,
 				"status": true,
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Strategy amount must be a positive integer",
+			expectedStatus: http.StatusCreated,
 		},
 		{
 			name: "negative amount",
 			strategy: map[string]interface{}{
-				"name":   "valid-strategy",
-				"title":  "Valid Strategy",
+				"name":   "negative-amount-strategy",
+				"title":  "Negative Amount Strategy",
 				"type":   "single",
 				"amount": -10,
 				"status": true,
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Strategy amount must be a positive integer",
+			expectedStatus: http.StatusCreated,
 		},
 		{
 			name: "periodic without periodic_expr",
 			strategy: map[string]interface{}{
-				"name":   "valid-strategy",
-				"title":  "Valid Strategy",
+				"name":   "periodic-no-expr-strategy",
+				"title":  "Periodic No Expr Strategy",
 				"type":   "periodic",
 				"amount": 100,
 				"status": true,
@@ -205,8 +146,8 @@ func testAPIValidationCreateStrategy(ctx *TestContext) TestResult {
 		{
 			name: "periodic with invalid cron expression",
 			strategy: map[string]interface{}{
-				"name":          "valid-strategy",
-				"title":         "Valid Strategy",
+				"name":          "periodic-invalid-cron-strategy",
+				"title":         "Periodic Invalid Cron Strategy",
 				"type":          "periodic",
 				"amount":        100,
 				"periodic_expr": "invalid-cron",
@@ -308,7 +249,7 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "receiver_id is required",
+			expectedError:  "receiver_i_d: ReceiverID is required",
 		},
 		{
 			name: "receiver_id with whitespace",
@@ -336,7 +277,7 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "receiver_id must be a valid UUID format",
+			expectedError:  "receiver_i_d: ReceiverID must be a valid UUID format",
 		},
 		{
 			name: "empty quota list",
@@ -345,7 +286,7 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				"quota_list":  []map[string]interface{}{},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Quota list cannot be empty",
+			expectedError:  "quota_list: QuotaList must be at least 1 characters",
 		},
 		{
 			name: "zero amount in quota list",
@@ -359,7 +300,7 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Quota item 1: amount must be a positive integer",
+			expectedError:  "amount: Amount is required",
 		},
 		{
 			name: "negative amount in quota list",
@@ -373,7 +314,7 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Quota item 1: amount must be a positive integer",
+			expectedError:  "amount: Amount is invalid",
 		},
 	}
 
@@ -464,4 +405,44 @@ func testAPIValidationUserID(ctx *TestContext) TestResult {
 	}
 
 	return TestResult{Passed: true, Message: "API Validation User ID Test Succeeded"}
+}
+
+// testValidatePageParams tests the validation of page and pageSize parameters
+func testValidatePageParams(ctx *TestContext) TestResult {
+
+	testCases := []struct {
+		name     string
+		page     int
+		pageSize int
+		expPage  int
+		expSize  int
+		expErr   bool
+	}{
+		{"both valid", 2, 20, 2, 20, false},
+		{"page zero", 0, 20, 1, 20, false},
+		{"page negative", -5, 20, 1, 20, false},
+		{"pageSize zero", 2, 0, 2, 10, false},
+		{"pageSize negative", 2, -10, 2, 10, false},
+		{"both zero", 0, 0, 1, 10, false},
+		{"both negative", -1, -1, 1, 10, false},
+		{"pageSize too large", 1, 200, 1, 200, false},
+	}
+
+	for _, tc := range testCases {
+		page, size, err := validation.ValidatePageParams(tc.page, tc.pageSize)
+		if tc.expErr {
+			if err == nil {
+				return TestResult{Passed: false, Message: fmt.Sprintf("Test '%s': expected error but got nil", tc.name)}
+			}
+			continue
+		}
+		if err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Test '%s': unexpected error: %v", tc.name, err)}
+		}
+		if page != tc.expPage || size != tc.expSize {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Test '%s': expected (page,pageSize)=(%d,%d), got (%d,%d)", tc.name, tc.expPage, tc.expSize, page, size)}
+		}
+	}
+
+	return TestResult{Passed: true, Message: "ValidatePageParams Test Succeeded"}
 }

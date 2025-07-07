@@ -62,13 +62,13 @@ func ParseUserInfoFromToken(accessToken string) (*AuthUser, error) {
 // QuotaStrategy strategy table structure
 type QuotaStrategy struct {
 	ID           int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name         string    `gorm:"uniqueIndex;not null" json:"name"`
-	Title        string    `gorm:"not null" json:"title"`
-	Type         string    `gorm:"not null" json:"type"` // periodic/single
+	Name         string    `gorm:"uniqueIndex;not null" json:"name" validate:"required,min=1,max=100"`
+	Title        string    `gorm:"not null" json:"title" validate:"required,min=1,max=200"`
+	Type         string    `gorm:"not null" json:"type" validate:"required,oneof=single periodic"` // periodic/single
 	Amount       int       `gorm:"not null" json:"amount"`
-	Model        string    `json:"model"`
-	PeriodicExpr string    `gorm:"column:periodic_expr" json:"periodic_expr"`
-	Condition    string    `json:"condition"`
+	Model        string    `json:"model" validate:"omitempty,min=1,max=100"`
+	PeriodicExpr string    `gorm:"column:periodic_expr" json:"periodic_expr" validate:"omitempty,cron"`
+	Condition    string    `json:"condition" validate:"omitempty"`
 	Status       bool      `gorm:"not null;default:true" json:"status"` // true=enabled, false=disabled
 	CreateTime   time.Time `gorm:"autoCreateTime" json:"create_time"`
 	UpdateTime   time.Time `gorm:"autoUpdateTime" json:"update_time"`
@@ -272,5 +272,3 @@ const (
 	StatusValid   = "VALID"
 	StatusExpired = "EXPIRED"
 )
-
-

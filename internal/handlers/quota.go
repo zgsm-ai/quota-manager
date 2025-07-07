@@ -71,6 +71,17 @@ func (h *QuotaHandler) GetUserQuota(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewSuccessResponse(quotaInfo, "User quota retrieved successfully"))
 }
 
+// PaginationQuery defines pagination parameters for query binding
+type PaginationQuery struct {
+	Page     int `form:"page"`
+	PageSize int `form:"page_size"`
+}
+
+// UserIDUri is used for binding and validating user_id from URI
+type UserIDUri struct {
+	UserID string `uri:"user_id" binding:"required" validate:"required,uuid"`
+}
+
 // GetQuotaAuditRecords handles GET /quota-manager/api/v1/quota/audit
 func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 	userID, err := h.getUserIDFromToken(c)
@@ -80,27 +91,21 @@ func (h *QuotaHandler) GetQuotaAuditRecords(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Page     int `form:"page"`
-		PageSize int `form:"page_size"`
-	}
-
+	var req PaginationQuery
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
 			"Invalid query parameters: "+err.Error()))
 		return
 	}
 
-	// Validate and set default values using validation package
+	// Validate and normalize pagination parameters
 	page, pageSize, err := validation.ValidatePageParams(req.Page, req.PageSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
-	req.Page = page
-	req.PageSize = pageSize
 
-	records, total, err := h.quotaService.GetQuotaAuditRecords(userID, req.Page, req.PageSize)
+	records, total, err := h.quotaService.GetQuotaAuditRecords(userID, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.DatabaseErrorCode,
 			"Failed to retrieve quota audit records: "+err.Error()))
@@ -124,55 +129,36 @@ func (h *QuotaHandler) TransferOut(c *gin.Context) {
 		return
 	}
 
-	var req services.TransferOutRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// Create a temporary struct without validation tags for binding
+	type TransferOutRequestRaw struct {
+		ReceiverID string                       `json:"receiver_id"`
+		QuotaList  []services.TransferQuotaItem `json:"quota_list"`
+	}
+
+	var rawReq TransferOutRequestRaw
+	if err := c.ShouldBindJSON(&rawReq); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
 			"Invalid request body: "+err.Error()))
 		return
 	}
 
-	// Clean receiver_id to remove leading/trailing whitespace before generating voucher
-	cleanReceiverID := strings.TrimSpace(req.ReceiverID)
+	// Clean receiver_id to remove leading/trailing whitespace
+	rawReq.ReceiverID = strings.TrimSpace(rawReq.ReceiverID)
 
-	// Validate receiver_id is not empty
-	if err := validation.ValidateRequiredString(cleanReceiverID, "receiver_id"); err != nil {
+	// Convert to the actual request struct with validation tags
+	req := services.TransferOutRequest{
+		ReceiverID: rawReq.ReceiverID,
+		QuotaList:  rawReq.QuotaList,
+	}
+
+	if err := validation.ValidateStruct(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
 
-	// Validate receiver_id is valid UUID format
-	if !validation.IsValidUUID(cleanReceiverID) {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"receiver_id must be a valid UUID format"))
-		return
-	}
-
-	// Validate quota list is not empty
-	if len(req.QuotaList) == 0 {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"Quota list cannot be empty"))
-		return
-	}
-
-	// Validate each quota item in the list
-	for i, quota := range req.QuotaList {
-		if !validation.IsPositiveInteger(quota.Amount) {
-			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-				fmt.Sprintf("Quota item %d: amount must be a positive integer", i+1)))
-			return
-		}
-
-		// Validate expiry date is not zero time
-		if quota.ExpiryDate.IsZero() {
-			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-				fmt.Sprintf("Quota item %d: expiry_date is required", i+1)))
-			return
-		}
-	}
-
 	resp, err := h.quotaService.TransferOut(giver, &req)
 	if err != nil {
-		// Check if it's a business logic error (insufficient quota, etc.) - should be 400
+		// Business logic errors (insufficient quota, etc.) should return 400
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "receiver_id cannot be empty") ||
 			strings.Contains(errMsg, "insufficient") ||
@@ -181,8 +167,7 @@ func (h *QuotaHandler) TransferOut(c *gin.Context) {
 				"Transfer validation failed: "+err.Error()))
 			return
 		}
-
-		// Otherwise it's a server-side error (database, AiGateway, etc.)
+		// Otherwise it's a server-side error
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.QuotaTransferFailedCode,
 			"Failed to transfer out quota: "+err.Error()))
 		return
@@ -206,15 +191,7 @@ func (h *QuotaHandler) TransferIn(c *gin.Context) {
 			"Invalid request body: "+err.Error()))
 		return
 	}
-
-	// Validate voucher code is not empty
-	if err := validation.ValidateRequiredString(req.VoucherCode, "voucher_code"); err != nil {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-		return
-	}
-
-	// Validate voucher code length (should be a reasonable JWT-like string)
-	if err := validation.ValidateStringLength(req.VoucherCode, "voucher_code", 10, 2000); err != nil {
+	if err := validation.ValidateStruct(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
@@ -247,41 +224,34 @@ func (h *QuotaHandler) GetUserQuotaAuditRecordsAdminEmptyID(c *gin.Context) {
 
 // GetUserQuotaAuditRecordsAdmin gets quota audit records for a specific user (admin function)
 func (h *QuotaHandler) GetUserQuotaAuditRecordsAdmin(c *gin.Context) {
-	userID := c.Param("user_id")
+	// Bind user_id from URI
+	var uriReq UserIDUri
+	if err := c.ShouldBindUri(&uriReq); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid user_id: "+err.Error()))
+		return
+	}
 
-	// Validate user_id is not empty
-	if err := validation.ValidateRequiredString(userID, "user_id"); err != nil {
+	// Validate user_id
+	if err := validation.ValidateStruct(&uriReq); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
 
-	// Validate user_id is valid UUID format
-	if !validation.IsValidUUID(userID) {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
-			"user_id must be a valid UUID format"))
-		return
-	}
-
-	var req struct {
-		Page     int `form:"page"`
-		PageSize int `form:"page_size"`
-	}
-
-	if err := c.ShouldBindQuery(&req); err != nil {
+	// Bind pagination parameters from query
+	var queryReq PaginationQuery
+	if err := c.ShouldBindQuery(&queryReq); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid query parameters: "+err.Error()))
 		return
 	}
 
-	// Validate and set default values using validation package
-	page, pageSize, err := validation.ValidatePageParams(req.Page, req.PageSize)
+	// Validate and normalize pagination parameters
+	page, pageSize, err := validation.ValidatePageParams(queryReq.Page, queryReq.PageSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
-	req.Page = page
-	req.PageSize = pageSize
 
-	records, total, err := h.quotaService.GetUserQuotaAuditRecords(userID, req.Page, req.PageSize)
+	records, total, err := h.quotaService.GetUserQuotaAuditRecords(uriReq.UserID, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.DatabaseErrorCode, "Failed to retrieve quota audit records: "+err.Error()))
 		return

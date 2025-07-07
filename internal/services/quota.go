@@ -69,14 +69,14 @@ type QuotaAuditRecord struct {
 
 // TransferOutRequest represents transfer out request
 type TransferOutRequest struct {
-	ReceiverID string              `json:"receiver_id"`
-	QuotaList  []TransferQuotaItem `json:"quota_list"`
+	ReceiverID string              `json:"receiver_id" validate:"required,uuid"`
+	QuotaList  []TransferQuotaItem `json:"quota_list" validate:"required,min=1,dive"`
 }
 
 // TransferQuotaItem represents quota item for transfer
 type TransferQuotaItem struct {
-	Amount     int       `json:"amount"`
-	ExpiryDate time.Time `json:"expiry_date"`
+	Amount     int       `json:"amount" validate:"required,gt=0"`
+	ExpiryDate time.Time `json:"expiry_date" validate:"required"`
 }
 
 // TransferOutResponse represents transfer out response
@@ -89,7 +89,7 @@ type TransferOutResponse struct {
 
 // TransferInRequest represents transfer in request
 type TransferInRequest struct {
-	VoucherCode string `json:"voucher_code"`
+	VoucherCode string `json:"voucher_code" validate:"required,min=10,max=2000"`
 }
 
 // TransferStatus represents the transfer status

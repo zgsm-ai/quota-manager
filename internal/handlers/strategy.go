@@ -28,63 +28,25 @@ func (h *StrategyHandler) CreateStrategy(c *gin.Context) {
 		return
 	}
 
-	// Validate required fields - these are client-side validation errors, should return 400
-	if err := validation.ValidateRequiredString(strategy.Name, "strategy name"); err != nil {
+	// Unified schema tag automatic validation
+	if err := validation.ValidateStruct(&strategy); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
 
-	if err := validation.ValidateRequiredString(strategy.Title, "strategy title"); err != nil {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-		return
-	}
-
-	// Validate strategy name length (1-100 characters)
-	if err := validation.ValidateStringLength(strategy.Name, "strategy name", 1, 100); err != nil {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-		return
-	}
-
-	// Validate strategy title length (1-200 characters)
-	if err := validation.ValidateStringLength(strategy.Title, "strategy title", 1, 200); err != nil {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-		return
-	}
-
-	// Validate strategy type
-	if !validation.IsValidStrategyType(strategy.Type) {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy type must be 'single' or 'periodic'"))
-		return
-	}
-
-	// Validate amount is positive integer
-	if !validation.IsPositiveInteger(strategy.Amount) {
-		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy amount must be a positive integer"))
-		return
-	}
-
-	// For periodic strategies, periodic_expr is required and must be valid cron expression
+	// For periodic type, periodic_expr is required and must be a valid cron expression.
 	if strategy.Type == "periodic" {
-		if err := validation.ValidateRequiredString(strategy.PeriodicExpr, "periodic expression"); err != nil {
-			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		if strategy.PeriodicExpr == "" {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "periodic_expr is required for periodic strategy"))
 			return
 		}
-
 		if err := validation.IsValidCronExpr(strategy.PeriodicExpr); err != nil {
 			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid periodic expression: "+err.Error()))
 			return
 		}
 	}
 
-	// Validate model field if provided
-	if strategy.Model != "" {
-		if err := validation.ValidateStringLength(strategy.Model, "model", 1, 100); err != nil {
-			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-			return
-		}
-	}
-
-	// Validate condition expression syntax (only if condition is not empty)
+	// condition expression
 	if strategy.Condition != "" {
 		parser := condition.NewParser(strategy.Condition)
 		if _, err := parser.Parse(); err != nil {
@@ -159,81 +121,69 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 		return
 	}
 
-	var updates map[string]interface{}
-	if err := c.ShouldBindJSON(&updates); err != nil {
+	type UpdateStrategyRequest struct {
+		Name         *string `json:"name" validate:"omitempty,min=1,max=100"`
+		Title        *string `json:"title" validate:"omitempty,min=1,max=200"`
+		Type         *string `json:"type" validate:"omitempty,oneof=single periodic"`
+		Amount       *int    `json:"amount" validate:"omitempty"`
+		PeriodicExpr *string `json:"periodic_expr" validate:"omitempty,cron"`
+		Model        *string `json:"model" validate:"omitempty,min=1,max=100"`
+		Condition    *string `json:"condition" validate:"omitempty"`
+		Status       *bool   `json:"status"`
+	}
+
+	var req UpdateStrategyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid request body: "+err.Error()))
 		return
 	}
-
-	// Validate each field that is being updated
-	if name, exists := updates["name"]; exists {
-		if nameStr, ok := name.(string); ok {
-			if err := validation.ValidateRequiredString(nameStr, "strategy name"); err != nil {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-				return
-			}
-			if err := validation.ValidateStringLength(nameStr, "strategy name", 1, 100); err != nil {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-				return
-			}
-		}
+	if err := validation.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
 	}
 
-	if title, exists := updates["title"]; exists {
-		if titleStr, ok := title.(string); ok {
-			if err := validation.ValidateRequiredString(titleStr, "strategy title"); err != nil {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-				return
-			}
-			if err := validation.ValidateStringLength(titleStr, "strategy title", 1, 200); err != nil {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-				return
-			}
-		}
-	}
-
-	if strategyType, exists := updates["type"]; exists {
-		if typeStr, ok := strategyType.(string); ok {
-			if !validation.IsValidStrategyType(typeStr) {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy type must be 'single' or 'periodic'"))
-				return
-			}
-		}
-	}
-
-	if amount, exists := updates["amount"]; exists {
-		if !validation.IsPositiveInteger(amount) {
-			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Strategy amount must be a positive integer"))
+	// Special business logic: if type is periodic, periodic_expr must be valid cron
+	if req.Type != nil && *req.Type == "periodic" && req.PeriodicExpr != nil {
+		if err := validation.IsValidCronExpr(*req.PeriodicExpr); err != nil {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid periodic expression: "+err.Error()))
 			return
 		}
 	}
 
-	if periodicExpr, exists := updates["periodic_expr"]; exists {
-		if exprStr, ok := periodicExpr.(string); ok {
-			if err := validation.IsValidCronExpr(exprStr); err != nil {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid periodic expression: "+err.Error()))
-				return
-			}
+	// Special business logic: validate condition expression if present
+	if req.Condition != nil && *req.Condition != "" {
+		parser := condition.NewParser(*req.Condition)
+		if _, err := parser.Parse(); err != nil {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid condition expression: "+err.Error()))
+			return
 		}
 	}
 
-	if model, exists := updates["model"]; exists {
-		if modelStr, ok := model.(string); ok && modelStr != "" {
-			if err := validation.ValidateStringLength(modelStr, "model", 1, 100); err != nil {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
-				return
-			}
-		}
+	// Prepare update map for service layer
+	updates := make(map[string]interface{})
+	if req.Name != nil {
+		updates["name"] = *req.Name
 	}
-
-	if conditionValue, exists := updates["condition"]; exists {
-		if conditionStr, ok := conditionValue.(string); ok && conditionStr != "" {
-			parser := condition.NewParser(conditionStr)
-			if _, err := parser.Parse(); err != nil {
-				c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid condition expression: "+err.Error()))
-				return
-			}
-		}
+	if req.Title != nil {
+		updates["title"] = *req.Title
+	}
+	if req.Type != nil {
+		updates["type"] = *req.Type
+	}
+	if req.Amount != nil {
+		updates["amount"] = *req.Amount
+	}
+	if req.PeriodicExpr != nil {
+		updates["periodic_expr"] = *req.PeriodicExpr
+	}
+	if req.Model != nil {
+		updates["model"] = *req.Model
+	}
+	if req.Condition != nil {
+		updates["condition"] = *req.Condition
+	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
 	}
 
 	if err := h.service.UpdateStrategy(id, updates); err != nil {
@@ -310,25 +260,20 @@ func (h *StrategyHandler) GetStrategyExecuteRecords(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Page     int `form:"page"`
-		PageSize int `form:"page_size"`
-	}
-
+	var req PaginationQuery
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid query parameters: "+err.Error()))
 		return
 	}
 
-	// Set default values
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.PageSize <= 0 {
-		req.PageSize = 10
+	// Validate and normalize pagination parameters
+	page, pageSize, err := validation.ValidatePageParams(req.Page, req.PageSize)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
 	}
 
-	records, total, err := h.service.GetStrategyExecuteRecords(id, req.Page, req.PageSize)
+	records, total, err := h.service.GetStrategyExecuteRecords(id, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.DatabaseErrorCode, "Failed to retrieve execution records: "+err.Error()))
 		return

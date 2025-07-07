@@ -62,9 +62,14 @@ func runAllTests(ctx *TestContext) []TestResult {
 
 		// Validation tests
 		{"Validation Utils Test", testValidationUtils},
+		{"Page Params Validation Test", testValidatePageParams},
 		{"API Validation Create Strategy Test", testAPIValidationCreateStrategy},
 		{"API Validation Transfer Out Test", testAPIValidationTransferOut},
 		{"API Validation User ID Test", testAPIValidationUserID},
+		{"Schema Validation Test", testSchemaValidation},
+		{"Transfer Request Validation Test", testTransferRequestValidation},
+		{"Custom Validators Test", testCustomValidators},
+		{"Error Messages Test", testErrorMessages},
 
 		// Condition Expression Tests
 		{"Condition Expression - True Condition Test", testTrueCondition},
