@@ -148,6 +148,20 @@ func (b *BelongToExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (
 	return user.Company == b.Org, nil
 }
 
+// TrueExpr always returns true
+type TrueExpr struct{}
+
+func (t *TrueExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	return true, nil
+}
+
+// FalseExpr always returns false
+type FalseExpr struct{}
+
+func (f *FalseExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	return false, nil
+}
+
 // RechargeExpr already recharged expression
 type RechargeExpr struct {
 	StrategyName string
@@ -234,7 +248,7 @@ func tokenize(condition string) []string {
 
 func (p *Parser) Parse() (Evaluator, error) {
 	if len(p.tokens) == 0 {
-		return &MatchUserExpr{UserID: ""}, nil // Empty condition returns true
+		return nil, fmt.Errorf("empty condition is not allowed, use true() for always-true condition")
 	}
 	return p.parseOr()
 }
@@ -441,6 +455,18 @@ func (p *Parser) buildFunction(funcName string, args []string) (Evaluator, error
 		}
 		return &BelongToExpr{Org: strings.Trim(args[0], "\"")}, nil
 
+	case "true":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("true expects 0 arguments, got %d", len(args))
+		}
+		return &TrueExpr{}, nil
+
+	case "false":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("false expects 0 arguments, got %d", len(args))
+		}
+		return &FalseExpr{}, nil
+
 	default:
 		return nil, fmt.Errorf("unknown function: %s", funcName)
 	}
@@ -456,7 +482,7 @@ func (p *Parser) currentToken() string {
 // CalcCondition calculate condition expression
 func CalcCondition(user *models.UserInfo, condition string, ctx *EvaluationContext) (bool, error) {
 	if condition == "" {
-		return true, nil // Empty condition means unconditional execution
+		return false, fmt.Errorf("empty condition is not allowed, use true() for always-true condition")
 	}
 
 	parser := NewParser(condition)

@@ -545,20 +545,28 @@ The system supports complex condition expressions for strategy targeting:
 
 ### Available Functions
 
-- `match-user(user)`: Match specific user
-- `register-before(timestamp)`: Registration before specified time
 - `access-after(timestamp)`: Last access after specified time
-- `github-star(project)`: Whether starred the specified project
-- `quota-le(model, amount)`: Quota balance less than or equal to amount
-- `is-vip(level)`: VIP level greater than or equal to specified level
-- `belong-to(org)`: Belongs to specified organization
 - `and(condition1, condition2)`: Logical AND
-- `or(condition1, condition2)`: Logical OR
+- `belong-to(org)`: Belongs to specified organization
+- `false()`: Always returns false (no users will match)
+- `github-star(project)`: Whether starred the specified project
+- `is-vip(level)`: VIP level greater than or equal to specified level
+- `match-user(user)`: Match specific user
 - `not(condition)`: Logical NOT
+- `or(condition1, condition2)`: Logical OR
+- `quota-le(model, amount)`: Quota balance less than or equal to amount
+- `register-before(timestamp)`: Registration before specified time
+- `true()`: Always returns true (all users will match)
 
 ### Examples
 
 ```
+# Always execute for all users (replaces empty condition)
+true()
+
+# Never execute for any users (useful for temporarily disabling)
+false()
+
 # Recharge users who starred the zgsm project
 github-star("zgsm")
 
@@ -567,6 +575,9 @@ and(is-vip(1), access-after("2024-05-01 00:00:00"))
 
 # Recharge early registered users or VIP users
 or(register-before("2023-01-01 00:00:00"), is-vip(2))
+
+# Complex condition with true/false functions
+or(and(is-vip(3), true()), and(false(), github-star("project")))
 ```
 
 ## Voucher System

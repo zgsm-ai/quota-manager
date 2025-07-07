@@ -122,7 +122,7 @@ func testStrategyWithExpiryDate(ctx *TestContext) TestResult {
 		Type:      "single",
 		Amount:    75,
 		Model:     "test-model",
-		Condition: "",
+		Condition: "true()",
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {

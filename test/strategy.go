@@ -27,7 +27,7 @@ func testSingleTypeStrategy(ctx *TestContext) TestResult {
 		Type:      "single",
 		Amount:    70,
 		Model:     "test-model",
-		Condition: "", // Empty condition, all users match
+		Condition: "true()", // Always true condition, all users match
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -80,7 +80,7 @@ func testPeriodicTypeStrategy(ctx *TestContext) TestResult {
 		Amount:       75,
 		Model:        "test-model",
 		PeriodicExpr: "0 * * * * *", // Execute every minute
-		Condition:    "",            // Empty condition, all users match
+		Condition:    "true()",      // Always true condition, all users match
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -138,7 +138,7 @@ func testStrategyStatusControl(ctx *TestContext) TestResult {
 		Type:      "single",
 		Amount:    80,
 		Model:     "test-model",
-		Condition: "", // Empty condition
+		Condition: "true()", // Always true condition
 	}
 	// First create strategy
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -235,7 +235,7 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 		Type:      "single",
 		Amount:    85,
 		Model:     "test-model",
-		Condition: "", // Empty condition
+		Condition: "true()", // Always true condition
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {

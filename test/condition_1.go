@@ -8,21 +8,21 @@ import (
 )
 
 // testEmptyCondition test empty condition expression
-func testEmptyCondition(ctx *TestContext) TestResult {
+func testTrueCondition(ctx *TestContext) TestResult {
 	// Create test user
 	user := createTestUser("test_user_empty", "Test User Empty", 0)
 	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
 	}
 
-	// Create empty condition strategy
+	// Create always-true condition strategy
 	strategy := &models.QuotaStrategy{
-		Name:      "empty-condition-test",
-		Title:     "Empty Condition Test",
+		Name:      "true-condition-test",
+		Title:     "True Condition Test",
 		Type:      "single",
 		Amount:    10,
 		Model:     "test-model",
-		Condition: "", // Empty condition
+		Condition: "true()", // Always true condition
 		Status:    true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -41,7 +41,7 @@ func testEmptyCondition(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected execution 1 time, actually executed %d times", executeCount)}
 	}
 
-	return TestResult{Passed: true, Message: "Empty condition strategy execution succeeded"}
+	return TestResult{Passed: true, Message: "True condition strategy execution succeeded"}
 }
 
 // testMatchUserCondition test match-user condition
@@ -383,4 +383,78 @@ func testIsVipCondition(ctx *TestContext) TestResult {
 	}
 
 	return TestResult{Passed: true, Message: "is-vip condition test succeeded"}
+}
+
+// testEmptyConditionProhibited test that empty condition is now prohibited
+func testEmptyConditionProhibited(ctx *TestContext) TestResult {
+	// Create test user
+	user := createTestUser("user_empty_prohibited", "Empty Prohibited User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Try to create strategy with empty condition - should fail
+	strategy := &models.QuotaStrategy{
+		Name:      "empty-condition-prohibited-test",
+		Title:     "Empty Condition Prohibited Test",
+		Type:      "single",
+		Amount:    10,
+		Model:     "test-model",
+		Condition: "", // Empty condition should be prohibited
+		Status:    true,
+	}
+	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
+	}
+
+	// Execute strategy - should fail due to empty condition
+	users := []models.UserInfo{*user}
+	ctx.StrategyService.ExecStrategy(strategy, users)
+
+	// Check that no execution happened due to empty condition error
+	var executeCount int64
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ?", strategy.ID, user.ID).Count(&executeCount)
+
+	if executeCount != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Empty condition should be prohibited, but strategy was executed %d times", executeCount)}
+	}
+
+	return TestResult{Passed: true, Message: "Empty condition prohibition test succeeded"}
+}
+
+// testFalseCondition test false() function
+func testFalseCondition(ctx *TestContext) TestResult {
+	// Create test user
+	user := createTestUser("user_false_condition", "False Condition User", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Create strategy with false() condition
+	strategy := &models.QuotaStrategy{
+		Name:      "false-condition-test",
+		Title:     "False Condition Test",
+		Type:      "single",
+		Amount:    10,
+		Model:     "test-model",
+		Condition: "false()", // Always false condition
+		Status:    true,
+	}
+	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create strategy failed: %v", err)}
+	}
+
+	// Execute strategy
+	users := []models.UserInfo{*user}
+	ctx.StrategyService.ExecStrategy(strategy, users)
+
+	// Check that no execution happened due to false condition
+	var executeCount int64
+	ctx.DB.Model(&models.QuotaExecute{}).Where("strategy_id = ? AND user_id = ? AND status = 'completed'", strategy.ID, user.ID).Count(&executeCount)
+
+	if executeCount != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("False condition should never execute, but strategy was executed %d times", executeCount)}
+	}
+
+	return TestResult{Passed: true, Message: "False condition test succeeded"}
 }

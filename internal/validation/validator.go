@@ -71,9 +71,9 @@ func ValidatePageParams(page, pageSize int) (int, int, error) {
 	if pageSize <= 0 {
 		pageSize = 10
 	}
-	if pageSize > 100 {
-		return 0, 0, fmt.Errorf("page size cannot exceed 100")
-	}
+	// if pageSize > 100 {
+	// 	return 0, 0, fmt.Errorf("page size cannot exceed 100")
+	// }
 	return page, pageSize, nil
 }
 

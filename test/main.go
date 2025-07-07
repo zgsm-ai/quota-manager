@@ -67,7 +67,9 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"API Validation User ID Test", testAPIValidationUserID},
 
 		// Condition Expression Tests
-		{"Condition Expression - Empty Condition Test", testEmptyCondition},
+		{"Condition Expression - True Condition Test", testTrueCondition},
+		{"Condition Expression - Empty Condition Test", testEmptyConditionProhibited},
+		{"Condition Expression - False Condition Test", testFalseCondition},
 		{"Condition Expression - Match User Test", testMatchUserCondition},
 		{"Condition Expression - Register Before Test", testRegisterBeforeCondition},
 		{"Condition Expression - Access After Test", testAccessAfterCondition},

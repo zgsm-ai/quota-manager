@@ -21,7 +21,7 @@ func testPeriodicStrategyExecution(ctx *TestContext) TestResult {
 		Amount:       25,
 		Model:        "test-model",
 		PeriodicExpr: "0 0 0 * * *", // Execute daily at midnight
-		Condition:    "",            // Empty condition, all users match
+		Condition:    "true()",      // Always true condition, all users match
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -105,7 +105,7 @@ func testPeriodicStrategyCronRegistration(ctx *TestContext) TestResult {
 		Amount:       30,
 		Model:        "test-model",
 		PeriodicExpr: "0 0 0 1 * *", // Execute on 1st day of every month at midnight
-		Condition:    "",
+		Condition:    "true()",
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -184,7 +184,7 @@ func testPeriodicCronExpressionValidation(ctx *TestContext) TestResult {
 			Amount:       10 + i*5,
 			Model:        "test-model",
 			PeriodicExpr: tc.expr,
-			Condition:    "",
+			Condition:    "true()",
 			Status:       true,
 		}
 
@@ -220,7 +220,7 @@ func testPeriodicStrategyCRUDOperations(ctx *TestContext) TestResult {
 		Amount:       100,
 		Model:        "test-model",
 		PeriodicExpr: "0 0 12 * * *", // Daily at noon
-		Condition:    "",
+		Condition:    "true()",
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -340,7 +340,7 @@ func testPeriodicStrategyFieldModifications(ctx *TestContext) TestResult {
 		Amount:       75,
 		Model:        "test-model",
 		PeriodicExpr: "0 0 9 * * 1", // Monday at 9 AM
-		Condition:    "",
+		Condition:    "true()",
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -450,7 +450,7 @@ func testPeriodicStrategyInvalidCronExpressions(ctx *TestContext) TestResult {
 			Amount:       50,
 			Model:        "test-model",
 			PeriodicExpr: expr,
-			Condition:    "",
+			Condition:    "true()",
 			Status:       true,
 		}
 
@@ -478,7 +478,7 @@ func testPeriodicStrategyConcurrentModifications(ctx *TestContext) TestResult {
 		Amount:       100,
 		Model:        "test-model",
 		PeriodicExpr: "0 0 12 * * *", // Daily at noon
-		Condition:    "",
+		Condition:    "true()",
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(strategy); err != nil {
@@ -548,7 +548,7 @@ func testPeriodicStrategyEdgeCases(ctx *TestContext) TestResult {
 		Amount:       0,
 		Model:        "test-model",
 		PeriodicExpr: "0 0 12 * * *",
-		Condition:    "",
+		Condition:    "true()",
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(zeroAmountStrategy); err != nil {
@@ -571,7 +571,7 @@ func testPeriodicStrategyEdgeCases(ctx *TestContext) TestResult {
 		Amount:       999999,
 		Model:        "test-model",
 		PeriodicExpr: "0 0 12 * * *",
-		Condition:    "",
+		Condition:    "true()",
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(largeAmountStrategy); err != nil {
@@ -593,7 +593,7 @@ func testPeriodicStrategyEdgeCases(ctx *TestContext) TestResult {
 		Amount:       25,
 		Model:        "test-model",
 		PeriodicExpr: "0 15,45 9,17 * * 1-5", // 9:15, 9:45, 17:15, 17:45 on weekdays
-		Condition:    "",
+		Condition:    "true()",
 		Status:       true,
 	}
 	if err := ctx.StrategyService.CreateStrategy(complexCronStrategy); err != nil {
