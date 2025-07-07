@@ -131,14 +131,17 @@ func (h *QuotaHandler) TransferOut(c *gin.Context) {
 		return
 	}
 
+	// Clean receiver_id to remove leading/trailing whitespace before generating voucher
+	cleanReceiverID := strings.TrimSpace(req.ReceiverID)
+
 	// Validate receiver_id is not empty
-	if err := validation.ValidateRequiredString(req.ReceiverID, "receiver_id"); err != nil {
+	if err := validation.ValidateRequiredString(cleanReceiverID, "receiver_id"); err != nil {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
 		return
 	}
 
 	// Validate receiver_id is valid UUID format
-	if !validation.IsValidUUID(req.ReceiverID) {
+	if !validation.IsValidUUID(cleanReceiverID) {
 		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
 			"receiver_id must be a valid UUID format"))
 		return

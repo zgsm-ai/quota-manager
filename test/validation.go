@@ -311,6 +311,20 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 			expectedError:  "receiver_id is required",
 		},
 		{
+			name: "receiver_id with whitespace",
+			transferData: map[string]interface{}{
+				"receiver_id": " 123e4567-e89b-12d3-a456-426614174000",
+				"quota_list": []map[string]interface{}{
+					{
+						"amount":      10,
+						"expiry_date": "2025-06-30T23:59:59Z",
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Transfer validation failed: quota not found for expiry date 2025-06-30 23:59:59 +0000 UTC",
+		},
+		{
 			name: "invalid receiver_id UUID format",
 			transferData: map[string]interface{}{
 				"receiver_id": "invalid-uuid",
@@ -345,7 +359,7 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "amount must be a positive integer",
+			expectedError:  "Quota item 1: amount must be a positive integer",
 		},
 		{
 			name: "negative amount in quota list",
@@ -359,7 +373,7 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "amount must be a positive integer",
+			expectedError:  "Quota item 1: amount must be a positive integer",
 		},
 	}
 
@@ -382,8 +396,8 @@ func testAPIValidationTransferOut(ctx *TestContext) TestResult {
 				return TestResult{Passed: false, Message: fmt.Sprintf("Test case '%s': failed to parse response: %v", tc.name, err)}
 			}
 
-			if message, ok := response["message"].(string); !ok || message == "" {
-				return TestResult{Passed: false, Message: fmt.Sprintf("Test case '%s': no error message in response", tc.name)}
+			if message, ok := response["message"].(string); !ok || message == "" || message != tc.expectedError {
+				return TestResult{Passed: false, Message: fmt.Sprintf("Test case '%s': error message '%s' is not expected", tc.name, message)}
 			}
 		}
 	}
