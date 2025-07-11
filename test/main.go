@@ -152,6 +152,26 @@ func runAllTests(ctx *TestContext) []TestResult {
 
 		// Sanity Tests
 		{"Concurrent Operations Test", testConcurrentOperations},
+
+		// Permission Management Tests
+		{"User Whitelist Management Test", testUserWhitelistManagement},
+		{"Department Whitelist Management Test", testDepartmentWhitelistManagement},
+		{"Permission Priority and Inheritance Test", testPermissionPriorityAndInheritance},
+		{"Aigateway Permission Sync Test", testAigatewayPermissionSync},
+		{"Sync Without Whitelist Test", testSyncWithoutWhitelist},
+		{"User Whitelist Distribution Test", testUserWhitelistDistribution},
+		{"Department Whitelist Distribution Test", testDepartmentWhitelistDistribution},
+		{"Permission Hierarchy Level 1 Test", testPermissionHierarchyLevel1},
+		{"Permission Hierarchy Level 2 Test", testPermissionHierarchyLevel2},
+		{"Permission Hierarchy Level 3 Test", testPermissionHierarchyLevel3},
+		{"Permission Hierarchy Level 5 Test", testPermissionHierarchyLevel5},
+		{"User Overrides Department Test", testUserOverridesDepartment},
+		{"Department Whitelist Change Test", testDepartmentWhitelistChange},
+		{"User Whitelist Change Test", testUserWhitelistChange},
+		{"User Department Change Test", testUserDepartmentChange},
+		{"User Addition and Removal Test", testUserAdditionAndRemoval},
+		{"Non-existent User and Department Test", testNonExistentUserAndDepartment},
+		{"Employee Data Integrity Test", testEmployeeDataIntegrity},
 	}
 
 	for _, tc := range testCases {

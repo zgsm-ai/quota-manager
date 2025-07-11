@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,12 +15,21 @@ type SetStarCall struct {
 	StarValue bool
 }
 
+// PermissionCall represents a permission management call for testing
+type PermissionCall struct {
+	EmployeeNumber string
+	Models         []string
+	Operation      string // "set", "query", "delete"
+}
+
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
-	data         map[string]int  // Total quota
-	usedData     map[string]int  // Used quota
-	starData     map[string]bool // GitHub star status
-	setStarCalls []SetStarCall   // Track SetGithubStar calls
+	data            map[string]int      // Total quota
+	usedData        map[string]int      // Used quota
+	starData        map[string]bool     // GitHub star status
+	permissionData  map[string][]string // User permissions (employee_number -> models)
+	setStarCalls    []SetStarCall       // Track SetGithubStar calls
+	permissionCalls []PermissionCall    // Track permission management calls
 }
 
 func (m *MockQuotaStore) GetQuota(consumer string) int {
@@ -70,11 +80,60 @@ func (m *MockQuotaStore) ClearSetStarCalls() {
 	m.setStarCalls = []SetStarCall{}
 }
 
+// Permission management methods
+func (m *MockQuotaStore) SetPermission(employeeNumber string, models []string) {
+	m.permissionData[employeeNumber] = models
+	m.permissionCalls = append(m.permissionCalls, PermissionCall{
+		EmployeeNumber: employeeNumber,
+		Models:         models,
+		Operation:      "set",
+	})
+}
+
+func (m *MockQuotaStore) GetPermission(employeeNumber string) []string {
+	m.permissionCalls = append(m.permissionCalls, PermissionCall{
+		EmployeeNumber: employeeNumber,
+		Models:         nil,
+		Operation:      "query",
+	})
+	if models, exists := m.permissionData[employeeNumber]; exists {
+		return models
+	}
+	return []string{}
+}
+
+func (m *MockQuotaStore) DeletePermission(employeeNumber string) {
+	delete(m.permissionData, employeeNumber)
+	m.permissionCalls = append(m.permissionCalls, PermissionCall{
+		EmployeeNumber: employeeNumber,
+		Models:         nil,
+		Operation:      "delete",
+	})
+}
+
+func (m *MockQuotaStore) GetPermissionCalls() []PermissionCall {
+	return m.permissionCalls
+}
+
+func (m *MockQuotaStore) ClearPermissionCalls() {
+	m.permissionCalls = []PermissionCall{}
+}
+
+func (m *MockQuotaStore) GetAllPermissions() map[string][]string {
+	return m.permissionData
+}
+
+func (m *MockQuotaStore) ClearAllPermissions() {
+	m.permissionData = make(map[string][]string)
+}
+
 var mockStore = &MockQuotaStore{
-	data:         make(map[string]int),
-	usedData:     make(map[string]int),
-	starData:     make(map[string]bool),
-	setStarCalls: []SetStarCall{},
+	data:            make(map[string]int),
+	usedData:        make(map[string]int),
+	starData:        make(map[string]bool),
+	permissionData:  make(map[string][]string),
+	setStarCalls:    []SetStarCall{},
+	permissionCalls: []PermissionCall{},
 }
 
 // createMockServer create mock server
@@ -314,5 +373,147 @@ func createMockServer(shouldFail bool) *httptest.Server {
 		}
 	}
 
+	// Add Higress permission management API endpoints
+	router.POST("/model-permission/set", func(c *gin.Context) {
+		// Skip auth check for this endpoint as we're testing the permission management
+		if shouldFail {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		employeeNumber := c.PostForm("employee_number")
+		modelsParam := c.PostForm("models")
+
+		if employeeNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    "ai-quota.invalid_params",
+				"message": "employee_number is required",
+				"success": false,
+			})
+			return
+		}
+
+		// Parse models JSON
+		var models []string
+		if modelsParam != "" {
+			if err := json.Unmarshal([]byte(modelsParam), &models); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "ai-quota.invalid_params",
+					"message": "invalid models format",
+					"success": false,
+				})
+				return
+			}
+		}
+
+		// Store permission in mock store
+		mockStore.SetPermission(employeeNumber, models)
+
+		c.JSON(http.StatusOK, gin.H{
+			"code":    "ai-quota.setpermission",
+			"message": "set user permission successful",
+			"success": true,
+			"data": gin.H{
+				"employee_number": employeeNumber,
+				"models":          models,
+			},
+		})
+	})
+
+	router.GET("/model-permission/query", func(c *gin.Context) {
+		// Skip auth check for this endpoint as we're testing the permission management
+		if shouldFail {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		employeeNumber := c.Query("employee_number")
+		if employeeNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    "ai-quota.invalid_params",
+				"message": "employee_number is required",
+				"success": false,
+			})
+			return
+		}
+
+		// Get permission from mock store
+		models := mockStore.GetPermission(employeeNumber)
+
+		c.JSON(http.StatusOK, gin.H{
+			"code":    "ai-quota.querypermission",
+			"message": "query user permission successful",
+			"success": true,
+			"data": gin.H{
+				"employee_number": employeeNumber,
+				"models":          models,
+			},
+		})
+	})
+
+	router.DELETE("/model-permission/delete", func(c *gin.Context) {
+		// Skip auth check for this endpoint as we're testing the permission management
+		if shouldFail {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		employeeNumber := c.Query("employee_number")
+		if employeeNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    "ai-quota.invalid_params",
+				"message": "employee_number is required",
+				"success": false,
+			})
+			return
+		}
+
+		// Delete permission from mock store
+		mockStore.DeletePermission(employeeNumber)
+
+		c.JSON(http.StatusOK, gin.H{
+			"code":    "ai-quota.deletepermission",
+			"message": "delete user permission successful",
+			"success": true,
+			"data": gin.H{
+				"employee_number": employeeNumber,
+			},
+		})
+	})
+
+	// Add HR API endpoints for employee sync testing
+	hrAPI := router.Group("/api/hr")
+	{
+		// HR Employee API
+		hrAPI.GET("/employees", func(c *gin.Context) {
+			if shouldFail {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"data":    mockHREmployees,
+			})
+		})
+
+		// HR Department API
+		hrAPI.GET("/departments", func(c *gin.Context) {
+			if shouldFail {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"data":    mockHRDepartments,
+			})
+		})
+	}
+
 	return httptest.NewServer(router)
 }
+
+// Mock HR data for testing
+var mockHREmployees []map[string]interface{}
+var mockHRDepartments []map[string]interface{}

@@ -299,3 +299,55 @@ func (c *Client) SetGithubStar(userID string, starValue bool) error {
 
 	return nil
 }
+
+// SetUserPermission sets user permission in Higress
+func (c *Client) SetUserPermission(employeeNumber string, models []string) error {
+	// Prepare request data
+	data := url.Values{}
+	data.Set("employee_number", employeeNumber)
+
+	// Convert models to JSON string
+	modelsJSON, err := json.Marshal(models)
+	if err != nil {
+		return fmt.Errorf("failed to marshal models: %w", err)
+	}
+	data.Set("models", string(modelsJSON))
+
+	// Create request
+	requestURL := fmt.Sprintf("%s/model-permission/set", c.BaseURL)
+	req, err := http.NewRequest("POST", requestURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(c.AuthHeader, c.AuthValue)
+
+	// Make request
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Higress returned status: %d", resp.StatusCode)
+	}
+
+	// Parse response to check for success
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if success, ok := result["success"].(bool); !ok || !success {
+		if message, ok := result["message"].(string); ok {
+			return fmt.Errorf("Higress error: %s", message)
+		}
+		return fmt.Errorf("Higress operation failed")
+	}
+
+	return nil
+}

@@ -35,3 +35,10 @@ voucher:
 
 log:
   level: "warn"
+
+employee_sync:
+  enabled: true
+  hr_url: "http://localhost:8099/api/hr/employees"
+  hr_key: "test-hr-key"
+  dept_url: "http://localhost:8099/api/hr/departments"
+  dept_key: "test-dept-key"

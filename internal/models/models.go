@@ -193,6 +193,118 @@ func (VoucherRedemption) TableName() string {
 	return "voucher_redemption"
 }
 
+// EmployeeDepartment represents the employee department mapping
+type EmployeeDepartment struct {
+	ID                 int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	EmployeeNumber     string    `gorm:"uniqueIndex;not null;size:100" json:"employee_number"`
+	Username           string    `gorm:"not null;size:100" json:"username"`
+	DeptFullLevelNames string    `gorm:"type:text;not null" json:"dept_full_level_names"` // Store as comma-separated string
+	CreateTime         time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime         time.Time `gorm:"autoUpdateTime" json:"update_time"`
+}
+
+// ModelWhitelist represents the model whitelist for users and departments
+type ModelWhitelist struct {
+	ID               int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	TargetType       string    `gorm:"not null;size:20;index" json:"target_type"`        // 'user' or 'department'
+	TargetIdentifier string    `gorm:"not null;size:500;index" json:"target_identifier"` // employee_number for user, department name for department
+	AllowedModels    string    `gorm:"type:text;not null" json:"allowed_models"`         // Store as comma-separated string
+	CreateTime       time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime       time.Time `gorm:"autoUpdateTime" json:"update_time"`
+}
+
+// EffectivePermission represents the effective permissions for each employee
+type EffectivePermission struct {
+	ID              int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	EmployeeNumber  string    `gorm:"uniqueIndex;not null;size:100" json:"employee_number"`
+	EffectiveModels string    `gorm:"type:text;not null" json:"effective_models"` // Store as comma-separated string
+	WhitelistID     *int      `gorm:"index" json:"whitelist_id"`
+	CreateTime      time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime      time.Time `gorm:"autoUpdateTime" json:"update_time"`
+}
+
+// PermissionAudit represents the audit log for permission operations
+type PermissionAudit struct {
+	ID               int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	Operation        string    `gorm:"not null;size:50;index" json:"operation"`
+	TargetType       string    `gorm:"size:20;index" json:"target_type"`
+	TargetIdentifier string    `gorm:"size:500;index" json:"target_identifier"`
+	Details          string    `gorm:"type:text" json:"details"`
+	CreateTime       time.Time `gorm:"autoCreateTime;index" json:"create_time"`
+}
+
+// GetDeptFullLevelNamesAsSlice returns the department full level names as a slice
+func (e *EmployeeDepartment) GetDeptFullLevelNamesAsSlice() []string {
+	if e.DeptFullLevelNames == "" {
+		return []string{}
+	}
+	return strings.Split(e.DeptFullLevelNames, ",")
+}
+
+// SetDeptFullLevelNamesFromSlice sets the department full level names from a slice
+func (e *EmployeeDepartment) SetDeptFullLevelNamesFromSlice(names []string) {
+	e.DeptFullLevelNames = strings.Join(names, ",")
+}
+
+// TableName sets the table name for EmployeeDepartment
+func (EmployeeDepartment) TableName() string {
+	return "employee_department"
+}
+
+// GetAllowedModelsAsSlice returns the allowed models as a slice
+func (m *ModelWhitelist) GetAllowedModelsAsSlice() []string {
+	if m.AllowedModels == "" {
+		return []string{}
+	}
+	return strings.Split(m.AllowedModels, ",")
+}
+
+// SetAllowedModelsFromSlice sets the allowed models from a slice
+func (m *ModelWhitelist) SetAllowedModelsFromSlice(models []string) {
+	m.AllowedModels = strings.Join(models, ",")
+}
+
+// TableName sets the table name for ModelWhitelist
+func (ModelWhitelist) TableName() string {
+	return "model_whitelist"
+}
+
+// GetEffectiveModelsAsSlice returns the effective models as a slice
+func (e *EffectivePermission) GetEffectiveModelsAsSlice() []string {
+	if e.EffectiveModels == "" {
+		return []string{}
+	}
+	return strings.Split(e.EffectiveModels, ",")
+}
+
+// SetEffectiveModelsFromSlice sets the effective models from a slice
+func (e *EffectivePermission) SetEffectiveModelsFromSlice(models []string) {
+	e.EffectiveModels = strings.Join(models, ",")
+}
+
+// TableName sets the table name for EffectivePermission
+func (EffectivePermission) TableName() string {
+	return "effective_permissions"
+}
+
+// TableName sets the table name for PermissionAudit
+func (PermissionAudit) TableName() string {
+	return "permission_audit"
+}
+
+// Constants for target types
+const (
+	TargetTypeUser       = "user"
+	TargetTypeDepartment = "department"
+)
+
+// Constants for permission operations
+const (
+	OperationEmployeeSync     = "employee_sync"
+	OperationWhitelistSet     = "whitelist_set"
+	OperationPermissionUpdate = "permission_updated"
+)
+
 // IsEnabled checks if the strategy is enabled
 func (s *QuotaStrategy) IsEnabled() bool {
 	return s.Status

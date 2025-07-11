@@ -120,18 +120,30 @@ func main() {
 	voucherService := services.NewVoucherService(cfg.Voucher.SigningKey)
 	quotaService := services.NewQuotaService(db, &cfg.AiGateway, gateway, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService)
-	schedulerService := services.NewSchedulerService(quotaService, strategyService, cfg)
 
-	// Start scheduler service (includes strategy scan)
+	// Initialize permission management services
+	permissionService := services.NewPermissionService(db, &cfg.AiGateway, gateway)
+	employeeSyncService := services.NewEmployeeSyncService(db, &cfg.EmployeeSync, permissionService)
+
+	schedulerService := services.NewSchedulerService(quotaService, strategyService, employeeSyncService, cfg)
+
+	// Start scheduler service (includes strategy scan and employee sync)
 	if err := schedulerService.Start(); err != nil {
 		logger.Error("Failed to start scheduler service", zap.Error(err))
 		os.Exit(1)
 	}
 	defer schedulerService.Stop()
 
+	// Trigger initial employee sync if employee_department table is empty
+	if err := employeeSyncService.TriggerInitialSyncIfNeeded(); err != nil {
+		logger.Error("Failed to trigger initial employee sync", zap.Error(err))
+		// Log error but don't exit, let the service continue running
+	}
+
 	// Initialize HTTP handlers
 	strategyHandler := handlers.NewStrategyHandler(strategyService)
 	quotaHandler := handlers.NewQuotaHandler(quotaService, &cfg.Server)
+	permissionHandler := handlers.NewPermissionHandler(permissionService, employeeSyncService)
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)
@@ -195,6 +207,15 @@ func main() {
 
 			// Quota management API
 			handlers.RegisterQuotaRoutes(v1, quotaHandler)
+
+			// Permission management API
+			permissions := v1.Group("/permissions")
+			{
+				permissions.POST("/user", permissionHandler.SetUserWhitelist)
+				permissions.POST("/department", permissionHandler.SetDepartmentWhitelist)
+				permissions.GET("/effective", permissionHandler.GetEffectivePermissions)
+				permissions.POST("/sync", permissionHandler.TriggerEmployeeSync)
+			}
 		}
 	}
 

@@ -7,13 +7,14 @@ import (
 )
 
 type Config struct {
-	Database     DatabaseConfig  `mapstructure:"database"`
-	AuthDatabase DatabaseConfig  `mapstructure:"auth_database"`
-	AiGateway    AiGatewayConfig `mapstructure:"aigateway"`
-	Server       ServerConfig    `mapstructure:"server"`
-	Scheduler    SchedulerConfig `mapstructure:"scheduler"`
-	Voucher      VoucherConfig   `mapstructure:"voucher"`
-	Log          LogConfig       `mapstructure:"log"`
+	Database     DatabaseConfig     `mapstructure:"database"`
+	AuthDatabase DatabaseConfig     `mapstructure:"auth_database"`
+	AiGateway    AiGatewayConfig    `mapstructure:"aigateway"`
+	Server       ServerConfig       `mapstructure:"server"`
+	Scheduler    SchedulerConfig    `mapstructure:"scheduler"`
+	Voucher      VoucherConfig      `mapstructure:"voucher"`
+	Log          LogConfig          `mapstructure:"log"`
+	EmployeeSync EmployeeSyncConfig `mapstructure:"employee_sync"`
 }
 
 type DatabaseConfig struct {
@@ -50,6 +51,14 @@ type VoucherConfig struct {
 
 type LogConfig struct {
 	Level string `mapstructure:"level"`
+}
+
+type EmployeeSyncConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	HrURL   string `mapstructure:"hr_url"`
+	HrKey   string `mapstructure:"hr_key"`
+	DeptURL string `mapstructure:"dept_url"`
+	DeptKey string `mapstructure:"dept_key"`
 }
 
 func (d *DatabaseConfig) DSN() string {

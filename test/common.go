@@ -18,11 +18,19 @@ import (
 	"github.com/google/uuid"
 )
 
-// testClearData test clear data
+// testClearData test clear data - unified data clearing for all test modules
 func testClearData(ctx *TestContext) TestResult {
 	// Clear quota-related tables from main database
 	quotaTables := []string{"voucher_redemption", "quota_audit", "quota", "quota_execute", "quota_strategy"}
 	for _, table := range quotaTables {
+		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
+		}
+	}
+
+	// Clear permission-related tables from main database
+	permissionTables := []string{"permission_audit", "effective_permissions", "model_whitelist", "employee_department"}
+	for _, table := range permissionTables {
 		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
 		}
@@ -38,8 +46,26 @@ func testClearData(ctx *TestContext) TestResult {
 	mockStore.usedData = make(map[string]int)
 	mockStore.starData = make(map[string]bool)
 	mockStore.setStarCalls = []SetStarCall{}
+	mockStore.ClearAllPermissions()
+	mockStore.ClearPermissionCalls()
 
-	return TestResult{Passed: true, Message: "Data cleared successfully"}
+	return TestResult{Passed: true, Message: "All data cleared successfully (quota + permission + auth)"}
+}
+
+// clearPermissionData clears permission-related data for test isolation
+func clearPermissionData(ctx *TestContext) error {
+	// Clear permission-related tables in the correct order (to avoid foreign key constraints)
+	permissionTables := []string{"permission_audit", "effective_permissions", "model_whitelist", "employee_department"}
+	for _, table := range permissionTables {
+		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
+			return fmt.Errorf("failed to clear table %s: %w", table, err)
+		}
+	}
+
+	// Clear mock permission calls
+	mockStore.ClearPermissionCalls()
+
+	return nil
 }
 
 // printTestResults print test results
@@ -79,6 +105,19 @@ func setupTestEnvironment() (*TestContext, error) {
 	// Auto migrate - ensure all tables exist in test environment
 	if err := db.DB.AutoMigrate(&models.QuotaStrategy{}, &models.QuotaExecute{}, &models.Quota{}, &models.QuotaAudit{}, &models.VoucherRedemption{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate main tables: %w", err)
+	}
+
+	// Drop and recreate permission tables to avoid type migration issues
+	// permissionTables := []string{"permission_audit", "effective_permissions", "model_whitelist", "employee_department"}
+	// for _, table := range permissionTables {
+	// 	if err := db.DB.Exec("DROP TABLE IF EXISTS " + table + " CASCADE").Error; err != nil {
+	// 		return nil, fmt.Errorf("failed to drop table %s: %w", table, err)
+	// 	}
+	// }
+
+	// Auto migrate permission tables (will create them fresh)
+	if err := db.DB.AutoMigrate(&models.EmployeeDepartment{}, &models.ModelWhitelist{}, &models.EffectivePermission{}, &models.PermissionAudit{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate permission tables: %w", err)
 	}
 
 	// Auto migrate auth tables

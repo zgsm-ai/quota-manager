@@ -10,19 +10,21 @@ import (
 
 // SchedulerService handles scheduled tasks
 type SchedulerService struct {
-	quotaService    *QuotaService
-	strategyService *StrategyService
-	config          *config.Config
-	cron            *cron.Cron
+	quotaService        *QuotaService
+	strategyService     *StrategyService
+	employeeSyncService *EmployeeSyncService
+	config              *config.Config
+	cron                *cron.Cron
 }
 
 // NewSchedulerService creates a new scheduler service
-func NewSchedulerService(quotaService *QuotaService, strategyService *StrategyService, cfg *config.Config) *SchedulerService {
+func NewSchedulerService(quotaService *QuotaService, strategyService *StrategyService, employeeSyncService *EmployeeSyncService, cfg *config.Config) *SchedulerService {
 	return &SchedulerService{
-		quotaService:    quotaService,
-		strategyService: strategyService,
-		config:          cfg,
-		cron:            cron.New(cron.WithSeconds()),
+		quotaService:        quotaService,
+		strategyService:     strategyService,
+		employeeSyncService: employeeSyncService,
+		config:              cfg,
+		cron:                cron.New(cron.WithSeconds()),
 	}
 }
 
@@ -31,6 +33,12 @@ func (s *SchedulerService) Start() error {
 	// Start the strategy service cron for periodic strategies
 	if err := s.strategyService.StartCron(); err != nil {
 		logger.Error("Failed to start strategy cron", zap.Error(err))
+		return err
+	}
+
+	// Start the employee sync service cron
+	if err := s.employeeSyncService.StartCron(); err != nil {
+		logger.Error("Failed to start employee sync cron", zap.Error(err))
 		return err
 	}
 
@@ -80,6 +88,7 @@ func (s *SchedulerService) Start() error {
 func (s *SchedulerService) Stop() {
 	s.cron.Stop()
 	s.strategyService.StopCron()
+	s.employeeSyncService.StopCron()
 	logger.Info("Scheduler service stopped")
 }
 

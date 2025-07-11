@@ -12,6 +12,13 @@ A comprehensive quota management system built with Go and Gin framework, featuri
 - **Quota Expiry Management**: Time-based quota management with automatic expiry handling
 - **JWT Authentication**: Token-based user authentication and authorization
 
+### Model Permission Management (New)
+- **Employee Synchronization**: Automated HR system integration for employee and department data
+- **Permission Management**: Fine-grained model access control for users and departments
+- **Department Hierarchy**: Support for complex organizational structures with permission inheritance
+- **Real-time Updates**: Automatic permission synchronization with AI Gateway
+- **Audit Trail**: Comprehensive permission operation tracking
+
 ### Advanced Quota Operations
 - **Quota Transfer**: Secure quota transfer between users with voucher codes
 - **Audit Trail**: Comprehensive quota operation tracking
@@ -123,6 +130,40 @@ quota-manager/
 - `password`: Password
 - `devices`: Devices (JSON)
 
+#### Permission Management Tables (New)
+
+**Employee Department Table (employee_department)**
+- `id`: Record ID
+- `employee_number`: Employee number (unique)
+- `username`: Employee username
+- `dept_full_level_names`: Department hierarchy path (array)
+- `create_time`: Creation time
+- `update_time`: Update time
+
+**Model Whitelist Table (model_whitelist)**
+- `id`: Whitelist ID
+- `target_type`: Target type ('user' or 'department')
+- `target_identifier`: Employee number for users, department name for departments
+- `allowed_models`: List of allowed models (array)
+- `create_time`: Creation time
+- `update_time`: Update time
+
+**Effective Permissions Table (effective_permissions)**
+- `id`: Permission ID
+- `employee_number`: Employee number (unique)
+- `effective_models`: Currently effective model list (array)
+- `whitelist_id`: Reference to source whitelist entry
+- `create_time`: Creation time
+- `update_time`: Update time
+
+**Permission Audit Table (permission_audit)**
+- `id`: Audit ID
+- `operation`: Operation type ('employee_sync', 'whitelist_set', 'permission_updated')
+- `target_type`: Target type ('user' or 'department')
+- `target_identifier`: Target identifier
+- `details`: Operation details (JSON)
+- `create_time`: Creation time
+
 ## Authentication System
 
 ### JWT Token Authentication
@@ -143,20 +184,37 @@ The system extracts user information from JWT tokens without signature verificat
 ```yaml
 server:
   port: 8099
-  mode: "release"  # gin模式: debug, release, test
+  mode: "release"  # gin mode: debug, release, test
   token_header: "authorization"
-  timezone: "Asia/Shanghai"  # 时区设置，默认为北京时间 (UTC+8)
+  timezone: "Asia/Shanghai"  # timezone setting, defaults to Beijing Time (UTC+8)
+
+# Employee Synchronization Configuration (New)
+employee_sync:
+  enabled: true
+  hr_url: "http://hr-system/api/employees"
+  hr_key: "your-hr-api-key"
+  dept_url: "http://hr-system/api/departments"
+  dept_key: "your-dept-api-key"
 ```
 
-**时区配置说明：**
-- `timezone`: 应用程序使用的时区，支持 IANA 时区名称
-- 常用时区：
-  - `Asia/Shanghai`: 北京时间 (UTC+8)
-  - `UTC`: 协调世界时
-  - `America/New_York`: 纽约时间
-  - `Europe/London`: 伦敦时间
-- 如果不设置，默认使用 `Asia/Shanghai`
-- 修改时区后需要重启应用生效
+**Employee Sync Configuration:**
+- `enabled`: Enable/disable employee synchronization
+- `hr_url`: HR system API endpoint for employee data
+- `hr_key`: Authentication key for HR employee API
+- `dept_url`: HR system API endpoint for department data
+- `dept_key`: Authentication key for HR department API
+- Synchronization runs daily at 1:00 AM automatically
+- Manual sync can be triggered via API endpoint
+
+**Timezone Configuration:**
+- `timezone`: Application timezone, supports IANA timezone names
+- Common timezones:
+  - `Asia/Shanghai`: Beijing Time (UTC+8)
+  - `UTC`: Coordinated Universal Time
+  - `America/New_York`: New York Time
+  - `Europe/London`: London Time
+- If not set, defaults to `Asia/Shanghai`
+- Application restart required after timezone modification
 
 ## API Documentation
 
@@ -221,6 +279,40 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   }
 }
 ```
+
+### Permission Management APIs (New)
+
+#### Set User Whitelist
+- **POST** `/quota-manager/api/v1/permissions/user`
+- **Request Body**:
+```json
+{
+  "employee_number": "85054712",
+  "models": ["gpt-4", "claude-3-opus"]
+}
+```
+
+#### Set Department Whitelist
+- **POST** `/quota-manager/api/v1/permissions/department`
+- **Request Body**:
+```json
+{
+  "department_name": "R&D_Center",
+  "models": ["gpt-4", "deepseek-v3"]
+}
+```
+
+#### Get Effective Permissions
+- **GET** `/quota-manager/api/v1/permissions/effective?target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/permissions/effective?target_type=department&target_identifier=R&D_Center`
+
+#### Trigger Employee Sync
+- **POST** `/quota-manager/api/v1/permissions/sync`
+
+**Permission Priority (High to Low):**
+1. User-specific whitelist
+2. Most specific department whitelist (child dept > parent dept)
+3. No permissions (empty list)
 
 #### Get Strategy List
 - **GET** `/quota-manager/api/v1/strategies`
@@ -693,9 +785,9 @@ aigateway:
 ```yaml
 server:
   port: 8099
-  mode: "release"  # gin模式: debug, release, test
+  mode: "release"  # gin mode: debug, release, test
   token_header: "authorization"
-  timezone: "Asia/Shanghai"  # 时区设置，默认为北京时间 (UTC+8)
+  timezone: "Asia/Shanghai"  # timezone setting, defaults to Beijing Time (UTC+8)
 
 database:
   host: "localhost"
