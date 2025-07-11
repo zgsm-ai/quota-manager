@@ -316,34 +316,20 @@ func testUserDepartmentChange(ctx *TestContext) TestResult {
 	// Create employee sync service
 	employeeSyncConfig := &config.EmployeeSyncConfig{
 		Enabled: true,
-		HrURL:   ctx.MockServer.URL + "/api/hr/employees",
-		HrKey:   "test-key",
-		DeptURL: ctx.MockServer.URL + "/api/hr/departments",
-		DeptKey: "test-key",
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
 
-	// Setup HR department hierarchy data for all scenarios
-	deptHierarchy := []map[string]interface{}{
-		{"deptName": "Tech_Group", "parentDeptName": "", "level": 1},
-		{"deptName": "R&D_Center", "parentDeptName": "Tech_Group", "level": 2},
-		// Architecture Department (source dept 1)
-		{"deptName": "Architecture_Dept", "parentDeptName": "R&D_Center", "level": 3},
-		{"deptName": "Architecture_Dept_Team1", "parentDeptName": "Architecture_Dept", "level": 4},
-		// Quality Assurance Department (target dept 1)
-		{"deptName": "QA_Dept", "parentDeptName": "R&D_Center", "level": 3},
-		{"deptName": "QA_Dept_Team1", "parentDeptName": "QA_Dept", "level": 4},
-		// Testing Department (target dept 2)
-		{"deptName": "Testing_Dept", "parentDeptName": "R&D_Center", "level": 3},
-		{"deptName": "Testing_Dept_Team1", "parentDeptName": "Testing_Dept", "level": 4},
-		// Operations Department (no whitelist dept)
-		{"deptName": "Operations_Dept", "parentDeptName": "R&D_Center", "level": 3},
-		{"deptName": "Operations_Dept_Team1", "parentDeptName": "Operations_Dept", "level": 4},
-	}
+	// Setup HR department hierarchy data for all scenarios using new structure
+	ClearMockData()                   // Clear any existing data first
+	SetupDefaultDepartmentHierarchy() // This sets up the basic hierarchy
 
-	for _, dept := range deptHierarchy {
-		mockHRDepartments = append(mockHRDepartments, dept)
-	}
+	// Add additional departments needed for this test
+	AddMockDepartment(11, 2, "Architecture_Dept", 3, 1)        // Third level - Architecture
+	AddMockDepartment(12, 11, "Architecture_Dept_Team1", 4, 1) // Fourth level - Architecture Team
 
 	// Define test scenarios
 	scenarios := []struct {
@@ -422,7 +408,7 @@ func testUserDepartmentChange(ctx *TestContext) TestResult {
 		result := testUserDepartmentChangeScenario(ctx, permissionService, employeeSyncService, scenario)
 		if !result.Passed {
 			// Clean up HR data before returning
-			mockHRDepartments = mockHRDepartments[:len(mockHRDepartments)-len(deptHierarchy)]
+			ClearMockData()
 			return TestResult{
 				Passed:  false,
 				Message: fmt.Sprintf("Failed at %s: %s", scenario.name, result.Message),
@@ -433,7 +419,7 @@ func testUserDepartmentChange(ctx *TestContext) TestResult {
 	}
 
 	// Clean up HR data
-	mockHRDepartments = mockHRDepartments[:len(mockHRDepartments)-len(deptHierarchy)]
+	ClearMockData()
 
 	return TestResult{Passed: true, Message: "User department change test with all 5 whitelist scenarios succeeded"}
 }

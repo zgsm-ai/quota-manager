@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -481,10 +483,51 @@ func createMockServer(shouldFail bool) *httptest.Server {
 		})
 	})
 
-	// Add HR API endpoints for employee sync testing
+	// Add HR API endpoints for employee sync testing (encrypted responses)
+	// Employee API endpoint for testing
+	router.GET("/api/test/employees", func(c *gin.Context) {
+		if shouldFail {
+			c.String(http.StatusInternalServerError, "Internal server error")
+			return
+		}
+
+		// Use test encryption key for employees
+		empKey := "TEST_EMP_KEY_32_BYTES_1234567890"
+
+		xmlResponse, err := createEncryptedXMLResponse(mockHREmployees, empKey)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Encryption failed")
+			return
+		}
+
+		c.Header("Content-Type", "application/xml; charset=utf-8")
+		c.String(http.StatusOK, xmlResponse)
+	})
+
+	// Department API endpoint for testing
+	router.GET("/api/test/departments", func(c *gin.Context) {
+		if shouldFail {
+			c.String(http.StatusInternalServerError, "Internal server error")
+			return
+		}
+
+		// Use test encryption key for departments
+		deptKey := "TEST_DEPT_KEY_32_BYTES_123456789"
+
+		xmlResponse, err := createEncryptedXMLResponse(mockHRDepartments, deptKey)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Encryption failed")
+			return
+		}
+
+		c.Header("Content-Type", "application/xml; charset=utf-8")
+		c.String(http.StatusOK, xmlResponse)
+	})
+
+	// Keep the old unencrypted endpoints for backward compatibility during testing
 	hrAPI := router.Group("/api/hr")
 	{
-		// HR Employee API
+		// HR Employee API (unencrypted for tests that still need it)
 		hrAPI.GET("/employees", func(c *gin.Context) {
 			if shouldFail {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -497,7 +540,7 @@ func createMockServer(shouldFail bool) *httptest.Server {
 			})
 		})
 
-		// HR Department API
+		// HR Department API (unencrypted for tests that still need it)
 		hrAPI.GET("/departments", func(c *gin.Context) {
 			if shouldFail {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -517,3 +560,128 @@ func createMockServer(shouldFail bool) *httptest.Server {
 // Mock HR data for testing
 var mockHREmployees []map[string]interface{}
 var mockHRDepartments []map[string]interface{}
+
+// Helper functions for converting between old and new data structures
+
+// CreateMockEmployee creates employee data with new structure fields
+func CreateMockEmployee(employeeNumber, username, email, mobile string, deptID int) map[string]interface{} {
+	return map[string]interface{}{
+		"badge": employeeNumber,            // New field name for employeeNumber
+		"Name":  username,                  // New field name for username
+		"DepID": fmt.Sprintf("%d", deptID), // Department ID as string
+		"email": email,
+		"TEL":   mobile,
+	}
+}
+
+// CreateMockDepartment creates department data with new structure fields
+func CreateMockDepartment(id, adminId int, name string, depGrade, status int) map[string]interface{} {
+	return map[string]interface{}{
+		"Id":               fmt.Sprintf("%d", id), // ID as string
+		"AdminId":          adminId,               // Parent department ID
+		"Name":             name,                  // Department name
+		"DepGrade":         depGrade,              // Department grade/level
+		"DepartmentStatus": status,                // Department status
+	}
+}
+
+// AddMockEmployee adds an employee using the new data structure
+func AddMockEmployee(employeeNumber, username, email, mobile string, deptID int) {
+	employee := CreateMockEmployee(employeeNumber, username, email, mobile, deptID)
+	mockHREmployees = append(mockHREmployees, employee)
+}
+
+// AddMockDepartment adds a department using the new data structure
+func AddMockDepartment(id, adminId int, name string, depGrade, status int) {
+	dept := CreateMockDepartment(id, adminId, name, depGrade, status)
+	mockHRDepartments = append(mockHRDepartments, dept)
+}
+
+// RemoveMockEmployeeByNumber removes an employee by employee number (badge)
+func RemoveMockEmployeeByNumber(employeeNumber string) {
+	for i, emp := range mockHREmployees {
+		if badge, ok := emp["badge"].(string); ok && badge == employeeNumber {
+			mockHREmployees = append(mockHREmployees[:i], mockHREmployees[i+1:]...)
+			break
+		}
+	}
+}
+
+// UpdateMockEmployeeDepartment updates an employee's department
+func UpdateMockEmployeeDepartment(employeeNumber string, newDeptID int) {
+	for i, emp := range mockHREmployees {
+		if badge, ok := emp["badge"].(string); ok && badge == employeeNumber {
+			mockHREmployees[i]["DepID"] = fmt.Sprintf("%d", newDeptID)
+			break
+		}
+	}
+}
+
+// ClearMockData clears all mock data
+func ClearMockData() {
+	mockHREmployees = []map[string]interface{}{}
+	mockHRDepartments = []map[string]interface{}{}
+}
+
+// SetupDefaultDepartmentHierarchy sets up a default department hierarchy for testing
+func SetupDefaultDepartmentHierarchy() {
+	// Clear existing data first
+	mockHRDepartments = []map[string]interface{}{}
+
+	// Create department hierarchy: Tech_Group -> R&D_Center -> [UX_Dept, QA_Dept, Testing_Dept] -> Teams
+	AddMockDepartment(1, 0, "Tech_Group", 1, 1)             // Root department
+	AddMockDepartment(2, 1, "R&D_Center", 2, 1)             // Second level
+	AddMockDepartment(3, 2, "UX_Dept", 3, 1)                // Third level - UX
+	AddMockDepartment(4, 3, "UX_Dept_Team1", 4, 1)          // Fourth level - UX Team
+	AddMockDepartment(5, 2, "QA_Dept", 3, 1)                // Third level - QA
+	AddMockDepartment(6, 5, "QA_Dept_Team1", 4, 1)          // Fourth level - QA Team
+	AddMockDepartment(7, 2, "Testing_Dept", 3, 1)           // Third level - Testing
+	AddMockDepartment(8, 7, "Testing_Dept_Team1", 4, 1)     // Fourth level - Testing Team
+	AddMockDepartment(9, 2, "Operations_Dept", 3, 1)        // Third level - Operations
+	AddMockDepartment(10, 9, "Operations_Dept_Team1", 4, 1) // Fourth level - Operations Team
+}
+
+// EncryptAES encrypts data using AES-ECB
+func EncryptAES(key string, plaintext string) (string, error) {
+	block, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return "", err
+	}
+
+	// Add PKCS7 padding
+	paddedPlaintext := addPKCS7Padding([]byte(plaintext), block.BlockSize())
+
+	ciphertext := make([]byte, len(paddedPlaintext))
+	for bs, be := 0, block.BlockSize(); bs < len(paddedPlaintext); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
+		block.Encrypt(ciphertext[bs:be], paddedPlaintext[bs:be])
+	}
+
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+// addPKCS7Padding adds PKCS7 padding to data
+func addPKCS7Padding(data []byte, blockSize int) []byte {
+	padding := blockSize - len(data)%blockSize
+	padText := make([]byte, padding)
+	for i := range padText {
+		padText[i] = byte(padding)
+	}
+	return append(data, padText...)
+}
+
+// createEncryptedXMLResponse creates an encrypted XML response
+func createEncryptedXMLResponse(data interface{}, key string) (string, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+
+	encryptedData, err := EncryptAES(key, string(jsonData))
+	if err != nil {
+		return "", err
+	}
+
+	// Wrap in XML format
+	xmlResponse := fmt.Sprintf("<?xml version=\"1.0\" encoding=\"utf-8\"?><string xmlns=\"http://tempuri.org/\">%s</string>", encryptedData)
+	return xmlResponse, nil
+}

@@ -315,10 +315,10 @@ func testSyncWithoutWhitelist(ctx *TestContext) TestResult {
 
 	employeeSyncConfig := &config.EmployeeSyncConfig{
 		Enabled: true,
-		HrURL:   ctx.MockServer.URL + "/api/hr/employees",
-		HrKey:   "test-key",
-		DeptURL: ctx.MockServer.URL + "/api/hr/departments",
-		DeptKey: "test-key",
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 
 	// Create services
@@ -327,6 +327,11 @@ func testSyncWithoutWhitelist(ctx *TestContext) TestResult {
 
 	// Clear any previous permission calls from earlier tests
 	mockStore.ClearPermissionCalls()
+
+	// Clear any existing employee department records from previous tests
+	if err := ctx.DB.DB.Exec("DELETE FROM employee_department").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear existing employee_department records: %v", err)}
+	}
 
 	// Clear any existing effective permissions from previous tests
 	if err := ctx.DB.DB.Exec("DELETE FROM effective_permissions").Error; err != nil {
@@ -338,28 +343,162 @@ func testSyncWithoutWhitelist(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear existing model whitelists: %v", err)}
 	}
 
+	// Setup minimal mock HR data for testing (even for "without whitelist" test we need some data)
+	ClearMockData()
+	SetupDefaultDepartmentHierarchy()
+	AddMockEmployee("000001", "test_employee", "test@example.com", "13800000001", 4) // UX_Dept_Team1
+
 	// Sync employees first
 	if err := employeeSyncService.SyncEmployees(); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Employee sync failed: %v", err)}
 	}
 
-	// Verify no permissions were set in AI gateway after sync
+	// Verify NO permissions were sent to aigateway (no whitelist means no permissions and no notification needed)
 	permissionCalls := mockStore.GetPermissionCalls()
-	if len(permissionCalls) > 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no permission calls after sync without whitelist, got %d", len(permissionCalls))}
+	if len(permissionCalls) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 permission calls for user without whitelist, got %d", len(permissionCalls))}
 	}
 
-	// Verify no effective permissions in database
+	// Verify effective permissions exist but are empty (no models without whitelist)
 	var effectivePermCount int64
 	if err := ctx.DB.DB.Model(&models.EffectivePermission{}).Count(&effectivePermCount).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count effective permissions: %v", err)}
 	}
 
-	if effectivePermCount > 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no effective permissions, got %d", effectivePermCount)}
+	if effectivePermCount != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 effective permission record, got %d", effectivePermCount)}
+	}
+
+	// Verify the effective permission record has no models
+	var effectivePermission models.EffectivePermission
+	if err := ctx.DB.DB.Where("employee_number = ?", "000001").First(&effectivePermission).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to find effective permissions: %v", err)}
+	}
+
+	effectiveModels := effectivePermission.GetEffectiveModelsAsSlice()
+	if len(effectiveModels) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no effective models without whitelist, got %d models: %v", len(effectiveModels), effectiveModels)}
 	}
 
 	return TestResult{Passed: true, Message: "Sync without whitelist test succeeded"}
+}
+
+// testAigatewayNotificationOptimization tests that aigateway is only notified when permissions actually change
+func testAigatewayNotificationOptimization(ctx *TestContext) TestResult {
+	// Create mock config
+	aiGatewayConfig := &config.AiGatewayConfig{
+		Host:       "localhost",
+		Port:       8080,
+		AdminPath:  "/model-permission",
+		AuthHeader: "x-admin-key",
+		AuthValue:  "test-key",
+	}
+
+	// Create services
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
+
+	// Clear any existing data
+	if err := ctx.DB.DB.Exec("DELETE FROM employee_department").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear employee data: %v", err)}
+	}
+	if err := ctx.DB.DB.Exec("DELETE FROM effective_permissions").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear effective permissions: %v", err)}
+	}
+	if err := ctx.DB.DB.Exec("DELETE FROM model_whitelist").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear whitelists: %v", err)}
+	}
+
+	// Create test employees
+	employees := []models.EmployeeDepartment{
+		{
+			EmployeeNumber:     "test001",
+			Username:           "user_no_permissions",
+			DeptFullLevelNames: "Tech_Group,Testing_Dept",
+		},
+		{
+			EmployeeNumber:     "test002",
+			Username:           "user_with_permissions",
+			DeptFullLevelNames: "Tech_Group,Testing_Dept",
+		},
+	}
+
+	for _, emp := range employees {
+		if err := ctx.DB.DB.Create(&emp).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
+		}
+	}
+
+	// Clear permission calls
+	mockStore.ClearPermissionCalls()
+
+	// Scenario 1: New user with no permissions - should NOT notify aigateway
+	if err := permissionService.UpdateEmployeePermissions("test001"); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update permissions for test001: %v", err)}
+	}
+
+	calls := mockStore.GetPermissionCalls()
+	if len(calls) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 1 failed: Expected 0 calls for new user with no permissions, got %d", len(calls))}
+	}
+
+	// Scenario 2: New user gets permissions - should notify aigateway
+	mockStore.ClearPermissionCalls()
+	if err := permissionService.SetUserWhitelist("test002", []string{"gpt-4"}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set whitelist for test002: %v", err)}
+	}
+
+	calls = mockStore.GetPermissionCalls()
+	if len(calls) != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 2 failed: Expected 1 call for new user with permissions, got %d", len(calls))}
+	}
+	if calls[0].EmployeeNumber != "test002" || len(calls[0].Models) != 1 || calls[0].Models[0] != "gpt-4" {
+		return TestResult{Passed: false, Message: "Scenario 2 failed: Incorrect aigateway call content"}
+	}
+
+	// Scenario 3: Existing user permissions change - should notify aigateway
+	mockStore.ClearPermissionCalls()
+	if err := permissionService.SetUserWhitelist("test002", []string{"gpt-4", "claude-3"}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update whitelist for test002: %v", err)}
+	}
+
+	calls = mockStore.GetPermissionCalls()
+	if len(calls) != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 3 failed: Expected 1 call for permission change, got %d", len(calls))}
+	}
+	if len(calls[0].Models) != 2 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 3 failed: Expected 2 models, got %d", len(calls[0].Models))}
+	}
+
+	// Scenario 4: User permissions don't change - should NOT notify aigateway
+	mockStore.ClearPermissionCalls()
+	if err := permissionService.UpdateEmployeePermissions("test002"); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update permissions for test002: %v", err)}
+	}
+
+	calls = mockStore.GetPermissionCalls()
+	if len(calls) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 4 failed: Expected 0 calls when permissions don't change, got %d", len(calls))}
+	}
+
+	// Scenario 5: User permissions cleared - should notify aigateway
+	mockStore.ClearPermissionCalls()
+	// Remove the user whitelist to clear permissions
+	if err := ctx.DB.DB.Exec("DELETE FROM model_whitelist WHERE target_type = 'user' AND target_identifier = 'test002'").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear user whitelist: %v", err)}
+	}
+	if err := permissionService.UpdateEmployeePermissions("test002"); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update permissions for test002 after clearing whitelist: %v", err)}
+	}
+
+	calls = mockStore.GetPermissionCalls()
+	if len(calls) != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 5 failed: Expected 1 call to clear permissions, got %d", len(calls))}
+	}
+	if len(calls[0].Models) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 5 failed: Expected empty models list to clear permissions, got %d models", len(calls[0].Models))}
+	}
+
+	return TestResult{Passed: true, Message: "Aigateway notification optimization test succeeded - all scenarios work correctly"}
 }
 
 // testUserWhitelistDistribution tests user whitelist distribution to AI gateway

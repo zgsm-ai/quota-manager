@@ -22,7 +22,13 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 	description         string
 }) TestResult {
 
-	// 0. Cleanup: Clear all department whitelists to ensure test isolation
+	// 0. Cleanup: Clear all data to ensure test isolation between scenarios
+	if err := ctx.DB.DB.Exec("DELETE FROM employee_department").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear employee_department: %v", err)}
+	}
+	if err := ctx.DB.DB.Exec("DELETE FROM effective_permissions").Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear effective_permissions: %v", err)}
+	}
 	if err := ctx.DB.DB.Where("target_type = ?", "department").Delete(&models.ModelWhitelist{}).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear department whitelists: %v", err)}
 	}
@@ -95,17 +101,32 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 
 	// 5. Action: Trigger department change via HR sync
 	if scenario.targetDept != scenario.originalDept {
-		// Add updated employee data to mock HR system
-		mockHREmployees = append(mockHREmployees, map[string]interface{}{
-			"employeeNumber": scenario.employeeNumber,
-			"username":       fmt.Sprintf("test_employee_%s", scenario.employeeNumber),
-			"fullName":       fmt.Sprintf("test_employee_%s", scenario.employeeNumber),
-			"deptName":       fmt.Sprintf("%s_Team1", scenario.targetDept),
-			"level":          4,
-		})
+		// Add updated employee data to mock HR system using new data structure
+		var deptID int
+		switch fmt.Sprintf("%s_Team1", scenario.targetDept) {
+		case "UX_Dept_Team1":
+			deptID = 4
+		case "QA_Dept_Team1":
+			deptID = 6
+		case "Testing_Dept_Team1":
+			deptID = 8
+		case "Operations_Dept_Team1":
+			deptID = 10
+		default:
+			deptID = 4 // Default to UX_Dept_Team1
+		}
+
+		AddMockEmployee(
+			scenario.employeeNumber,
+			fmt.Sprintf("test_employee_%s", scenario.employeeNumber),
+			fmt.Sprintf("test_%s@example.com", scenario.employeeNumber),
+			fmt.Sprintf("13800%s", scenario.employeeNumber),
+			deptID,
+		)
 	}
 
-	// Clear permission calls
+	// Clear permission calls BEFORE the action phase to isolate the test
+	// This ensures we only count calls from the employee sync operation
 	mockStore.ClearPermissionCalls()
 
 	// Trigger employee sync
@@ -123,35 +144,51 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 
 	// 6. Validation: Check aigateway calls
 	permissionCalls := mockStore.GetPermissionCalls()
-	// Always expect 1 call since system now always syncs permissions (including clearing)
-	expectedCallCount := 1
+
+	// Determine expected call count based on scenario specifics
+	var expectedCallCount int
+	if scenario.targetDept == scenario.originalDept {
+		// No department change scenarios
+		if len(scenario.expectedModels) == 0 {
+			// User has no permissions and no department change - no call expected
+			expectedCallCount = 0
+		} else {
+			// User has permissions but no department change - call expected for permission update
+			expectedCallCount = 1
+		}
+	} else {
+		// Department change scenarios - always expect 1 call for permission sync
+		expectedCallCount = 1
+	}
 
 	if len(permissionCalls) != expectedCallCount {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected %d permission calls, got %d", expectedCallCount, len(permissionCalls))}
 	}
 
-	// Validate the aigateway call details
-	call := permissionCalls[0]
-	if call.EmployeeNumber != scenario.employeeNumber {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected employee number %s in aigateway call, got %s", scenario.employeeNumber, call.EmployeeNumber)}
-	}
+	// Validate the aigateway call details (only if calls are expected)
+	if expectedCallCount > 0 {
+		call := permissionCalls[0]
+		if call.EmployeeNumber != scenario.employeeNumber {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected employee number %s in aigateway call, got %s", scenario.employeeNumber, call.EmployeeNumber)}
+		}
 
-	if call.Operation != "set" {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'set' operation in aigateway call, got '%s'", call.Operation)}
-	}
+		if call.Operation != "set" {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 'set' operation in aigateway call, got '%s'", call.Operation)}
+		}
 
-	if len(call.Models) != len(scenario.expectedModels) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected %d models in aigateway call, got %d", len(scenario.expectedModels), len(call.Models))}
-	}
+		if len(call.Models) != len(scenario.expectedModels) {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected %d models in aigateway call, got %d", len(scenario.expectedModels), len(call.Models))}
+		}
 
-	// Verify aigateway call models match expected (including empty list)
-	expectedModelsMap := make(map[string]bool)
-	for _, model := range scenario.expectedModels {
-		expectedModelsMap[model] = true
-	}
-	for _, model := range call.Models {
-		if !expectedModelsMap[model] {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Unexpected model %s in aigateway call", model)}
+		// Verify aigateway call models match expected (including empty list)
+		expectedModelsMap := make(map[string]bool)
+		for _, model := range scenario.expectedModels {
+			expectedModelsMap[model] = true
+		}
+		for _, model := range call.Models {
+			if !expectedModelsMap[model] {
+				return TestResult{Passed: false, Message: fmt.Sprintf("Unexpected model %s in aigateway call", model)}
+			}
 		}
 	}
 
@@ -206,12 +243,7 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 
 	// Clean up for next scenario - remove employee from mock HR if added
 	if scenario.targetDept != scenario.originalDept {
-		for i, emp := range mockHREmployees {
-			if empNum, ok := emp["employeeNumber"].(string); ok && empNum == scenario.employeeNumber {
-				mockHREmployees = append(mockHREmployees[:i], mockHREmployees[i+1:]...)
-				break
-			}
-		}
+		RemoveMockEmployeeByNumber(scenario.employeeNumber)
 	}
 
 	return TestResult{Passed: true, Message: fmt.Sprintf("Scenario %s completed successfully", scenario.name)}
@@ -254,44 +286,19 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 	// === Create employee sync service ===
 	employeeSyncConfig := &config.EmployeeSyncConfig{
 		Enabled: true,
-		HrURL:   ctx.MockServer.URL + "/api/hr/employees",
-		HrKey:   "test-key",
-		DeptURL: ctx.MockServer.URL + "/api/hr/departments",
-		DeptKey: "test-key",
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
 
-	// Add department hierarchy data to mock HR system
-	mockHRDepartments = append(mockHRDepartments, map[string]interface{}{
-		"deptName":       "Tech_Group",
-		"parentDeptName": "",
-		"level":          1,
-	})
-	mockHRDepartments = append(mockHRDepartments, map[string]interface{}{
-		"deptName":       "R&D_Center",
-		"parentDeptName": "Tech_Group",
-		"level":          2,
-	})
-	mockHRDepartments = append(mockHRDepartments, map[string]interface{}{
-		"deptName":       "UX_Dept",
-		"parentDeptName": "R&D_Center",
-		"level":          3,
-	})
-	mockHRDepartments = append(mockHRDepartments, map[string]interface{}{
-		"deptName":       "UX_Dept_Team1",
-		"parentDeptName": "UX_Dept",
-		"level":          4,
-	})
+	// Add department hierarchy data to mock HR system using new structure
+	SetupDefaultDepartmentHierarchy()
 
 	// === Test 1: Simulate employee addition ===
 	// Add new employee to mock HR data (simulating HR system detecting new hire)
-	mockHREmployees = append(mockHREmployees, map[string]interface{}{
-		"employeeNumber": "000060",
-		"username":       "new_test_employee",
-		"fullName":       "new_test_employee",
-		"deptName":       "UX_Dept_Team1",
-		"level":          4,
-	})
+	AddMockEmployee("000060", "new_test_employee", "new_test@example.com", "13800000060", 4) // UX_Dept_Team1
 
 	// Clear permission calls
 	mockStore.ClearPermissionCalls()
@@ -386,12 +393,7 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 
 	// === Test 2: Simulate employee removal ===
 	// Remove employee from mock HR data (simulating HR system detecting employee departure)
-	for i, employee := range mockHREmployees {
-		if empNum, ok := employee["employeeNumber"].(string); ok && empNum == "000060" {
-			mockHREmployees = append(mockHREmployees[:i], mockHREmployees[i+1:]...)
-			break
-		}
-	}
+	RemoveMockEmployeeByNumber("000060")
 
 	// Clear permission calls
 	mockStore.ClearPermissionCalls()
@@ -458,8 +460,8 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 	}
 
 	// === Clean up mock HR data ===
-	// Clean up added department data (keep original 4, remove newly added 4)
-	mockHRDepartments = mockHRDepartments[:len(mockHRDepartments)-4]
+	// Clear all mock data to prepare for next test
+	ClearMockData()
 
 	return TestResult{Passed: true, Message: "User addition and removal test via employee sync with comprehensive verification succeeded"}
 }
@@ -477,28 +479,23 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 
 	employeeSyncConfig := &config.EmployeeSyncConfig{
 		Enabled: true,
-		HrURL:   ctx.MockServer.URL + "/api/hr/employees",
-		HrKey:   "test-key",
-		DeptURL: ctx.MockServer.URL + "/api/hr/departments",
-		DeptKey: "test-key",
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
 	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
 
-	// Setup department hierarchy in Mock HR for our test
-	testDepartments := []map[string]interface{}{
-		{"deptName": "Tech_Group", "parentDeptName": "", "level": 1},
-		{"deptName": "AI_Lab", "parentDeptName": "Tech_Group", "level": 2},
-		{"deptName": "ML_Dept", "parentDeptName": "AI_Lab", "level": 3},
-		{"deptName": "ML_Dept_Team1", "parentDeptName": "ML_Dept", "level": 4},
-		{"deptName": "DL_Dept", "parentDeptName": "AI_Lab", "level": 3},
-		{"deptName": "DL_Dept_Team1", "parentDeptName": "DL_Dept", "level": 4},
-	}
-
-	for _, dept := range testDepartments {
-		mockHRDepartments = append(mockHRDepartments, dept)
-	}
+	// Setup department hierarchy in Mock HR for our test using new structure
+	ClearMockData()                                // Clear any existing data first
+	AddMockDepartment(1, 0, "Tech_Group", 1, 1)    // Root department
+	AddMockDepartment(2, 1, "AI_Lab", 2, 1)        // Second level
+	AddMockDepartment(3, 2, "ML_Dept", 3, 1)       // Third level - ML
+	AddMockDepartment(4, 3, "ML_Dept_Team1", 4, 1) // Fourth level - ML Team
+	AddMockDepartment(5, 2, "DL_Dept", 3, 1)       // Third level - DL
+	AddMockDepartment(6, 5, "DL_Dept_Team1", 4, 1) // Fourth level - DL Team
 
 	// Create initial employee in database
 	employee := &models.EmployeeDepartment{
@@ -511,13 +508,7 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	}
 
 	// Add initial employee data to Mock HR system to ensure sync consistency
-	mockHREmployees = append(mockHREmployees, map[string]interface{}{
-		"employeeNumber": "000070",
-		"username":       "data_integrity_test_employee",
-		"fullName":       "data_integrity_test_employee (000070)",
-		"deptName":       "ML_Dept_Team1",
-		"level":          4,
-	})
+	AddMockEmployee("000070", "data_integrity_test_employee", "test_070@example.com", "13800000070", 4) // ML_Dept_Team1
 
 	// Set initial permissions
 	if err := permissionService.SetUserWhitelist("000070", []string{"gpt-4", "claude-3-opus"}); err != nil {
@@ -546,18 +537,8 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 
 	// Simulate employee data changes by updating Mock HR system first
 	// Update the employee data in Mock HR to simulate real HR system changes
-	for i, emp := range mockHREmployees {
-		if empNumber, ok := emp["employeeNumber"].(string); ok && empNumber == "000070" {
-			mockHREmployees[i] = map[string]interface{}{
-				"employeeNumber": "000070",
-				"username":       "data_integrity_test_employee_updated",
-				"fullName":       "data_integrity_test_employee_updated (000070)",
-				"deptName":       "DL_Dept_Team1", // Department change
-				"level":          4,
-			}
-			break
-		}
-	}
+	RemoveMockEmployeeByNumber("000070")                                                                                // Remove old employee data
+	AddMockEmployee("000070", "data_integrity_test_employee_updated", "test_070_updated@example.com", "13800000070", 6) // DL_Dept_Team1 (department change)
 
 	// Clear any previous aigateway calls from setup
 	mockStore.ClearPermissionCalls()
@@ -716,16 +697,7 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	}
 
 	// Clean up Mock HR data
-	// Remove the test employee
-	for i, emp := range mockHREmployees {
-		if empNumber, ok := emp["employeeNumber"].(string); ok && empNumber == "000070" {
-			mockHREmployees = append(mockHREmployees[:i], mockHREmployees[i+1:]...)
-			break
-		}
-	}
-
-	// Remove the test departments (6 departments added)
-	mockHRDepartments = mockHRDepartments[:len(mockHRDepartments)-6]
+	ClearMockData()
 
 	return TestResult{Passed: true, Message: "Employee data integrity test with comprehensive database verification succeeded"}
 }

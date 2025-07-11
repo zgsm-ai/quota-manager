@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS employee_department (
     id SERIAL PRIMARY KEY,
     employee_number VARCHAR(100) UNIQUE NOT NULL,
     username VARCHAR(100) NOT NULL,
-    dept_full_level_names TEXT[] NOT NULL,
+    dept_full_level_names TEXT NOT NULL,
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
@@ -146,14 +146,14 @@ CREATE TABLE IF NOT EXISTS employee_department (
 -- Create indexes for employee_department table
 CREATE INDEX IF NOT EXISTS idx_employee_department_employee_number ON employee_department(employee_number);
 CREATE INDEX IF NOT EXISTS idx_employee_department_username ON employee_department(username);
-CREATE INDEX IF NOT EXISTS idx_employee_department_dept_full_level_names ON employee_department USING GIN(dept_full_level_names);
+CREATE INDEX IF NOT EXISTS idx_employee_department_dept_full_level_names ON employee_department(dept_full_level_names);
 
 -- Model whitelist table
 CREATE TABLE IF NOT EXISTS model_whitelist (
     id SERIAL PRIMARY KEY,
     target_type VARCHAR(20) NOT NULL,  -- 'user' or 'department'
     target_identifier VARCHAR(500) NOT NULL,  -- employee_number for user, department name for department
-    allowed_models TEXT[] NOT NULL,
+    allowed_models TEXT NOT NULL,
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
 );
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS model_whitelist (
 -- Create indexes for model_whitelist table
 CREATE INDEX IF NOT EXISTS idx_model_whitelist_target_type ON model_whitelist(target_type);
 CREATE INDEX IF NOT EXISTS idx_model_whitelist_target_identifier ON model_whitelist(target_identifier);
-CREATE INDEX IF NOT EXISTS idx_model_whitelist_allowed_models ON model_whitelist USING GIN(allowed_models);
+CREATE INDEX IF NOT EXISTS idx_model_whitelist_allowed_models ON model_whitelist(allowed_models);
 
 -- Create unique index to prevent duplicate whitelists
 CREATE UNIQUE INDEX IF NOT EXISTS idx_model_whitelist_unique ON model_whitelist(target_type, target_identifier);
@@ -170,7 +170,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_model_whitelist_unique ON model_whitelist(
 CREATE TABLE IF NOT EXISTS effective_permissions (
     id SERIAL PRIMARY KEY,
     employee_number VARCHAR(100) UNIQUE NOT NULL,
-    effective_models TEXT[] NOT NULL,
+    effective_models TEXT NOT NULL,
     whitelist_id INTEGER,
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS effective_permissions (
 -- Create indexes for effective_permissions table
 CREATE INDEX IF NOT EXISTS idx_effective_permissions_employee ON effective_permissions(employee_number);
 CREATE INDEX IF NOT EXISTS idx_effective_permissions_whitelist ON effective_permissions(whitelist_id);
-CREATE INDEX IF NOT EXISTS idx_effective_permissions_effective_models ON effective_permissions USING GIN(effective_models);
+CREATE INDEX IF NOT EXISTS idx_effective_permissions_effective_models ON effective_permissions(effective_models);
 
 -- Audit log table for permission operations
 CREATE TABLE IF NOT EXISTS permission_audit (

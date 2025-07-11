@@ -180,47 +180,121 @@ func (s *PermissionService) UpdateEmployeePermissions(employeeNumber string) err
 		departments = employee.GetDeptFullLevelNamesAsSlice()
 	}
 
-	// Calculate effective permissions
-	effectiveModels, whitelistID := s.calculateEffectivePermissions(employeeNumber, departments)
+	// Get current effective permissions from database (if exists)
+	var currentEffectiveModels []string
+	var existingEffectivePermission models.EffectivePermission
+	err = s.db.DB.Where("employee_number = ?", employeeNumber).First(&existingEffectivePermission).Error
+	if err == nil {
+		currentEffectiveModels = existingEffectivePermission.GetEffectiveModelsAsSlice()
+	} else {
+		// No existing effective permissions, treat as empty
+		currentEffectiveModels = []string{}
+	}
 
-	// Update or create effective permissions
-	var effectivePermission models.EffectivePermission
-	err = s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectivePermission).Error
+	// Calculate new effective permissions
+	newEffectiveModels, whitelistID := s.calculateEffectivePermissions(employeeNumber, departments)
 
+	// Check if permissions have actually changed
+	permissionsChanged := !s.slicesEqual(currentEffectiveModels, newEffectiveModels)
+
+	// For new users (no existing effective permission record), only notify if they have permissions
+	isNewUser := err != nil
+	hasCurrentPermissions := len(currentEffectiveModels) > 0
+	hasNewPermissions := len(newEffectiveModels) > 0
+
+	// Update or create effective permissions in database
 	if err == nil {
 		// Update existing record
-		effectivePermission.SetEffectiveModelsFromSlice(effectiveModels)
-		effectivePermission.WhitelistID = whitelistID
-		if err := s.db.DB.Save(&effectivePermission).Error; err != nil {
+		existingEffectivePermission.SetEffectiveModelsFromSlice(newEffectiveModels)
+		existingEffectivePermission.WhitelistID = whitelistID
+		if err := s.db.DB.Save(&existingEffectivePermission).Error; err != nil {
 			return fmt.Errorf("failed to update effective permissions: %w", err)
 		}
 	} else {
 		// Create new record
-		effectivePermission = models.EffectivePermission{
+		effectivePermission := models.EffectivePermission{
 			EmployeeNumber: employeeNumber,
 			WhitelistID:    whitelistID,
 		}
-		effectivePermission.SetEffectiveModelsFromSlice(effectiveModels)
+		effectivePermission.SetEffectiveModelsFromSlice(newEffectiveModels)
 		if err := s.db.DB.Create(&effectivePermission).Error; err != nil {
 			return fmt.Errorf("failed to create effective permissions: %w", err)
 		}
 	}
 
-	// Update Higress with current permissions (including empty list to clear permissions)
-	if s.aigatewayClient != nil {
-		if err := s.aigatewayClient.SetUserPermission(employeeNumber, effectiveModels); err != nil {
+	// Determine if we should notify Aigateway
+	// Only notify when:
+	// 1. Existing user with permission changes (including from something to nothing or nothing to something)
+	// 2. New user who gets initial permissions (not for new users with no permissions)
+	shouldNotify := false
+	notificationReason := ""
+
+	if !isNewUser && permissionsChanged {
+		// Existing user with permission changes
+		shouldNotify = true
+		if hasCurrentPermissions && !hasNewPermissions {
+			notificationReason = "permissions_cleared"
+		} else if !hasCurrentPermissions && hasNewPermissions {
+			notificationReason = "permissions_granted"
+		} else {
+			notificationReason = "permissions_modified"
+		}
+	} else if isNewUser && hasNewPermissions {
+		// New user with initial permissions
+		shouldNotify = true
+		notificationReason = "new_user_with_permissions"
+	}
+
+	// DEBUG: Log detailed information for troubleshooting
+	logger.Logger.Info("UpdateEmployeePermissions decision",
+		zap.String("employee_number", employeeNumber),
+		zap.Strings("current_models", currentEffectiveModels),
+		zap.Strings("new_models", newEffectiveModels),
+		zap.Bool("permissions_changed", permissionsChanged),
+		zap.Bool("is_new_user", isNewUser),
+		zap.Bool("has_current_permissions", hasCurrentPermissions),
+		zap.Bool("has_new_permissions", hasNewPermissions),
+		zap.Bool("should_notify", shouldNotify),
+		zap.String("notification_reason", notificationReason))
+
+	if shouldNotify && s.aigatewayClient != nil {
+		if err := s.aigatewayClient.SetUserPermission(employeeNumber, newEffectiveModels); err != nil {
 			logger.Logger.Error("Failed to update Higress permissions",
 				zap.String("employee_number", employeeNumber),
-				zap.Strings("models", effectiveModels),
+				zap.Strings("previous_models", currentEffectiveModels),
+				zap.Strings("new_models", newEffectiveModels),
+				zap.String("reason", notificationReason),
 				zap.Error(err))
+		} else {
+			logger.Logger.Info("Successfully updated Aigateway permissions",
+				zap.String("employee_number", employeeNumber),
+				zap.Strings("previous_models", currentEffectiveModels),
+				zap.Strings("new_models", newEffectiveModels),
+				zap.String("reason", notificationReason))
+		}
+	} else {
+		if isNewUser && !hasNewPermissions {
+			logger.Logger.Debug("Skipping Aigateway notification for new user with no permissions",
+				zap.String("employee_number", employeeNumber))
+		} else if !permissionsChanged {
+			logger.Logger.Debug("Skipping Aigateway notification - no permission changes detected",
+				zap.String("employee_number", employeeNumber),
+				zap.Strings("current_models", currentEffectiveModels))
 		}
 	}
 
 	// Record audit
 	auditDetails := map[string]interface{}{
-		"employee_number":  employeeNumber,
-		"effective_models": effectiveModels,
-		"whitelist_id":     whitelistID,
+		"employee_number":         employeeNumber,
+		"previous_models":         currentEffectiveModels,
+		"new_effective_models":    newEffectiveModels,
+		"whitelist_id":            whitelistID,
+		"permissions_changed":     permissionsChanged,
+		"is_new_user":             isNewUser,
+		"has_current_permissions": hasCurrentPermissions,
+		"has_new_permissions":     hasNewPermissions,
+		"aigateway_notified":      shouldNotify,
+		"notification_reason":     notificationReason,
 	}
 	s.recordAudit(models.OperationPermissionUpdate, models.TargetTypeUser, employeeNumber, auditDetails)
 
@@ -321,15 +395,30 @@ func (s *PermissionService) RemoveUserCompletely(employeeNumber string) error {
 		// Record what we're removing for audit
 		removedModels := effectivePermission.GetEffectiveModelsAsSlice()
 
+		// Notify Aigateway to clear permissions if user had any permissions
+		if len(removedModels) > 0 && s.aigatewayClient != nil {
+			if err := s.aigatewayClient.SetUserPermission(employeeNumber, []string{}); err != nil {
+				logger.Logger.Error("Failed to clear Aigateway permissions for removed user",
+					zap.String("employee_number", employeeNumber),
+					zap.Strings("removed_models", removedModels),
+					zap.Error(err))
+			} else {
+				logger.Logger.Info("Successfully cleared Aigateway permissions for removed user",
+					zap.String("employee_number", employeeNumber),
+					zap.Strings("removed_models", removedModels))
+			}
+		}
+
 		if err := s.db.DB.Delete(&effectivePermission).Error; err != nil {
 			return fmt.Errorf("failed to delete effective permissions: %w", err)
 		}
 
 		// Record audit
 		auditDetails := map[string]interface{}{
-			"employee_number": employeeNumber,
-			"reason":          "employee_removal",
-			"removed_models":  removedModels,
+			"employee_number":    employeeNumber,
+			"reason":             "employee_removal",
+			"removed_models":     removedModels,
+			"aigateway_notified": len(removedModels) > 0 && s.aigatewayClient != nil,
 		}
 		s.recordAudit("user_complete_removal", models.TargetTypeUser, employeeNumber, auditDetails)
 

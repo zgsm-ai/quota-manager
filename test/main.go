@@ -159,6 +159,7 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Permission Priority and Inheritance Test", testPermissionPriorityAndInheritance},
 		{"Aigateway Permission Sync Test", testAigatewayPermissionSync},
 		{"Sync Without Whitelist Test", testSyncWithoutWhitelist},
+		{"Aigateway Notification Optimization Test", testAigatewayNotificationOptimization},
 		{"User Whitelist Distribution Test", testUserWhitelistDistribution},
 		{"Department Whitelist Distribution Test", testDepartmentWhitelistDistribution},
 		{"Permission Hierarchy Level 1 Test", testPermissionHierarchyLevel1},

@@ -34,3 +34,11 @@ voucher:
 
 log:
   level: "debug"
+
+# Employee Synchronization Configuration for testing
+employee_sync:
+  enabled: true
+  hr_url: "http://localhost:8099/api/test/employees"       # Test employee endpoint
+  hr_key: "TEST_EMP_KEY_32_BYTES_1234567890"               # Test employee encryption key
+  dept_url: "http://localhost:8099/api/test/departments"   # Test department endpoint
+  dept_key: "TEST_DEPT_KEY_32_BYTES_123456789"             # Test department encryption key

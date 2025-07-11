@@ -1,13 +1,19 @@
 package services
 
 import (
+	"crypto/aes"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
 	"quota-manager/pkg/logger"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -103,27 +109,35 @@ func (s *EmployeeSyncService) TriggerInitialSyncIfNeeded() error {
 	return nil
 }
 
-// HREmployee represents employee data from HR system
+// HREmployee represents employee data from HR system (matching reference code structure)
 type HREmployee struct {
-	EmployeeNumber string `json:"employeeNumber"`
-	Username       string `json:"username"`
-	FullName       string `json:"fullName"`
-	DeptName       string `json:"deptName"`
-	Level          int    `json:"level"`
+	EmployeeNumber string `json:"badge"`
+	Username       string `json:"Name"`
+	DeptID         int    `json:"DepID,string"`
+	Email          string `json:"email"`
+	Mobile         string `json:"TEL"`
+
+	// Fields populated by our program.
+	FullName           string   `json:"-"`
+	UserID             string   `json:"-"`
+	DeptName           string   `json:"-"`
+	DeptFullLevelIds   []int    `json:"-"`
+	DeptFullLevelNames []string `json:"-"`
 }
 
-// HRDepartment represents department data from HR system
+// HRDepartment represents department data from HR system (matching reference code structure)
 type HRDepartment struct {
-	DeptName       string `json:"deptName"`
-	ParentDeptName string `json:"parentDeptName"`
-	Level          int    `json:"level"`
-}
+	ID       int    `json:"Id,string"`
+	AdminId  int    `json:"AdminId"`
+	Name     string `json:"Name"`
+	DepGrade int    `json:"DepGrade"`
+	Status   int    `json:"DepartmentStatus"`
 
-// HRResponse represents HR API response
-type HRResponse struct {
-	Success bool            `json:"success"`
-	Data    json.RawMessage `json:"data"`
-	Message string          `json:"message"`
+	// Fields populated by our program.
+	Level          int             `json:"-"`
+	FullLevelIds   []int           `json:"-"`
+	FullLevelNames []string        `json:"-"`
+	Children       []*HRDepartment `json:"-"`
 }
 
 // SyncEmployees synchronizes employees from HR system
@@ -179,123 +193,92 @@ func (s *EmployeeSyncService) SyncEmployees() error {
 
 // fetchEmployeesFromHR fetches employees from HR system
 func (s *EmployeeSyncService) fetchEmployeesFromHR() ([]HREmployee, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", s.employeeSyncConf.HrURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", s.employeeSyncConf.HrKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HR API returned status: %d", resp.StatusCode)
-	}
-
-	var hrResp HRResponse
-	if err := json.NewDecoder(resp.Body).Decode(&hrResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if !hrResp.Success {
-		return nil, fmt.Errorf("HR API error: %s", hrResp.Message)
-	}
-
 	var employees []HREmployee
-	if err := json.Unmarshal(hrResp.Data, &employees); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal employees: %w", err)
+	err := s.fetchAndDeserialize(s.employeeSyncConf.HrURL, s.employeeSyncConf.HrKey, &employees)
+	if err != nil {
+		return nil, err
 	}
-
 	return employees, nil
 }
 
 // fetchDepartmentsFromHR fetches departments from HR system
-func (s *EmployeeSyncService) fetchDepartmentsFromHR() ([]HRDepartment, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", s.employeeSyncConf.DeptURL, nil)
+func (s *EmployeeSyncService) fetchDepartmentsFromHR() ([]*HRDepartment, error) {
+	var departments []*HRDepartment
+	err := s.fetchAndDeserialize(s.employeeSyncConf.DeptURL, s.employeeSyncConf.DeptKey, &departments)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", s.employeeSyncConf.DeptKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Department API returned status: %d", resp.StatusCode)
-	}
-
-	var hrResp HRResponse
-	if err := json.NewDecoder(resp.Body).Decode(&hrResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if !hrResp.Success {
-		return nil, fmt.Errorf("Department API error: %s", hrResp.Message)
-	}
-
-	var departments []HRDepartment
-	if err := json.Unmarshal(hrResp.Data, &departments); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal departments: %w", err)
-	}
-
 	return departments, nil
 }
 
-// buildDepartmentHierarchy builds department hierarchy from flat list
-func (s *EmployeeSyncService) buildDepartmentHierarchy(departments []HRDepartment) map[string][]string {
-	hierarchy := make(map[string][]string)
+// buildDepartmentHierarchy builds department hierarchy from flat list (matching reference code logic)
+func (s *EmployeeSyncService) buildDepartmentHierarchy(depts []*HRDepartment) []*HRDepartment {
+	nodeMap := make(map[int]*HRDepartment)
+	for _, d := range depts {
+		nodeMap[d.ID] = d
+	}
 
-	// Create a map of department to parent mapping
-	deptToParent := make(map[string]string)
-	for _, dept := range departments {
-		if dept.ParentDeptName != "" {
-			deptToParent[dept.DeptName] = dept.ParentDeptName
+	for _, node := range nodeMap {
+		level := 1
+		fullIds := []int{node.ID}
+		fullNames := []string{node.Name}
+		parentId := node.AdminId
+
+		for parentId != 0 {
+			parent, ok := nodeMap[parentId]
+			if !ok {
+				break
+			}
+			level++
+			fullIds = append(fullIds, parent.ID)
+			fullNames = append(fullNames, parent.Name)
+			parentId = parent.AdminId
+		}
+		node.Level = level
+		s.reverseInts(fullIds)
+		s.reverseStrings(fullNames)
+		node.FullLevelIds = fullIds
+		node.FullLevelNames = fullNames
+	}
+
+	var rootNodes []*HRDepartment
+	for _, node := range nodeMap {
+		if node.AdminId == 0 || nodeMap[node.AdminId] == nil {
+			rootNodes = append(rootNodes, node)
+		} else {
+			parent := nodeMap[node.AdminId]
+			if parent.Children == nil {
+				parent.Children = make([]*HRDepartment, 0)
+			}
+			parent.Children = append(parent.Children, node)
 		}
 	}
 
-	// Build full hierarchy path for each department
-	for _, dept := range departments {
-		hierarchy[dept.DeptName] = s.buildFullPath(dept.DeptName, deptToParent)
-	}
-
-	return hierarchy
+	return rootNodes
 }
 
-// buildFullPath builds full department path
-func (s *EmployeeSyncService) buildFullPath(deptName string, deptToParent map[string]string) []string {
-	var path []string
-	current := deptName
-	visited := make(map[string]bool)
-
-	for current != "" {
-		if visited[current] {
-			// Circular reference detected, break
-			break
+// flattenDepartmentTree flattens department tree into a map for quick lookup
+func (s *EmployeeSyncService) flattenDepartmentTree(deptTree []*HRDepartment) map[int]*HRDepartment {
+	flatMap := make(map[int]*HRDepartment)
+	var dfs func(depts []*HRDepartment)
+	dfs = func(depts []*HRDepartment) {
+		if len(depts) == 0 {
+			return
 		}
-		visited[current] = true
-		path = append([]string{current}, path...)
-		current = deptToParent[current]
+		for _, dept := range depts {
+			flatMap[dept.ID] = dept
+			dfs(dept.Children)
+		}
 	}
-
-	return path
+	dfs(deptTree)
+	return flatMap
 }
 
 // processEmployees processes employees and updates database
-func (s *EmployeeSyncService) processEmployees(employees []HREmployee, deptHierarchy map[string][]string) ([]string, error) {
+func (s *EmployeeSyncService) processEmployees(employees []HREmployee, deptHierarchy []*HRDepartment) ([]string, error) {
+	// Create a flat map of department ID to department for quick lookup
+	deptMap := s.flattenDepartmentTree(deptHierarchy)
+
 	// Get existing employees from database
 	existingEmployees := make(map[string]*models.EmployeeDepartment)
 	var dbEmployees []models.EmployeeDepartment
@@ -312,10 +295,15 @@ func (s *EmployeeSyncService) processEmployees(employees []HREmployee, deptHiera
 	// Process each employee
 	for _, emp := range employees {
 		// Get department hierarchy for this employee
-		deptFullPath := deptHierarchy[emp.DeptName]
-		if len(deptFullPath) == 0 {
-			// If no hierarchy found, use the department name itself
-			deptFullPath = []string{emp.DeptName}
+		var deptFullPath []string
+		if dept, ok := deptMap[emp.DeptID]; ok {
+			deptFullPath = dept.FullLevelNames
+		} else {
+			// If department not found, skip this employee
+			logger.Logger.Warn("Department not found for employee",
+				zap.String("employee_number", emp.EmployeeNumber),
+				zap.Int("dept_id", emp.DeptID))
+			continue
 		}
 
 		// Check if employee exists
@@ -438,6 +426,20 @@ func (s *EmployeeSyncService) slicesEqual(a, b []string) bool {
 	return true
 }
 
+// reverseInts reverses an integer slice in place
+func (s *EmployeeSyncService) reverseInts(slice []int) {
+	for i, j := 0, len(slice)-1; i < j; i, j = i+1, j-1 {
+		slice[i], slice[j] = slice[j], slice[i]
+	}
+}
+
+// reverseStrings reverses a string slice in place
+func (s *EmployeeSyncService) reverseStrings(slice []string) {
+	for i, j := 0, len(slice)-1; i < j; i, j = i+1, j-1 {
+		slice[i], slice[j] = slice[j], slice[i]
+	}
+}
+
 // recordAudit records an audit log entry
 func (s *EmployeeSyncService) recordAudit(operation, targetType, targetIdentifier string, details map[string]interface{}) {
 	detailsJSON, _ := json.Marshal(details)
@@ -451,4 +453,107 @@ func (s *EmployeeSyncService) recordAudit(operation, targetType, targetIdentifie
 	if err := s.db.DB.Create(audit).Error; err != nil {
 		logger.Logger.Error("Failed to record audit", zap.Error(err))
 	}
+}
+
+// fetchAndDeserialize fetches data from URL, decrypts and deserializes it
+func (s *EmployeeSyncService) fetchAndDeserialize(url, key string, target interface{}) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("http get request to %s failed: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("http request to %s returned non-200 status: %s", url, resp.Status)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body from %s: %w", url, err)
+	}
+
+	encryptedString := strings.TrimSpace(string(body))
+	if encryptedString == "" {
+		return fmt.Errorf("received empty response body from %s", url)
+	}
+
+	// Check if response is XML and extract content
+	if strings.HasPrefix(encryptedString, "<?xml") {
+		encryptedString, err = s.parseXMLContent(encryptedString)
+		if err != nil {
+			return fmt.Errorf("failed to parse xml content from %s: %w", url, err)
+		}
+	}
+
+	// Decrypt the response
+	decryptedJSON, err := s.DecryptAES(key, encryptedString)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt response from %s: %w", url, err)
+	}
+
+	return json.Unmarshal([]byte(decryptedJSON), target)
+}
+
+// parseXMLContent extracts content from XML response
+func (s *EmployeeSyncService) parseXMLContent(xmlString string) (string, error) {
+	var result struct {
+		Content string `xml:",chardata"`
+	}
+	if err := xml.Unmarshal([]byte(xmlString), &result); err != nil {
+		return "", err
+	}
+	return result.Content, nil
+}
+
+// DecryptAES decrypts AES encrypted data
+func (s *EmployeeSyncService) DecryptAES(key string, encryptedBase64 string) (string, error) {
+	encryptedData, err := base64.StdEncoding.DecodeString(encryptedBase64)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode failed: %w", err)
+	}
+
+	block, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return "", fmt.Errorf("failed to create new cipher: %w", err)
+	}
+
+	blockSize := block.BlockSize()
+	if len(encryptedData)%blockSize != 0 {
+		return "", errors.New("encrypted data is not a multiple of the block size")
+	}
+
+	decryptedData := make([]byte, len(encryptedData))
+	for bs, be := 0, blockSize; bs < len(encryptedData); bs, be = bs+blockSize, be+blockSize {
+		block.Decrypt(decryptedData[bs:be], encryptedData[bs:be])
+	}
+
+	unpaddedData, err := s.unpadPKCS7(decryptedData, blockSize)
+	if err != nil {
+		return "", fmt.Errorf("failed to unpad data: %w", err)
+	}
+
+	return string(unpaddedData), nil
+}
+
+// unpadPKCS7 removes PKCS7 padding
+func (s *EmployeeSyncService) unpadPKCS7(data []byte, blockSize int) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, errors.New("pkcs7: data is empty")
+	}
+	if len(data)%blockSize != 0 {
+		return nil, errors.New("pkcs7: data is not a multiple of the block size")
+	}
+
+	paddingLen := int(data[len(data)-1])
+	if paddingLen > blockSize || paddingLen == 0 {
+		return nil, errors.New("pkcs7: invalid padding")
+	}
+
+	for i := 0; i < paddingLen; i++ {
+		if data[len(data)-paddingLen+i] != byte(paddingLen) {
+			return nil, errors.New("pkcs7: invalid padding")
+		}
+	}
+
+	return data[:len(data)-paddingLen], nil
 }
