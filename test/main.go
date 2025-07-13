@@ -71,6 +71,11 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Custom Validators Test", testCustomValidators},
 		{"Error Messages Test", testErrorMessages},
 
+		// Permission Validation Tests
+		{"Permission Validation Test", testPermissionValidation},
+		{"Permission Custom Validators Test", testPermissionCustomValidators},
+		{"Permission Validation Error Messages Test", testPermissionValidationErrorMessages},
+
 		// Condition Expression Tests
 		{"Condition Expression - True Condition Test", testTrueCondition},
 		{"Condition Expression - Empty Condition Test", testEmptyConditionProhibited},

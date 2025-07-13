@@ -524,36 +524,6 @@ func createMockServer(shouldFail bool) *httptest.Server {
 		c.String(http.StatusOK, xmlResponse)
 	})
 
-	// Keep the old unencrypted endpoints for backward compatibility during testing
-	hrAPI := router.Group("/api/hr")
-	{
-		// HR Employee API (unencrypted for tests that still need it)
-		hrAPI.GET("/employees", func(c *gin.Context) {
-			if shouldFail {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-				return
-			}
-
-			c.JSON(http.StatusOK, gin.H{
-				"success": true,
-				"data":    mockHREmployees,
-			})
-		})
-
-		// HR Department API (unencrypted for tests that still need it)
-		hrAPI.GET("/departments", func(c *gin.Context) {
-			if shouldFail {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-				return
-			}
-
-			c.JSON(http.StatusOK, gin.H{
-				"success": true,
-				"data":    mockHRDepartments,
-			})
-		})
-	}
-
 	return httptest.NewServer(router)
 }
 

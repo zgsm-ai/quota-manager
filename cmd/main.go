@@ -122,7 +122,7 @@ func main() {
 	strategyService := services.NewStrategyService(db, gateway, quotaService)
 
 	// Initialize permission management services
-	permissionService := services.NewPermissionService(db, &cfg.AiGateway, gateway)
+	permissionService := services.NewPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
 	employeeSyncService := services.NewEmployeeSyncService(db, &cfg.EmployeeSync, permissionService)
 
 	schedulerService := services.NewSchedulerService(quotaService, strategyService, employeeSyncService, cfg)

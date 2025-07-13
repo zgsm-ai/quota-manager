@@ -23,14 +23,8 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 }) TestResult {
 
 	// 0. Cleanup: Clear all data to ensure test isolation between scenarios
-	if err := ctx.DB.DB.Exec("DELETE FROM employee_department").Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear employee_department: %v", err)}
-	}
-	if err := ctx.DB.DB.Exec("DELETE FROM effective_permissions").Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear effective_permissions: %v", err)}
-	}
-	if err := ctx.DB.DB.Where("target_type = ?", "department").Delete(&models.ModelWhitelist{}).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear department whitelists: %v", err)}
+	if err := clearPermissionData(ctx); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear permission data: %v", err)}
 	}
 
 	// 1. Setup: Create test employee in original department
@@ -260,7 +254,16 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
+	// Default employee sync config for compatibility
+	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: false, // Default to disabled for existing tests
+		HrURL:   "http://localhost:8099/api/hr/employees",
+		HrKey:   "test-hr-key",
+		DeptURL: "http://localhost:8099/api/hr/departments",
+		DeptKey: "test-dept-key",
+	}
+
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
 
 	// Create a temporary employee in the target department so we can set its whitelist
 	tempEmployee := &models.EmployeeDepartment{
@@ -485,7 +488,8 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
+	// Use the existing employee sync config for permission service
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
 
 	// Setup department hierarchy in Mock HR for our test using new structure

@@ -39,11 +39,49 @@ func (v *defaultValidator) Engine() interface{} {
 func registerCustomValidators() {
 	// Register cron expression validator
 	schemaValidator.RegisterValidation("cron", validateCron)
+
+	// Register custom validators for permission management
+	schemaValidator.RegisterValidation("employee_number", validateEmployeeNumber)
+	schemaValidator.RegisterValidation("department_name", validateDepartmentName)
 }
 
 // validateCron validates cron expression using our existing function
 func validateCron(fl validator.FieldLevel) bool {
 	return IsValidCronExpr(fl.Field().String()) == nil
+}
+
+// validateEmployeeNumber validates employee number format
+func validateEmployeeNumber(fl validator.FieldLevel) bool {
+	employeeNumber := fl.Field().String()
+	if len(employeeNumber) < 2 || len(employeeNumber) > 20 {
+		return false
+	}
+
+	// Check if it contains only alphanumeric characters
+	for _, char := range employeeNumber {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
+// validateDepartmentName validates department name format
+func validateDepartmentName(fl validator.FieldLevel) bool {
+	departmentName := fl.Field().String()
+	if len(departmentName) < 2 || len(departmentName) > 100 {
+		return false
+	}
+
+	// Allow Chinese characters, English letters, digits, underscores, and hyphens
+	for _, char := range departmentName {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '_' || char == '-' ||
+			(char >= 0x4e00 && char <= 0x9fff)) { // Chinese characters range
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateStruct validates a struct using schema tags
@@ -147,6 +185,12 @@ func getErrorMessage(err validator.FieldError) string {
 		return fmt.Sprintf("%s must be a valid email address", field)
 	case "oneof":
 		return fmt.Sprintf("%s must be one of: %s", field, param)
+	case "employee_number":
+		return fmt.Sprintf("%s must be 2-20 characters long and contain only alphanumeric characters", field)
+	case "department_name":
+		return fmt.Sprintf("%s must be 2-100 characters long and contain only letters, digits, underscores, and hyphens", field)
+	case "dive":
+		return fmt.Sprintf("Invalid item in %s", field)
 	default:
 		return fmt.Sprintf("%s is invalid", field)
 	}

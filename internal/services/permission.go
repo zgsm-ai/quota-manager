@@ -13,9 +13,10 @@ import (
 
 // PermissionService handles permission management
 type PermissionService struct {
-	db              *database.DB
-	aiGatewayConf   *config.AiGatewayConfig
-	aigatewayClient HigressClient
+	db               *database.DB
+	aiGatewayConf    *config.AiGatewayConfig
+	employeeSyncConf *config.EmployeeSyncConfig
+	aigatewayClient  HigressClient
 }
 
 // HigressClient interface for Higress permission management
@@ -24,16 +25,26 @@ type HigressClient interface {
 }
 
 // NewPermissionService creates a new permission service
-func NewPermissionService(db *database.DB, aiGatewayConf *config.AiGatewayConfig, aigatewayClient HigressClient) *PermissionService {
+func NewPermissionService(db *database.DB, aiGatewayConf *config.AiGatewayConfig, employeeSyncConf *config.EmployeeSyncConfig, aigatewayClient HigressClient) *PermissionService {
 	return &PermissionService{
-		db:              db,
-		aiGatewayConf:   aiGatewayConf,
-		aigatewayClient: aigatewayClient,
+		db:               db,
+		aiGatewayConf:    aiGatewayConf,
+		employeeSyncConf: employeeSyncConf,
+		aigatewayClient:  aigatewayClient,
 	}
 }
 
 // SetUserWhitelist sets whitelist for a user
 func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []string) error {
+	// Check if user exists when employee_sync is enabled
+	if s.employeeSyncConf.Enabled {
+		var employee models.EmployeeDepartment
+		err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error
+		if err != nil {
+			return fmt.Errorf("user not found: employee number '%s' does not exist", employeeNumber)
+		}
+	}
+
 	// Check if whitelist already exists
 	var whitelist models.ModelWhitelist
 	err := s.db.DB.Where("target_type = ? AND target_identifier = ?",

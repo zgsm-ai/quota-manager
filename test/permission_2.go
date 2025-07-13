@@ -19,7 +19,16 @@ func testDepartmentWhitelistChange(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
+	// Default employee sync config for compatibility
+	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: false, // Default to disabled for existing tests
+		HrURL:   "http://localhost:8099/api/hr/employees",
+		HrKey:   "test-hr-key",
+		DeptURL: "http://localhost:8099/api/hr/departments",
+		DeptKey: "test-dept-key",
+	}
+
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
 
 	// Create test employees
 	employees := []models.EmployeeDepartment{
@@ -169,7 +178,16 @@ func testUserWhitelistChange(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
+	// Default employee sync config for compatibility
+	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: false, // Default to disabled for existing tests
+		HrURL:   "http://localhost:8099/api/hr/employees",
+		HrKey:   "test-hr-key",
+		DeptURL: "http://localhost:8099/api/hr/departments",
+		DeptKey: "test-dept-key",
+	}
+
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
 
 	// Create test employee
 	employee := &models.EmployeeDepartment{
@@ -311,7 +329,16 @@ func testUserDepartmentChange(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
+	// Default employee sync config for compatibility
+	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: false, // Default to disabled for existing tests
+		HrURL:   "http://localhost:8099/api/hr/employees",
+		HrKey:   "test-hr-key",
+		DeptURL: "http://localhost:8099/api/hr/departments",
+		DeptKey: "test-dept-key",
+	}
+
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
 
 	// Create employee sync service
 	employeeSyncConfig := &config.EmployeeSyncConfig{
@@ -439,10 +466,53 @@ func slicesEqual(a, b []string) bool {
 
 // testNonExistentUserAndDepartment tests handling of non-existent users and departments
 func testNonExistentUserAndDepartment(ctx *TestContext) TestResult {
-	// Clear any previous aigateway calls
-	mockStore.ClearPermissionCalls()
+	// Test both employee_sync enabled and disabled scenarios
+	scenarios := []struct {
+		name            string
+		employeeEnabled bool
+		expectUserError bool
+		description     string
+	}{
+		{
+			name:            "Employee sync disabled",
+			employeeEnabled: false,
+			expectUserError: false,
+			description:     "When employee_sync.enabled is false, setting whitelist for non-existent user should succeed",
+		},
+		{
+			name:            "Employee sync enabled",
+			employeeEnabled: true,
+			expectUserError: true,
+			description:     "When employee_sync.enabled is true, setting whitelist for non-existent user should fail",
+		},
+	}
 
-	// Create services
+	for _, scenario := range scenarios {
+		fmt.Printf("\n=== Testing %s ===\n", scenario.name)
+		fmt.Printf("Description: %s\n", scenario.description)
+
+		result := testNonExistentUserScenario(ctx, scenario.employeeEnabled, scenario.expectUserError)
+		if !result.Passed {
+			return TestResult{
+				Passed:  false,
+				Message: fmt.Sprintf("Failed at %s: %s", scenario.name, result.Message),
+			}
+		}
+
+		fmt.Printf("✅ %s completed successfully\n", scenario.name)
+	}
+
+	return TestResult{Passed: true, Message: "Non-existent user and department test - both employee_sync enabled and disabled scenarios succeeded"}
+}
+
+// testNonExistentUserScenario tests a specific employee_sync configuration scenario
+func testNonExistentUserScenario(ctx *TestContext, employeeSyncEnabled bool, expectUserError bool) TestResult {
+	// Clear permission data for test isolation between scenarios
+	if err := clearPermissionData(ctx); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to clear permission data: %v", err)}
+	}
+
+	// Create services with specific employee_sync configuration
 	aiGatewayConfig := &config.AiGatewayConfig{
 		Host:       "localhost",
 		Port:       8080,
@@ -451,49 +521,82 @@ func testNonExistentUserAndDepartment(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, ctx.Gateway)
+	employeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: employeeSyncEnabled,
+		HrURL:   "http://localhost:8099/api/hr/employees",
+		HrKey:   "test-hr-key",
+		DeptURL: "http://localhost:8099/api/hr/departments",
+		DeptKey: "test-dept-key",
+	}
 
-	// Test 1: Set whitelist for non-existent user - should now succeed
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+
+	// Test 1: Set whitelist for non-existent user
 	err1 := permissionService.SetUserWhitelist("999999", []string{"gpt-4", "claude-3-opus"})
-	if err1 != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected success when setting whitelist for non-existent user, but got error: %v", err1)}
-	}
 
-	// Verify whitelist record was created in database for non-existent user
-	var nonExistentUserWhitelistCount int64
-	if err := ctx.DB.DB.Model(&models.ModelWhitelist{}).Where("target_type = ? AND target_identifier = ?", "user", "999999").Count(&nonExistentUserWhitelistCount).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count whitelist records for non-existent user: %v", err)}
-	}
+	if expectUserError {
+		// When employee_sync is enabled, expect failure
+		if err1 == nil {
+			return TestResult{Passed: false, Message: "Expected error when setting whitelist for non-existent user with employee_sync enabled, but got no error"}
+		}
+		// Check if it's the expected error message
+		expectedUserErrorMsg := "user not found: employee number '999999' does not exist"
+		if err1.Error() != expectedUserErrorMsg {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected error message '%s' for non-existent user, got '%s'", expectedUserErrorMsg, err1.Error())}
+		}
 
-	if nonExistentUserWhitelistCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 whitelist record for non-existent user, got %d", nonExistentUserWhitelistCount)}
-	}
+		// Verify no whitelist records were created for non-existent user
+		var nonExistentUserWhitelistCount int64
+		if err := ctx.DB.DB.Model(&models.ModelWhitelist{}).Where("target_type = ? AND target_identifier = ?", "user", "999999").Count(&nonExistentUserWhitelistCount).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count whitelist records for non-existent user: %v", err)}
+		}
 
-	// Verify effective permissions were created for non-existent user
-	var nonExistentUserEffectiveCount int64
-	if err := ctx.DB.DB.Model(&models.EffectivePermission{}).Where("employee_number = ?", "999999").Count(&nonExistentUserEffectiveCount).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count effective permissions for non-existent user: %v", err)}
-	}
+		if nonExistentUserWhitelistCount > 0 {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected no whitelist records for non-existent user when employee_sync enabled, got %d", nonExistentUserWhitelistCount)}
+		}
 
-	if nonExistentUserEffectiveCount != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 effective permission record for non-existent user, got %d", nonExistentUserEffectiveCount)}
-	}
+	} else {
+		// When employee_sync is disabled, expect success
+		if err1 != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected success when setting whitelist for non-existent user with employee_sync disabled, but got error: %v", err1)}
+		}
 
-	// Verify the effective permissions contain the correct models
-	var effectivePermission models.EffectivePermission
-	if err := ctx.DB.DB.Where("employee_number = ?", "999999").First(&effectivePermission).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions for non-existent user: %v", err)}
-	}
+		// Verify whitelist record was created in database for non-existent user
+		var nonExistentUserWhitelistCount int64
+		if err := ctx.DB.DB.Model(&models.ModelWhitelist{}).Where("target_type = ? AND target_identifier = ?", "user", "999999").Count(&nonExistentUserWhitelistCount).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count whitelist records for non-existent user: %v", err)}
+		}
 
-	effectiveModels := effectivePermission.GetEffectiveModelsAsSlice()
-	expectedModels := []string{"gpt-4", "claude-3-opus"}
-	if len(effectiveModels) != len(expectedModels) {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected %d effective models, got %d", len(expectedModels), len(effectiveModels))}
-	}
+		if nonExistentUserWhitelistCount != 1 {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 whitelist record for non-existent user, got %d", nonExistentUserWhitelistCount)}
+		}
 
-	for i, model := range expectedModels {
-		if effectiveModels[i] != model {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected model '%s' at position %d, got '%s'", model, i, effectiveModels[i])}
+		// Verify effective permissions were created for non-existent user
+		var nonExistentUserEffectiveCount int64
+		if err := ctx.DB.DB.Model(&models.EffectivePermission{}).Where("employee_number = ?", "999999").Count(&nonExistentUserEffectiveCount).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count effective permissions for non-existent user: %v", err)}
+		}
+
+		if nonExistentUserEffectiveCount != 1 {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 effective permission record for non-existent user, got %d", nonExistentUserEffectiveCount)}
+		}
+
+		// Verify the effective permissions contain the correct models
+		var effectivePermission models.EffectivePermission
+		if err := ctx.DB.DB.Where("employee_number = ?", "999999").First(&effectivePermission).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions for non-existent user: %v", err)}
+		}
+
+		effectiveModels := effectivePermission.GetEffectiveModelsAsSlice()
+		expectedModels := []string{"gpt-4", "claude-3-opus"}
+		if len(effectiveModels) != len(expectedModels) {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected %d effective models, got %d", len(expectedModels), len(effectiveModels))}
+		}
+
+		for i, model := range expectedModels {
+			if effectiveModels[i] != model {
+				return TestResult{Passed: false, Message: fmt.Sprintf("Expected model '%s' at position %d, got '%s'", model, i, effectiveModels[i])}
+			}
 		}
 	}
 
@@ -519,31 +622,48 @@ func testNonExistentUserAndDepartment(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no whitelist records for non-existent department, got %d", nonExistentDeptWhitelistCount)}
 	}
 
-	// Test 3: Get permissions for non-existent user - should now succeed since we created effective permissions
+	// Test 3: Get permissions for non-existent user
 	models3, err3 := permissionService.GetUserEffectivePermissions("999999")
 	if err3 != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected success when getting permissions for non-existent user, but got error: %v", err3)}
 	}
 
-	// Verify the returned models match what we set
-	if len(models3) != 2 || models3[0] != "gpt-4" || models3[1] != "claude-3-opus" {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected models [gpt-4, claude-3-opus] for non-existent user, got %v", models3)}
+	// Verify the returned models based on whether user whitelist was created
+	if expectUserError {
+		// When employee_sync is enabled and whitelist creation failed, should return empty permissions
+		if len(models3) != 0 {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected empty permissions for non-existent user when employee_sync enabled, got %v", models3)}
+		}
+	} else {
+		// When employee_sync is disabled and whitelist was created, should return the models
+		if len(models3) != 2 || models3[0] != "gpt-4" || models3[1] != "claude-3-opus" {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected models [gpt-4, claude-3-opus] for non-existent user when employee_sync disabled, got %v", models3)}
+		}
 	}
 
-	// Test 4: Verify aigateway calls were made for non-existent user since SetUserWhitelist now succeeds
+	// Test 4: Verify aigateway calls based on whether user whitelist was created
 	permissionCalls := mockStore.GetPermissionCalls()
-	if len(permissionCalls) != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 aigateway call for non-existent user operation, got %d calls", len(permissionCalls))}
-	}
 
-	// Verify the aigateway call was for the correct user and models
-	call := permissionCalls[0]
-	if call.EmployeeNumber != "999999" {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected aigateway call for employee 999999, got %s", call.EmployeeNumber)}
-	}
+	if expectUserError {
+		// When employee_sync is enabled and whitelist creation failed, should have no aigateway calls
+		if len(permissionCalls) != 0 {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 aigateway calls when employee_sync enabled and user creation failed, got %d calls", len(permissionCalls))}
+		}
+	} else {
+		// When employee_sync is disabled and whitelist was created, should have 1 aigateway call
+		if len(permissionCalls) != 1 {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 aigateway call when employee_sync disabled and user whitelist created, got %d calls", len(permissionCalls))}
+		}
 
-	if len(call.Models) != 2 || call.Models[0] != "gpt-4" || call.Models[1] != "claude-3-opus" {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected aigateway call with models [gpt-4, claude-3-opus], got %v", call.Models)}
+		// Verify the aigateway call was for the correct user and models
+		call := permissionCalls[0]
+		if call.EmployeeNumber != "999999" {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected aigateway call for employee 999999, got %s", call.EmployeeNumber)}
+		}
+
+		if len(call.Models) != 2 || call.Models[0] != "gpt-4" || call.Models[1] != "claude-3-opus" {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected aigateway call with models [gpt-4, claude-3-opus], got %v", call.Models)}
+		}
 	}
 
 	// Test 5: Verify database consistency - check that this test didn't create new orphaned records
@@ -566,5 +686,10 @@ func testNonExistentUserAndDepartment(ctx *TestContext) TestResult {
 		fmt.Printf("Warning: Found %d orphaned effective permission records (possibly from previous tests)\n", orphanedEffectiveCountAfter)
 	}
 
-	return TestResult{Passed: true, Message: "Non-existent user and department test - user operations (set whitelist, get permissions) work for non-existent users, department whitelist still requires existing department, database integrity maintained"}
+	// Return appropriate success message based on scenario
+	if expectUserError {
+		return TestResult{Passed: true, Message: "Employee sync enabled scenario - correctly rejected non-existent user whitelist creation and verified all related behaviors"}
+	} else {
+		return TestResult{Passed: true, Message: "Employee sync disabled scenario - successfully created whitelist for non-existent user and verified all related behaviors"}
+	}
 }

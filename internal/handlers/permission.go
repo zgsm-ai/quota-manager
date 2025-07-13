@@ -5,6 +5,8 @@ import (
 	modelsLib "quota-manager/internal/models"
 	"quota-manager/internal/services"
 
+	"quota-manager/internal/validation"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,31 +26,29 @@ func NewPermissionHandler(permissionService *services.PermissionService, employe
 
 // SetUserWhitelistRequest represents user whitelist request
 type SetUserWhitelistRequest struct {
-	EmployeeNumber string   `json:"employee_number" binding:"required"`
-	Models         []string `json:"models" binding:"required"`
+	EmployeeNumber string   `json:"employee_number" validate:"required,employee_number"`
+	Models         []string `json:"models" validate:"required,max=10"`
 }
 
 // SetDepartmentWhitelistRequest represents department whitelist request
 type SetDepartmentWhitelistRequest struct {
-	DepartmentName string   `json:"department_name" binding:"required"`
-	Models         []string `json:"models" binding:"required"`
+	DepartmentName string   `json:"department_name" validate:"required,department_name"`
+	Models         []string `json:"models" validate:"required,max=10"`
 }
 
 // GetPermissionsRequest represents get permissions request
 type GetPermissionsRequest struct {
-	TargetType       string `form:"target_type" binding:"required,oneof=user department"`
-	TargetIdentifier string `form:"target_identifier" binding:"required"`
+	TargetType       string `form:"target_type" validate:"required,oneof=user department"`
+	TargetIdentifier string `form:"target_identifier" validate:"required,min=2,max=100"`
 }
 
 // SetUserWhitelist sets whitelist for a user
 func (h *PermissionHandler) SetUserWhitelist(c *gin.Context) {
 	var req SetUserWhitelistRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":    "permission.invalid_params",
-			"message": "Invalid parameters: " + err.Error(),
-			"success": false,
-		})
+
+	// Use the new validation helper instead of ShouldBindJSON
+	if err := validation.ValidateJSON(c, &req); err != nil {
+		// Error response is already sent by ValidateJSON
 		return
 	}
 
@@ -84,12 +84,10 @@ func (h *PermissionHandler) SetUserWhitelist(c *gin.Context) {
 // SetDepartmentWhitelist sets whitelist for a department
 func (h *PermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 	var req SetDepartmentWhitelistRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":    "permission.invalid_params",
-			"message": "Invalid parameters: " + err.Error(),
-			"success": false,
-		})
+
+	// Use the new validation helper instead of ShouldBindJSON
+	if err := validation.ValidateJSON(c, &req); err != nil {
+		// Error response is already sent by ValidateJSON
 		return
 	}
 
@@ -125,12 +123,10 @@ func (h *PermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 // GetEffectivePermissions gets effective permissions for a user or department
 func (h *PermissionHandler) GetEffectivePermissions(c *gin.Context) {
 	var req GetPermissionsRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code":    "permission.invalid_params",
-			"message": "Invalid parameters: " + err.Error(),
-			"success": false,
-		})
+
+	// Use the new validation helper instead of ShouldBindQuery
+	if err := validation.ValidateQuery(c, &req); err != nil {
+		// Error response is already sent by ValidateQuery
 		return
 	}
 
