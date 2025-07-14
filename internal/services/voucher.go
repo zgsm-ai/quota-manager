@@ -17,7 +17,7 @@ type VoucherData struct {
 	GiverName       string             `json:"giver_name"`
 	GiverPhone      string             `json:"giver_phone"`
 	GiverGithub     string             `json:"giver_github"`
-	GiverGithubStar bool               `json:"giver_github_star"` // Whether giver starred zgsm-ai.zgsm
+	GiverGithubStar string             `json:"giver_github_star"` // Comma-separated list of starred projects
 	ReceiverID      string             `json:"receiver_id"`
 	QuotaList       []VoucherQuotaItem `json:"quota_list"`
 	Timestamp       int64              `json:"timestamp"`

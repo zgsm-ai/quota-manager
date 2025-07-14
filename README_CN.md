@@ -120,7 +120,7 @@ quota-manager/
 - `github_name`: GitHub 用户名
 - `email`: 邮箱
 - `phone`: 电话号码
-- `github_star`: GitHub 星标项目列表
+- `github_star`: GitHub 星标项目列表（逗号分隔）
 - `vip`: VIP 等级
 - `company`: 公司
 - `location`: 位置
@@ -573,6 +573,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `giver_name`: 转出方显示名称
 - `giver_phone`: 转出方电话号码
 - `giver_github`: 转出方 GitHub 用户名
+- `giver_github_star`: 转出方的星标项目列表（逗号分隔，会传递给接收方）
 - `receiver_id`: 接收方用户 ID
 - `quota_list`: 转账结果数组
   - `amount`: 配额数量
@@ -641,7 +642,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `and(condition1, condition2)`: 逻辑与
 - `belong-to(org)`: 属于指定组织
 - `false()`: 始终返回 false（没有用户匹配）
-- `github-star(project)`: 是否为指定项目加星
+- `github-star(project)`: 检查用户是否为指定项目加星（从用户的星标项目列表中匹配）
 - `is-vip(level)`: VIP 等级大于或等于指定等级
 - `match-user(user)`: 匹配特定用户
 - `not(condition)`: 逻辑非

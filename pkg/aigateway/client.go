@@ -32,14 +32,9 @@ type QuotaResponse struct {
 	UserID string `json:"user_id"`
 }
 
-type StarResponse struct {
-	UserID    string `json:"user_id"`
-	StarValue bool   `json:"star_value"`
-}
-
-type StarSetRequest struct {
-	UserID    string `json:"user_id"`
-	StarValue bool   `json:"star_value"`
+type StarProjectsResponse struct {
+	EmployeeNumber  string `json:"employee_number"`
+	StarredProjects string `json:"starred_projects"` // Comma-separated list
 }
 
 func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
@@ -203,9 +198,9 @@ func (c *Client) QueryQuotaValue(userID string) (int, error) {
 	return resp.Quota, nil
 }
 
-// QueryGithubStar queries user's GitHub star status for zgsm-ai.zgsm project
-func (c *Client) QueryGithubStar(userID string) (*StarResponse, error) {
-	apiUrl := fmt.Sprintf("%s%s/star?user_id=%s", c.BaseURL, c.AdminPath, userID)
+// QueryGithubStarProjects queries user's starred GitHub projects (returns comma-separated list)
+func (c *Client) QueryGithubStarProjects(employeeNumber string) (*StarProjectsResponse, error) {
+	apiUrl := fmt.Sprintf("%s%s/star/projects/query?employee_number=%s", c.BaseURL, c.AdminPath, employeeNumber)
 
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
@@ -219,50 +214,54 @@ func (c *Client) QueryGithubStar(userID string) (*StarResponse, error) {
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var respData ResponseData
-	if err := json.Unmarshal(body, &respData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	if !respData.Success {
-		return nil, fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
+	var response ResponseData
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !response.Success {
+		return nil, fmt.Errorf("API returned error: %s", response.Message)
 	}
 
 	// Parse the data field
-	dataMap, ok := respData.Data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid response data format")
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
 	}
 
-	starValueStr, ok := dataMap["star_value"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid star_value format in response")
+	var dataMap map[string]interface{}
+	if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
+		return nil, fmt.Errorf("failed to parse data: %w", err)
 	}
 
-	starValue := starValueStr == "true"
+	starredProjects, _ := dataMap["starred_projects"].(string)
 
-	return &StarResponse{
-		UserID:    userID,
-		StarValue: starValue,
+	return &StarProjectsResponse{
+		EmployeeNumber:  employeeNumber,
+		StarredProjects: starredProjects,
 	}, nil
 }
 
-// SetGithubStar sets user's GitHub star status for zgsm-ai.zgsm project
-func (c *Client) SetGithubStar(userID string, starValue bool) error {
-	apiUrl := fmt.Sprintf("%s%s/star/set", c.BaseURL, c.AdminPath)
+// SetGithubStarProjects sets user's starred GitHub projects (comma-separated list)
+func (c *Client) SetGithubStarProjects(employeeNumber string, starredProjects string) error {
+	apiUrl := fmt.Sprintf("%s%s/star/projects/set", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
-	data.Set("user_id", userID)
-	data.Set("star_value", strconv.FormatBool(starValue))
+	data.Set("employee_number", employeeNumber)
+	data.Set("starred_projects", starredProjects)
 
 	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
 	if err != nil {

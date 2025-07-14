@@ -23,16 +23,16 @@ type QuotaService struct {
 	db              *database.DB
 	aiGatewayConf   *config.AiGatewayConfig
 	aiGatewayClient interface {
-		QueryGithubStar(userID string) (*aigateway.StarResponse, error)
-		SetGithubStar(userID string, starValue bool) error
+		QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
+		SetGithubStarProjects(employeeNumber string, starredProjects string) error
 	}
 	voucherSvc *VoucherService
 }
 
 // NewQuotaService creates a new quota service
 func NewQuotaService(db *database.DB, aiGatewayConf *config.AiGatewayConfig, aiGatewayClient interface {
-	QueryGithubStar(userID string) (*aigateway.StarResponse, error)
-	SetGithubStar(userID string, starValue bool) error
+	QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
+	SetGithubStarProjects(employeeNumber string, starredProjects string) error
 }, voucherSvc *VoucherService) *QuotaService {
 	return &QuotaService{
 		db:              db,
@@ -324,21 +324,12 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		}
 	}
 
-	// Check if giver has starred zgsm-ai.zgsm project
-	var giverGithubStar bool
-	// First check from user's GithubStar field in database
+	// Get giver's starred projects from database
+	var giverGithubStar string
 	var userInfo models.UserInfo
 	if err := s.db.AuthDB.Where("id = ?", giver.ID).First(&userInfo).Error; err == nil {
-		// Check if user has starred zgsm-ai.zgsm project
-		if userInfo.GithubStar != "" {
-			stars := strings.Split(userInfo.GithubStar, ",")
-			for _, star := range stars {
-				if strings.TrimSpace(star) == "zgsm-ai.zgsm" {
-					giverGithubStar = true
-					break
-				}
-			}
-		}
+		// Store all starred projects as comma-separated string
+		giverGithubStar = userInfo.GithubStar
 	}
 
 	// Clean receiver_id to remove leading/trailing whitespace before generating voucher
@@ -349,7 +340,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 		GiverName:       giver.Name,
 		GiverPhone:      giver.Phone,
 		GiverGithub:     giver.Github,
-		GiverGithubStar: giverGithubStar,
+		GiverGithubStar: giverGithubStar, // Now stores comma-separated list of starred projects
 		ReceiverID:      cleanReceiverID,
 		QuotaList:       voucherQuotaList,
 	}
@@ -651,13 +642,14 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 		}
 	}
 
-	// Check and handle GitHub star status if giver has starred zgsm-ai.zgsm project
-	if voucherData.GiverGithubStar && s.aiGatewayClient != nil {
-		// If giver starred the project, set GitHub star status in AiGateway for receiver
+	// Check and handle GitHub star status if giver has starred projects
+	if voucherData.GiverGithubStar != "" && s.aiGatewayClient != nil {
+		// If giver has starred projects, set starred projects in AiGateway for receiver
 		// This is best effort - we don't want to fail the transfer if AI Gateway call fails
-		if err := s.aiGatewayClient.SetGithubStar(receiver.ID, true); err != nil {
-			logger.Warn("Failed to set GitHub star status in AiGateway",
+		if err := s.aiGatewayClient.SetGithubStarProjects(receiver.ID, voucherData.GiverGithubStar); err != nil {
+			logger.Warn("Failed to set GitHub star projects in AiGateway",
 				zap.String("user_id", receiver.ID),
+				zap.String("starred_projects", voucherData.GiverGithubStar),
 				zap.Error(err))
 		}
 	}

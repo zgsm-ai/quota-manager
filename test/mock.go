@@ -11,10 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SetStarCall represents a SetGithubStar call for testing
-type SetStarCall struct {
-	UserID    string
-	StarValue bool
+// SetStarProjectsCall represents a SetGithubStarProjects call for testing
+type SetStarProjectsCall struct {
+	EmployeeNumber  string
+	StarredProjects string
 }
 
 // PermissionCall represents a permission management call for testing
@@ -26,12 +26,12 @@ type PermissionCall struct {
 
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
-	data            map[string]int      // Total quota
-	usedData        map[string]int      // Used quota
-	starData        map[string]bool     // GitHub star status
-	permissionData  map[string][]string // User permissions (employee_number -> models)
-	setStarCalls    []SetStarCall       // Track SetGithubStar calls
-	permissionCalls []PermissionCall    // Track permission management calls
+	data                 map[string]int        // Total quota
+	usedData             map[string]int        // Used quota
+	starData             map[string]bool       // GitHub star status
+	permissionData       map[string][]string   // User permissions (employee_number -> models)
+	setStarProjectsCalls []SetStarProjectsCall // Track SetGithubStarProjects calls
+	permissionCalls      []PermissionCall      // Track permission management calls
 }
 
 func (m *MockQuotaStore) GetQuota(consumer string) int {
@@ -66,20 +66,22 @@ func (m *MockQuotaStore) DeltaUsed(consumer string, delta int) int {
 	return m.usedData[consumer]
 }
 
-func (m *MockQuotaStore) SetGithubStar(userID string, starValue bool) {
-	m.starData[userID] = starValue
-	m.setStarCalls = append(m.setStarCalls, SetStarCall{
-		UserID:    userID,
-		StarValue: starValue,
+func (m *MockQuotaStore) SetGithubStarProjects(employeeNumber string, starredProjects string) error {
+	// For simplicity in mock, just store true if there are any starred projects
+	m.starData[employeeNumber] = starredProjects != ""
+	m.setStarProjectsCalls = append(m.setStarProjectsCalls, SetStarProjectsCall{
+		EmployeeNumber:  employeeNumber,
+		StarredProjects: starredProjects,
 	})
+	return nil
 }
 
-func (m *MockQuotaStore) GetSetStarCalls() []SetStarCall {
-	return m.setStarCalls
+func (m *MockQuotaStore) GetSetStarProjectsCalls() []SetStarProjectsCall {
+	return m.setStarProjectsCalls
 }
 
-func (m *MockQuotaStore) ClearSetStarCalls() {
-	m.setStarCalls = []SetStarCall{}
+func (m *MockQuotaStore) ClearSetStarProjectsCalls() {
+	m.setStarProjectsCalls = []SetStarProjectsCall{}
 }
 
 // Permission management methods
@@ -130,12 +132,12 @@ func (m *MockQuotaStore) ClearAllPermissions() {
 }
 
 var mockStore = &MockQuotaStore{
-	data:            make(map[string]int),
-	usedData:        make(map[string]int),
-	starData:        make(map[string]bool),
-	permissionData:  make(map[string][]string),
-	setStarCalls:    []SetStarCall{},
-	permissionCalls: []PermissionCall{},
+	data:                 make(map[string]int),
+	usedData:             make(map[string]int),
+	starData:             make(map[string]bool),
+	permissionData:       make(map[string][]string),
+	setStarProjectsCalls: []SetStarProjectsCall{},
+	permissionCalls:      []PermissionCall{},
 }
 
 // createMockServer create mock server
@@ -349,27 +351,30 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				})
 			})
 
-			quota.POST("/star/set", func(c *gin.Context) {
+			quota.POST("/star/projects/set", func(c *gin.Context) {
 				if shouldFail {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 					return
 				}
 
-				userID := c.PostForm("user_id")
-				starValueStr := c.PostForm("star_value")
+				employeeNumber := c.PostForm("employee_number")
+				starredProjects := c.PostForm("starred_projects")
 
-				if userID == "" || starValueStr == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
+				if employeeNumber == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "missing employee_number parameter"})
 					return
 				}
 
-				starValue := starValueStr == "true"
-				mockStore.SetGithubStar(userID, starValue)
+				err := mockStore.SetGithubStarProjects(employeeNumber, starredProjects)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
 
 				c.JSON(http.StatusOK, gin.H{
-					"message":    "success",
-					"user_id":    userID,
-					"star_value": starValue,
+					"message":          "success",
+					"employee_number":  employeeNumber,
+					"starred_projects": starredProjects,
 				})
 			})
 		}

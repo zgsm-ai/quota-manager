@@ -45,7 +45,7 @@ func testClearData(ctx *TestContext) TestResult {
 	mockStore.data = make(map[string]int)
 	mockStore.usedData = make(map[string]int)
 	mockStore.starData = make(map[string]bool)
-	mockStore.setStarCalls = []SetStarCall{}
+	mockStore.ClearSetStarProjectsCalls()
 	mockStore.ClearAllPermissions()
 	mockStore.ClearPermissionCalls()
 

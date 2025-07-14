@@ -120,7 +120,7 @@ quota-manager/
 - `github_name`: GitHub username
 - `email`: Email
 - `phone`: Phone number
-- `github_star`: GitHub star project list
+- `github_star`: GitHub starred projects (comma-separated list)
 - `vip`: VIP level
 - `company`: Company
 - `location`: Location
@@ -573,6 +573,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `giver_name`: Giver display name
 - `giver_phone`: Giver phone number
 - `giver_github`: Giver GitHub username
+- `giver_github_star`: Giver's starred projects (comma-separated list, transferred to receiver)
 - `receiver_id`: Receiver user ID
 - `quota_list`: Array of transfer results
   - `amount`: Quota amount
@@ -641,7 +642,7 @@ The system supports complex condition expressions for strategy targeting:
 - `and(condition1, condition2)`: Logical AND
 - `belong-to(org)`: Belongs to specified organization
 - `false()`: Always returns false (no users will match)
-- `github-star(project)`: Whether starred the specified project
+- `github-star(project)`: Whether user has starred the specified project (checks against user's starred projects list)
 - `is-vip(level)`: VIP level greater than or equal to specified level
 - `match-user(user)`: Match specific user
 - `not(condition)`: Logical NOT
@@ -659,7 +660,7 @@ true()
 # Never execute for any users (useful for temporarily disabling)
 false()
 
-# Recharge users who starred the zgsm project
+# Recharge users who have starred the zgsm project
 github-star("zgsm")
 
 # Recharge VIP users who are recently active

@@ -151,11 +151,11 @@ func main() {
 		// Refresh used quota
 		v1.POST("/quota/used/refresh", refreshUsedQuota)
 
-		// Query GitHub star status
-		v1.GET("/quota/star", queryGithubStar)
+		// Query GitHub star projects status
+		v1.GET("/quota/star/projects/query", queryGithubStar)
 
-		// Set GitHub star status
-		v1.POST("/quota/star/set", setGithubStar)
+		// Set GitHub star projects status
+		v1.POST("/quota/star/projects/set", setGithubStar)
 	}
 
 	fmt.Println("AiGateway Mock Service starting on port 1002")

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"quota-manager/internal/models"
@@ -22,16 +23,16 @@ func testTransferInGithubStarNotSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create receiver: %v", err)}
 	}
 
-	// Clear previous SetGithubStar calls
-	mockStore.ClearSetStarCalls()
+	// Clear previous SetGithubStarProjects calls
+	mockStore.ClearSetStarProjectsCalls()
 
-	// Create voucher data without GitHub star
+	// Create voucher data without GitHub star projects
 	voucherData := &services.VoucherData{
 		GiverID:         giver.ID,
 		GiverName:       giver.Name,
 		GiverPhone:      "13800138000",
 		GiverGithub:     "giver-no-star",
-		GiverGithubStar: false, // giver does not have star
+		GiverGithubStar: "", // giver does not have starred projects
 		ReceiverID:      receiver.ID,
 		QuotaList: []services.VoucherQuotaItem{
 			{
@@ -39,6 +40,7 @@ func testTransferInGithubStarNotSet(ctx *TestContext) TestResult {
 				ExpiryDate: time.Now().Add(30 * 24 * time.Hour),
 			},
 		},
+		Timestamp: time.Now().Unix(),
 	}
 
 	// Generate voucher code
@@ -60,13 +62,13 @@ func testTransferInGithubStarNotSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer-in failed: %v", err)}
 	}
 
-	// Verify that no SetGithubStar call was made (since giver didn't have star)
-	setStarCalls := mockStore.GetSetStarCalls()
-	if len(setStarCalls) != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no SetGithubStar calls, but got %d calls", len(setStarCalls))}
+	// Verify that no SetGithubStarProjects call was made (since giver didn't have starred projects)
+	setStarProjectsCalls := mockStore.GetSetStarProjectsCalls()
+	if len(setStarProjectsCalls) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no SetGithubStarProjects calls, but got %d calls", len(setStarProjectsCalls))}
 	}
 
-	return TestResult{Passed: true, Message: "Transfer-in correctly does not set GitHub star flag when giver has no star"}
+	return TestResult{Passed: true, Message: "Transfer-in correctly does not set GitHub star projects when giver has no starred projects"}
 }
 
 // testTransferInGithubStarSet tests transfer-in when giver has star
@@ -83,23 +85,24 @@ func testTransferInGithubStarSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create receiver: %v", err)}
 	}
 
-	// Clear previous SetGithubStar calls
-	mockStore.ClearSetStarCalls()
+	// Clear previous SetGithubStarProjects calls
+	mockStore.ClearSetStarProjectsCalls()
 
-	// Create voucher data with GitHub star
+	// Create voucher data with GitHub star projects
 	voucherData := &services.VoucherData{
 		GiverID:         giver.ID,
 		GiverName:       giver.Name,
-		GiverPhone:      "13800138000",
+		GiverPhone:      "13800138001",
 		GiverGithub:     "giver-with-star",
-		GiverGithubStar: true, // giver has star
+		GiverGithubStar: "zgsm-ai.zgsm,microsoft/vscode", // giver has starred projects
 		ReceiverID:      receiver.ID,
 		QuotaList: []services.VoucherQuotaItem{
 			{
-				Amount:     100,
+				Amount:     200,
 				ExpiryDate: time.Now().Add(30 * 24 * time.Hour),
 			},
 		},
+		Timestamp: time.Now().Unix(),
 	}
 
 	// Generate voucher code
@@ -113,7 +116,7 @@ func testTransferInGithubStarSet(ctx *TestContext) TestResult {
 		ID:     receiver.ID,
 		Name:   receiver.Name,
 		Github: "receiver-2",
-		Phone:  "13900139000",
+		Phone:  "13900139001",
 	}, &services.TransferInRequest{
 		VoucherCode: voucherCode,
 	})
@@ -121,21 +124,21 @@ func testTransferInGithubStarSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer-in failed: %v", err)}
 	}
 
-	// Verify that SetGithubStar call was made for receiver with value true
-	setStarCalls := mockStore.GetSetStarCalls()
-	if len(setStarCalls) != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 SetGithubStar call, but got %d calls", len(setStarCalls))}
+	// Verify that SetGithubStarProjects call was made for receiver with the projects
+	setStarProjectsCalls := mockStore.GetSetStarProjectsCalls()
+	if len(setStarProjectsCalls) != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 SetGithubStarProjects call, but got %d calls", len(setStarProjectsCalls))}
 	}
 
-	call := setStarCalls[0]
-	if call.UserID != receiver.ID {
-		return TestResult{Passed: false, Message: fmt.Sprintf("SetGithubStar called for wrong user: expected %s, got %s", receiver.ID, call.UserID)}
+	call := setStarProjectsCalls[0]
+	if call.EmployeeNumber != receiver.ID {
+		return TestResult{Passed: false, Message: fmt.Sprintf("SetGithubStarProjects called for wrong user: expected %s, got %s", receiver.ID, call.EmployeeNumber)}
 	}
-	if !call.StarValue {
-		return TestResult{Passed: false, Message: "SetGithubStar should be called with starValue=true"}
+	if call.StarredProjects != "zgsm-ai.zgsm,microsoft/vscode" {
+		return TestResult{Passed: false, Message: fmt.Sprintf("SetGithubStarProjects called with wrong projects: expected 'zgsm-ai.zgsm,microsoft/vscode', got '%s'", call.StarredProjects)}
 	}
 
-	return TestResult{Passed: true, Message: "Transfer-in correctly sets GitHub star flag when giver has star"}
+	return TestResult{Passed: true, Message: "Transfer-in correctly sets GitHub star projects when giver has starred projects"}
 }
 
 // testTransferInGithubStarEmptyField tests transfer-in when voucher has no GitHub star field
@@ -152,23 +155,24 @@ func testTransferInGithubStarEmptyField(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create receiver: %v", err)}
 	}
 
-	// Clear previous SetGithubStar calls
-	mockStore.ClearSetStarCalls()
+	// Clear previous SetGithubStarProjects calls
+	mockStore.ClearSetStarProjectsCalls()
 
-	// Create voucher data with default (false) GitHub star field
+	// Create voucher data with default (empty) GitHub star field
 	voucherData := &services.VoucherData{
 		GiverID:         giver.ID,
 		GiverName:       giver.Name,
-		GiverPhone:      "13800138000",
-		GiverGithub:     "giver-empty",
-		GiverGithubStar: false, // default/empty value
+		GiverPhone:      "13800138002",
+		GiverGithub:     "giver-empty-field",
+		GiverGithubStar: "", // default/empty value
 		ReceiverID:      receiver.ID,
 		QuotaList: []services.VoucherQuotaItem{
 			{
-				Amount:     100,
+				Amount:     150,
 				ExpiryDate: time.Now().Add(30 * 24 * time.Hour),
 			},
 		},
+		Timestamp: time.Now().Unix(),
 	}
 
 	// Generate voucher code
@@ -182,7 +186,7 @@ func testTransferInGithubStarEmptyField(ctx *TestContext) TestResult {
 		ID:     receiver.ID,
 		Name:   receiver.Name,
 		Github: "receiver-3",
-		Phone:  "13900139000",
+		Phone:  "13900139002",
 	}, &services.TransferInRequest{
 		VoucherCode: voucherCode,
 	})
@@ -190,10 +194,10 @@ func testTransferInGithubStarEmptyField(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Transfer-in failed: %v", err)}
 	}
 
-	// Verify that no SetGithubStar call was made (empty field defaults to false)
-	setStarCalls := mockStore.GetSetStarCalls()
-	if len(setStarCalls) != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no SetGithubStar calls, but got %d calls", len(setStarCalls))}
+	// Verify that no SetGithubStarProjects call was made (empty field defaults to no projects)
+	setStarProjectsCalls := mockStore.GetSetStarProjectsCalls()
+	if len(setStarProjectsCalls) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no SetGithubStarProjects calls, but got %d calls", len(setStarProjectsCalls))}
 	}
 
 	return TestResult{Passed: true, Message: "Transfer-in correctly handles empty GitHub star field"}
@@ -266,8 +270,8 @@ func testTransferOutGithubStarNotSet(ctx *TestContext) TestResult {
 	if voucherData.GiverGithub != "giver-out-no-star" {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected giver github 'giver-out-no-star', got %s", voucherData.GiverGithub)}
 	}
-	if voucherData.GiverGithubStar != false {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected GiverGithubStar to be false (giver doesn't star zgsm-ai.zgsm), got %v", voucherData.GiverGithubStar)}
+	if voucherData.GiverGithubStar != "microsoft/vscode,google/tensorflow" {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected GiverGithubStar to be 'microsoft/vscode,google/tensorflow' (giver's starred projects), got %v", voucherData.GiverGithubStar)}
 	}
 	if voucherData.ReceiverID != receiver.ID {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected receiver ID %s, got %s", receiver.ID, voucherData.ReceiverID)}
@@ -279,7 +283,7 @@ func testTransferOutGithubStarNotSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 100, got %d", voucherData.QuotaList[0].Amount)}
 	}
 
-	return TestResult{Passed: true, Message: "Transfer-out correctly sets GiverGithubStar=false when giver doesn't star zgsm-ai.zgsm"}
+	return TestResult{Passed: true, Message: "Transfer-out correctly sets GiverGithubStar with all giver's starred projects"}
 }
 
 // testTransferOutGithubStarSet tests transfer-out when giver has star - voucher field verification
@@ -349,8 +353,8 @@ func testTransferOutGithubStarSet(ctx *TestContext) TestResult {
 	if voucherData.GiverGithub != "giver-out-with-star" {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected giver github 'giver-out-with-star', got %s", voucherData.GiverGithub)}
 	}
-	if voucherData.GiverGithubStar != true {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected GiverGithubStar to be true (giver stars zgsm-ai.zgsm), got %v", voucherData.GiverGithubStar)}
+	if !strings.Contains(voucherData.GiverGithubStar, "zgsm-ai.zgsm") {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected GiverGithubStar to contain zgsm-ai.zgsm (giver stars zgsm-ai.zgsm), got %v", voucherData.GiverGithubStar)}
 	}
 	if voucherData.ReceiverID != receiver.ID {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected receiver ID %s, got %s", receiver.ID, voucherData.ReceiverID)}
@@ -362,5 +366,5 @@ func testTransferOutGithubStarSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 100, got %d", voucherData.QuotaList[0].Amount)}
 	}
 
-	return TestResult{Passed: true, Message: "Transfer-out correctly sets GiverGithubStar=true when giver stars zgsm-ai.zgsm"}
+	return TestResult{Passed: true, Message: "Transfer-out correctly sets GiverGithubStar with projects when giver stars zgsm-ai.zgsm"}
 }
