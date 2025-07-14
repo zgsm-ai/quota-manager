@@ -233,6 +233,26 @@ type PermissionAudit struct {
 	CreateTime       time.Time `gorm:"autoCreateTime;index" json:"create_time"`
 }
 
+// StarCheckSetting represents star check settings for users/departments
+type StarCheckSetting struct {
+	ID               int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	TargetType       string    `gorm:"not null;size:20;index" json:"target_type"`        // 'user' or 'department'
+	TargetIdentifier string    `gorm:"not null;size:500;index" json:"target_identifier"` // employee_number for user, department name for department
+	Enabled          bool      `gorm:"not null" json:"enabled"`                          // star check enabled/disabled
+	CreateTime       time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime       time.Time `gorm:"autoUpdateTime" json:"update_time"`
+}
+
+// EffectiveStarCheckSetting represents the effective star check settings for each employee
+type EffectiveStarCheckSetting struct {
+	ID             int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	EmployeeNumber string    `gorm:"uniqueIndex;not null;size:100" json:"employee_number"`
+	Enabled        bool      `gorm:"not null" json:"enabled"` // effective star check setting
+	SettingID      *int      `gorm:"index" json:"setting_id"`
+	CreateTime     time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`
+}
+
 // GetDeptFullLevelNamesAsSlice returns the department full level names as a slice
 func (e *EmployeeDepartment) GetDeptFullLevelNamesAsSlice() []string {
 	if e.DeptFullLevelNames == "" {
@@ -292,6 +312,16 @@ func (PermissionAudit) TableName() string {
 	return "permission_audit"
 }
 
+// TableName sets the table name for StarCheckSetting
+func (StarCheckSetting) TableName() string {
+	return "star_check_settings"
+}
+
+// TableName sets the table name for EffectiveStarCheckSetting
+func (EffectiveStarCheckSetting) TableName() string {
+	return "effective_star_check_settings"
+}
+
 // Constants for target types
 const (
 	TargetTypeUser       = "user"
@@ -300,9 +330,11 @@ const (
 
 // Constants for permission operations
 const (
-	OperationEmployeeSync     = "employee_sync"
-	OperationWhitelistSet     = "whitelist_set"
-	OperationPermissionUpdate = "permission_updated"
+	OperationEmployeeSync           = "employee_sync"
+	OperationWhitelistSet           = "whitelist_set"
+	OperationPermissionUpdate       = "permission_updated"
+	OperationStarCheckSet           = "star_check_set"
+	OperationStarCheckSettingUpdate = "star_check_setting_update"
 )
 
 // IsEnabled checks if the strategy is enabled

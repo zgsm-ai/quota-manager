@@ -264,6 +264,7 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 	}
 
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
+	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
 
 	// Create a temporary employee in the target department so we can set its whitelist
 	tempEmployee := &models.EmployeeDepartment{
@@ -294,7 +295,7 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 		DeptURL: ctx.MockServer.URL + "/api/test/departments",
 		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
-	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
+	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService)
 
 	// Add department hierarchy data to mock HR system using new structure
 	SetupDefaultDepartmentHierarchy()
@@ -490,7 +491,8 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 
 	// Use the existing employee sync config for permission service
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
-	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
+	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService)
 
 	// Setup department hierarchy in Mock HR for our test using new structure
 	ClearMockData()                                // Clear any existing data first

@@ -179,6 +179,30 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"User Addition and Removal Test", testUserAdditionAndRemoval},
 		{"Non-existent User and Department Test", testNonExistentUserAndDepartment},
 		{"Employee Data Integrity Test", testEmployeeDataIntegrity},
+
+		// Star Check Permission Management Tests
+		{"User Star Check Setting Management Test", testUserStarCheckSettingManagement},
+		{"Department Star Check Setting Management Test", testDepartmentStarCheckSettingManagement},
+		{"Star Check Setting Priority and Inheritance Test", testStarCheckSettingPriorityAndInheritance},
+		{"Empty Star Check Setting Fallback Test", testEmptyStarCheckSettingFallback},
+		{"Star Check Permission Distribution Test", testStarCheckPermissionDistribution},
+		{"Sync Without Star Check Setting Test", testSyncWithoutStarCheckSetting},
+		{"Star Check Notification Optimization Test", testStarCheckNotificationOptimization},
+		{"User Star Check Setting Distribution Test", testUserStarCheckSettingDistribution},
+		{"Department Star Check Setting Distribution Test", testDepartmentStarCheckSettingDistribution},
+		{"Star Check Setting Hierarchy Level 1 Test", testStarCheckSettingHierarchyLevel1},
+		{"Star Check Setting Hierarchy Level 2 Test", testStarCheckSettingHierarchyLevel2},
+		{"Star Check Setting Hierarchy Level 3 Test", testStarCheckSettingHierarchyLevel3},
+		{"Star Check Setting Hierarchy Level 5 Test", testStarCheckSettingHierarchyLevel5},
+		{"User Star Check Setting Overrides Department Test", testUserStarCheckSettingOverridesDepartment},
+		{"Department Star Check Setting Change Test", testDepartmentStarCheckSettingChange},
+		{"User Star Check Setting Change Test", testUserStarCheckSettingChange},
+		{"User Department Star Check Change Test", testUserDepartmentStarCheckChange},
+		{"User Star Check Addition and Removal Test", testUserStarCheckAdditionAndRemoval},
+		{"Non-existent User and Department Star Check Test", testNonExistentUserAndDepartmentStarCheck},
+		{"Star Check Employee Data Integrity Test", testStarCheckEmployeeDataIntegrity},
+		{"Unified Permission Queries Test", testUnifiedPermissionQueries},
+		{"Star Check Employee Sync Test", testStarCheckEmployeeSync},
 	}
 
 	for _, tc := range testCases {

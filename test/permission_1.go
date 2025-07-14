@@ -369,7 +369,8 @@ func testSyncWithoutWhitelist(ctx *TestContext) TestResult {
 	}
 
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
-	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
+	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService)
 
 	// Clear any previous permission calls from earlier tests
 	// Clear permission data for test isolation

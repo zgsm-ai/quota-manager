@@ -197,3 +197,35 @@ CREATE INDEX IF NOT EXISTS idx_permission_audit_operation ON permission_audit(op
 CREATE INDEX IF NOT EXISTS idx_permission_audit_target_type ON permission_audit(target_type);
 CREATE INDEX IF NOT EXISTS idx_permission_audit_target_identifier ON permission_audit(target_identifier);
 CREATE INDEX IF NOT EXISTS idx_permission_audit_create_time ON permission_audit(create_time);
+
+-- Star check settings table
+CREATE TABLE IF NOT EXISTS star_check_settings (
+    id SERIAL PRIMARY KEY,
+    target_type VARCHAR(20) NOT NULL,  -- 'user' or 'department'
+    target_identifier VARCHAR(500) NOT NULL,  -- employee_number for user, department name for department
+    enabled BOOLEAN NOT NULL DEFAULT true,  -- star check enabled or disabled
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for star_check_settings table
+CREATE INDEX IF NOT EXISTS idx_star_check_settings_target_type ON star_check_settings(target_type);
+CREATE INDEX IF NOT EXISTS idx_star_check_settings_target_identifier ON star_check_settings(target_identifier);
+
+-- Create unique index to prevent duplicate settings
+CREATE UNIQUE INDEX IF NOT EXISTS idx_star_check_settings_unique ON star_check_settings(target_type, target_identifier);
+
+-- Effective star check settings table
+CREATE TABLE IF NOT EXISTS effective_star_check_settings (
+    id SERIAL PRIMARY KEY,
+    employee_number VARCHAR(100) UNIQUE NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT true,  -- effective star check setting
+    setting_id INTEGER,
+    create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (setting_id) REFERENCES star_check_settings(id) ON DELETE SET NULL
+);
+
+-- Create indexes for effective_star_check_settings table
+CREATE INDEX IF NOT EXISTS idx_effective_star_check_settings_employee ON effective_star_check_settings(employee_number);
+CREATE INDEX IF NOT EXISTS idx_effective_star_check_settings_setting ON effective_star_check_settings(setting_id);

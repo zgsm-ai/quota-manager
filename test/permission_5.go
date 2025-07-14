@@ -27,60 +27,60 @@ func testPermissionValidation(ctx *TestContext) TestResult {
 	return TestResult{Passed: true, Message: "Permission validation test succeeded"}
 }
 
-// testSetUserWhitelistValidation tests SetUserWhitelistRequest validation
+// testSetUserWhitelistValidation tests SetUserModelWhitelistRequest validation
 func testSetUserWhitelistValidation() bool {
 	// Test valid request
-	validReq := handlers.SetUserWhitelistRequest{
+	validReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "EMP12345",
 		Models:         []string{"gpt-4", "claude-3-opus"},
 	}
 	if err := validation.ValidateStruct(&validReq); err != nil {
-		fmt.Printf("Valid SetUserWhitelistRequest should pass validation: %v\n", err)
+		fmt.Printf("Valid SetUserModelWhitelistRequest should pass validation: %v\n", err)
 		return false
 	}
 
 	// Test valid request with empty models (delete permissions)
-	emptyModelsReq := handlers.SetUserWhitelistRequest{
+	emptyModelsReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "EMP123",
 		Models:         []string{},
 	}
 	if err := validation.ValidateStruct(&emptyModelsReq); err != nil {
-		fmt.Printf("SetUserWhitelistRequest with empty models should pass validation: %v\n", err)
+		fmt.Printf("SetUserModelWhitelistRequest with empty models should pass validation: %v\n", err)
 		return false
 	}
 
 	// Test invalid employee number - too short
-	shortEmpReq := handlers.SetUserWhitelistRequest{
+	shortEmpReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "E",
 		Models:         []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&shortEmpReq); err == nil {
-		fmt.Printf("SetUserWhitelistRequest with short employee number should fail validation\n")
+		fmt.Printf("SetUserModelWhitelistRequest with short employee number should fail validation\n")
 		return false
 	}
 
 	// Test invalid employee number - too long
-	longEmpReq := handlers.SetUserWhitelistRequest{
+	longEmpReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "EMP123456789012345678901", // 23 characters
 		Models:         []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&longEmpReq); err == nil {
-		fmt.Printf("SetUserWhitelistRequest with long employee number should fail validation\n")
+		fmt.Printf("SetUserModelWhitelistRequest with long employee number should fail validation\n")
 		return false
 	}
 
 	// Test invalid employee number - special characters
-	specialCharReq := handlers.SetUserWhitelistRequest{
+	specialCharReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "EMP-123@",
 		Models:         []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&specialCharReq); err == nil {
-		fmt.Printf("SetUserWhitelistRequest with special characters in employee number should fail validation\n")
+		fmt.Printf("SetUserModelWhitelistRequest with special characters in employee number should fail validation\n")
 		return false
 	}
 
 	// Test too many models
-	tooManyModelsReq := handlers.SetUserWhitelistRequest{
+	tooManyModelsReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "EMP123",
 		Models: []string{
 			"model1", "model2", "model3", "model4", "model5",
@@ -88,36 +88,36 @@ func testSetUserWhitelistValidation() bool {
 		},
 	}
 	if err := validation.ValidateStruct(&tooManyModelsReq); err == nil {
-		fmt.Printf("SetUserWhitelistRequest with too many models should fail validation\n")
+		fmt.Printf("SetUserModelWhitelistRequest with too many models should fail validation\n")
 		return false
 	}
 
 	// Test missing required field - employee_number
-	missingEmpReq := handlers.SetUserWhitelistRequest{
+	missingEmpReq := handlers.SetUserModelWhitelistRequest{
 		Models: []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&missingEmpReq); err == nil {
-		fmt.Printf("SetUserWhitelistRequest with missing employee_number should fail validation\n")
+		fmt.Printf("SetUserModelWhitelistRequest with missing employee_number should fail validation\n")
 		return false
 	}
 
 	// Test missing required field - models
-	missingModelsReq := handlers.SetUserWhitelistRequest{
+	missingModelsReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "EMP123",
 		// Models field is not set, should fail validation
 	}
 	if err := validation.ValidateStruct(&missingModelsReq); err == nil {
-		fmt.Printf("SetUserWhitelistRequest with missing models should fail validation\n")
+		fmt.Printf("SetUserModelWhitelistRequest with missing models should fail validation\n")
 		return false
 	}
 
 	return true
 }
 
-// testSetDepartmentWhitelistValidation tests SetDepartmentWhitelistRequest validation
+// testSetDepartmentWhitelistValidation tests SetDepartmentModelWhitelistRequest validation
 func testSetDepartmentWhitelistValidation() bool {
 	// Test valid department name - English
-	validEngReq := handlers.SetDepartmentWhitelistRequest{
+	validEngReq := handlers.SetDepartmentModelWhitelistRequest{
 		DepartmentName: "RD_Center",
 		Models:         []string{"gpt-4", "deepseek-v3"},
 	}
@@ -127,7 +127,7 @@ func testSetDepartmentWhitelistValidation() bool {
 	}
 
 	// Test valid department name - Chinese
-	validChineseReq := handlers.SetDepartmentWhitelistRequest{
+	validChineseReq := handlers.SetDepartmentModelWhitelistRequest{
 		DepartmentName: "研发中心",
 		Models:         []string{"claude-3-opus"},
 	}
@@ -137,7 +137,7 @@ func testSetDepartmentWhitelistValidation() bool {
 	}
 
 	// Test valid department name - Mixed
-	validMixedReq := handlers.SetDepartmentWhitelistRequest{
+	validMixedReq := handlers.SetDepartmentModelWhitelistRequest{
 		DepartmentName: "RD部门_Tech-Division",
 		Models:         []string{"qwen-turbo"},
 	}
@@ -147,51 +147,52 @@ func testSetDepartmentWhitelistValidation() bool {
 	}
 
 	// Test invalid department name - too short
-	shortDeptReq := handlers.SetDepartmentWhitelistRequest{
+	shortDeptReq := handlers.SetDepartmentModelWhitelistRequest{
 		DepartmentName: "R",
 		Models:         []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&shortDeptReq); err == nil {
-		fmt.Printf("SetDepartmentWhitelistRequest with short department name should fail validation\n")
+		fmt.Printf("SetDepartmentModelWhitelistRequest with short department name should fail validation\n")
 		return false
 	}
 
 	// Test invalid department name - special characters
-	specialCharDeptReq := handlers.SetDepartmentWhitelistRequest{
+	specialCharDeptReq := handlers.SetDepartmentModelWhitelistRequest{
 		DepartmentName: "R&D@Center!",
 		Models:         []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&specialCharDeptReq); err == nil {
-		fmt.Printf("SetDepartmentWhitelistRequest with invalid special characters should fail validation\n")
+		fmt.Printf("SetDepartmentModelWhitelistRequest with invalid special characters should fail validation\n")
 		return false
 	}
 
 	// Test missing required field - department_name
-	missingDeptReq := handlers.SetDepartmentWhitelistRequest{
+	missingDeptReq := handlers.SetDepartmentModelWhitelistRequest{
 		Models: []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&missingDeptReq); err == nil {
-		fmt.Printf("SetDepartmentWhitelistRequest with missing department_name should fail validation\n")
+		fmt.Printf("SetDepartmentModelWhitelistRequest with missing department_name should fail validation\n")
 		return false
 	}
 
 	// Test missing required field - models
-	missingModelsReq := handlers.SetDepartmentWhitelistRequest{
+	missingModelsReq := handlers.SetDepartmentModelWhitelistRequest{
 		DepartmentName: "研发中心",
 		// Models field is not set, should fail validation
 	}
 	if err := validation.ValidateStruct(&missingModelsReq); err == nil {
-		fmt.Printf("SetDepartmentWhitelistRequest with missing models should fail validation\n")
+		fmt.Printf("SetDepartmentModelWhitelistRequest with missing models should fail validation\n")
 		return false
 	}
 
 	return true
 }
 
-// testGetEffectivePermissionsValidation tests GetPermissionsRequest validation
+// testGetEffectivePermissionsValidation tests GetEffectivePermissionsRequest validation
 func testGetEffectivePermissionsValidation() bool {
-	// Test valid user query
-	validUserReq := handlers.GetPermissionsRequest{
+	// Test valid user query for model permissions
+	validUserReq := handlers.GetEffectivePermissionsRequest{
+		Type:             "model",
 		TargetType:       "user",
 		TargetIdentifier: "EMP12345",
 	}
@@ -200,8 +201,9 @@ func testGetEffectivePermissionsValidation() bool {
 		return false
 	}
 
-	// Test valid department query
-	validDeptReq := handlers.GetPermissionsRequest{
+	// Test valid department query for star-check permissions
+	validDeptReq := handlers.GetEffectivePermissionsRequest{
+		Type:             "star-check",
 		TargetType:       "department",
 		TargetIdentifier: "研发中心",
 	}
@@ -210,41 +212,66 @@ func testGetEffectivePermissionsValidation() bool {
 		return false
 	}
 
+	// Test missing required field - type
+	missingTypeFieldReq := handlers.GetEffectivePermissionsRequest{
+		TargetType:       "user",
+		TargetIdentifier: "EMP123",
+	}
+	if err := validation.ValidateStruct(&missingTypeFieldReq); err == nil {
+		fmt.Printf("GetEffectivePermissionsRequest with missing type should fail validation\n")
+		return false
+	}
+
+	// Test invalid type
+	invalidTypeFieldReq := handlers.GetEffectivePermissionsRequest{
+		Type:             "invalid-type",
+		TargetType:       "user",
+		TargetIdentifier: "EMP123",
+	}
+	if err := validation.ValidateStruct(&invalidTypeFieldReq); err == nil {
+		fmt.Printf("GetEffectivePermissionsRequest with invalid type should fail validation\n")
+		return false
+	}
+
 	// Test invalid target_type
-	invalidTypeReq := handlers.GetPermissionsRequest{
+	invalidTargetTypeReq := handlers.GetEffectivePermissionsRequest{
+		Type:             "model",
 		TargetType:       "group",
 		TargetIdentifier: "EMP123",
 	}
-	if err := validation.ValidateStruct(&invalidTypeReq); err == nil {
-		fmt.Printf("GetPermissionsRequest with invalid target_type should fail validation\n")
+	if err := validation.ValidateStruct(&invalidTargetTypeReq); err == nil {
+		fmt.Printf("GetEffectivePermissionsRequest with invalid target_type should fail validation\n")
 		return false
 	}
 
 	// Test invalid target_identifier - too short
-	shortIdentifierReq := handlers.GetPermissionsRequest{
+	shortIdentifierReq := handlers.GetEffectivePermissionsRequest{
+		Type:             "model",
 		TargetType:       "user",
 		TargetIdentifier: "E",
 	}
 	if err := validation.ValidateStruct(&shortIdentifierReq); err == nil {
-		fmt.Printf("GetPermissionsRequest with short target_identifier should fail validation\n")
+		fmt.Printf("GetEffectivePermissionsRequest with short target_identifier should fail validation\n")
 		return false
 	}
 
 	// Test missing required field - target_type
-	missingTypeReq := handlers.GetPermissionsRequest{
+	missingTargetTypeReq := handlers.GetEffectivePermissionsRequest{
+		Type:             "model",
 		TargetIdentifier: "EMP123",
 	}
-	if err := validation.ValidateStruct(&missingTypeReq); err == nil {
-		fmt.Printf("GetPermissionsRequest with missing target_type should fail validation\n")
+	if err := validation.ValidateStruct(&missingTargetTypeReq); err == nil {
+		fmt.Printf("GetEffectivePermissionsRequest with missing target_type should fail validation\n")
 		return false
 	}
 
 	// Test missing required field - target_identifier
-	missingIdentifierReq := handlers.GetPermissionsRequest{
+	missingIdentifierReq := handlers.GetEffectivePermissionsRequest{
+		Type:       "model",
 		TargetType: "user",
 	}
 	if err := validation.ValidateStruct(&missingIdentifierReq); err == nil {
-		fmt.Printf("GetPermissionsRequest with missing target_identifier should fail validation\n")
+		fmt.Printf("GetEffectivePermissionsRequest with missing target_identifier should fail validation\n")
 		return false
 	}
 
@@ -279,7 +306,7 @@ func testEmployeeNumberValidator() bool {
 	}
 
 	for _, empNum := range validEmployeeNumbers {
-		req := handlers.SetUserWhitelistRequest{
+		req := handlers.SetUserModelWhitelistRequest{
 			EmployeeNumber: empNum,
 			Models:         []string{},
 		}
@@ -301,7 +328,7 @@ func testEmployeeNumberValidator() bool {
 	}
 
 	for _, empNum := range invalidEmployeeNumbers {
-		req := handlers.SetUserWhitelistRequest{
+		req := handlers.SetUserModelWhitelistRequest{
 			EmployeeNumber: empNum,
 			Models:         []string{},
 		}
@@ -327,7 +354,7 @@ func testDepartmentNameValidator() bool {
 	}
 
 	for _, deptName := range validDepartmentNames {
-		req := handlers.SetDepartmentWhitelistRequest{
+		req := handlers.SetDepartmentModelWhitelistRequest{
 			DepartmentName: deptName,
 			Models:         []string{},
 		}
@@ -365,7 +392,7 @@ func testDepartmentNameValidator() bool {
 	}
 
 	for _, deptName := range invalidDepartmentNames {
-		req := handlers.SetDepartmentWhitelistRequest{
+		req := handlers.SetDepartmentModelWhitelistRequest{
 			DepartmentName: deptName,
 			Models:         []string{},
 		}
@@ -381,7 +408,7 @@ func testDepartmentNameValidator() bool {
 // testPermissionValidationErrorMessages tests validation error messages
 func testPermissionValidationErrorMessages(ctx *TestContext) TestResult {
 	// Test employee number error message
-	invalidEmpReq := handlers.SetUserWhitelistRequest{
+	invalidEmpReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "E", // too short
 		Models:         []string{},
 	}
@@ -395,7 +422,7 @@ func testPermissionValidationErrorMessages(ctx *TestContext) TestResult {
 	}
 
 	// Test department name error message
-	invalidDeptReq := handlers.SetDepartmentWhitelistRequest{
+	invalidDeptReq := handlers.SetDepartmentModelWhitelistRequest{
 		DepartmentName: "R@D", // invalid characters
 		Models:         []string{},
 	}
@@ -409,7 +436,7 @@ func testPermissionValidationErrorMessages(ctx *TestContext) TestResult {
 	}
 
 	// Test too many models error message
-	tooManyModelsReq := handlers.SetUserWhitelistRequest{
+	tooManyModelsReq := handlers.SetUserModelWhitelistRequest{
 		EmployeeNumber: "EMP123",
 		Models: []string{
 			"model1", "model2", "model3", "model4", "model5",

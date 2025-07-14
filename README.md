@@ -19,6 +19,13 @@ A comprehensive quota management system built with Go and Gin framework, featuri
 - **Real-time Updates**: Automatic permission synchronization with AI Gateway
 - **Audit Trail**: Comprehensive permission operation tracking
 
+### Star Check Permission Management (New)
+- **Star Check Control**: User and department-level GitHub star check toggle management
+- **Fine-grained Control**: Support for disabling/enabling star checks for specific users or departments
+- **Permission Inheritance**: Department hierarchy-based star check setting inheritance
+- **Priority Management**: User settings take precedence over department settings
+- **Unified Interface**: Shared unified query and sync interfaces with model permission management
+
 ### Advanced Quota Operations
 - **Quota Transfer**: Secure quota transfer between users with voucher codes
 - **Audit Trail**: Comprehensive quota operation tracking
@@ -158,11 +165,27 @@ quota-manager/
 
 **Permission Audit Table (permission_audit)**
 - `id`: Audit ID
-- `operation`: Operation type ('employee_sync', 'whitelist_set', 'permission_updated')
+- `operation`: Operation type ('employee_sync', 'whitelist_set', 'permission_updated', 'star_check_set', 'star_check_setting_update')
 - `target_type`: Target type ('user' or 'department')
 - `target_identifier`: Target identifier
 - `details`: Operation details (JSON)
 - `create_time`: Creation time
+
+**Star Check Settings Table (star_check_settings)**
+- `id`: Setting ID
+- `target_type`: Target type ('user' or 'department')
+- `target_identifier`: Employee number for users, department name for departments
+- `enabled`: Whether star check is enabled (boolean)
+- `create_time`: Creation time
+- `update_time`: Update time
+
+**Effective Star Check Settings Table (effective_star_check_settings)**
+- `id`: Setting ID
+- `employee_number`: Employee number (unique)
+- `enabled`: Currently effective star check setting (boolean)
+- `setting_id`: Reference to source setting entry
+- `create_time`: Creation time
+- `update_time`: Update time
 
 ## Authentication System
 
@@ -313,6 +336,49 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 1. User-specific whitelist
 2. Most specific department whitelist (child dept > parent dept)
 3. No permissions (empty list)
+
+### Star Check Permission Management APIs (New)
+
+#### Set User Star Check Setting
+- **POST** `/quota-manager/api/v1/star-check-permissions/user`
+- **Request Body**:
+```json
+{
+  "employee_number": "85054712",
+  "enabled": true
+}
+```
+
+#### Set Department Star Check Setting
+- **POST** `/quota-manager/api/v1/star-check-permissions/department`
+- **Request Body**:
+```json
+{
+  "department_name": "R&D_Center",
+  "enabled": false
+}
+```
+
+#### Unified Permission Query Interface
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=department&target_identifier=R&D_Center`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=department&target_identifier=R&D_Center`
+
+**Query Parameters:**
+- `type`: Permission type, `model` (model permissions) or `star-check` (star check permissions)
+- `target_type`: Target type, `user` or `department`
+- `target_identifier`: Target identifier (employee number for users or department name for departments)
+
+**Star Check Permission Priority (High to Low):**
+1. User-specific setting
+2. Most specific department setting (child dept > parent dept)
+3. Default setting (enabled)
+
+#### Unified Employee Sync Interface
+- **POST** `/quota-manager/api/v1/employee-sync`
+
+This interface will synchronize employee data and update both model permissions and star check permissions.
 
 #### Get Strategy List
 - **GET** `/quota-manager/api/v1/strategies`

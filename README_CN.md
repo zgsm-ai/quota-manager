@@ -19,6 +19,13 @@
 - **实时更新**：与 AI Gateway 的自动权限同步
 - **审计跟踪**：全面的权限操作跟踪
 
+### Star 检查权限管理（新增）
+- **Star 检查控制**：用户和部门级别的 GitHub Star 检查开关管理
+- **细粒度控制**：支持针对特定用户或部门禁用/启用 Star 检查
+- **权限继承**：部门层级的 Star 检查设置继承
+- **优先级管理**：用户设置优先于部门设置
+- **统一接口**：与模型权限管理共享统一的查询和同步接口
+
 ### 高级配额操作
 - **配额转账**：使用兑换码在用户间安全转账配额
 - **审计跟踪**：全面的配额操作跟踪
@@ -158,11 +165,27 @@ quota-manager/
 
 **权限审计表 (permission_audit)**
 - `id`: 审计 ID
-- `operation`: 操作类型（'employee_sync', 'whitelist_set', 'permission_updated'）
+- `operation`: 操作类型（'employee_sync', 'whitelist_set', 'permission_updated', 'star_check_set', 'star_check_setting_update'）
 - `target_type`: 目标类型（'user' 或 'department'）
 - `target_identifier`: 目标标识符
 - `details`: 操作详细信息（JSON）
 - `create_time`: 创建时间
+
+**Star 检查设置表 (star_check_settings)**
+- `id`: 设置 ID
+- `target_type`: 目标类型（'user' 或 'department'）
+- `target_identifier`: 用户的员工编号，部门的部门名称
+- `enabled`: Star 检查是否启用（布尔值）
+- `create_time`: 创建时间
+- `update_time`: 更新时间
+
+**有效 Star 检查设置表 (effective_star_check_settings)**
+- `id`: 设置 ID
+- `employee_number`: 员工编号（唯一）
+- `enabled`: 当前有效的 Star 检查设置（布尔值）
+- `setting_id`: 源设置条目的引用
+- `create_time`: 创建时间
+- `update_time`: 更新时间
 
 ## 认证系统
 
@@ -313,6 +336,49 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 1. 用户特定白名单
 2. 最具体的部门白名单（子部门 > 父部门）
 3. 无权限（空列表）
+
+### Star 检查权限管理 API（新增）
+
+#### 设置用户 Star 检查开关
+- **POST** `/quota-manager/api/v1/star-check-permissions/user`
+- **请求体**:
+```json
+{
+  "employee_number": "85054712",
+  "enabled": true
+}
+```
+
+#### 设置部门 Star 检查开关
+- **POST** `/quota-manager/api/v1/star-check-permissions/department`
+- **请求体**:
+```json
+{
+  "department_name": "研发中心",
+  "enabled": false
+}
+```
+
+#### 统一权限查询接口
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=department&target_identifier=研发中心`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=department&target_identifier=研发中心`
+
+**查询参数说明：**
+- `type`: 权限类型，`model` (模型权限) 或 `star-check` (Star 检查权限)
+- `target_type`: 目标类型，`user` 或 `department`
+- `target_identifier`: 目标标识符（用户的员工编号或部门名称）
+
+**Star 检查权限优先级（从高到低）：**
+1. 用户特定设置
+2. 最具体的部门设置（子部门 > 父部门）
+3. 默认设置（启用）
+
+#### 统一员工同步接口
+- **POST** `/quota-manager/api/v1/employee-sync`
+
+该接口会同时同步员工数据并更新模型权限和 Star 检查权限。
 
 #### 获取策略列表
 - **GET** `/quota-manager/api/v1/strategies`

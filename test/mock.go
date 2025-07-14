@@ -24,14 +24,23 @@ type PermissionCall struct {
 	Operation      string // "set", "query", "delete"
 }
 
+// StarCheckCall represents a star check permission call for testing
+type StarCheckCall struct {
+	EmployeeNumber string
+	Enabled        bool
+	Operation      string // "set", "query"
+}
+
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
 	data                 map[string]int        // Total quota
 	usedData             map[string]int        // Used quota
 	starData             map[string]bool       // GitHub star status
 	permissionData       map[string][]string   // User permissions (employee_number -> models)
+	starCheckData        map[string]bool       // Star check permissions (employee_number -> enabled)
 	setStarProjectsCalls []SetStarProjectsCall // Track SetGithubStarProjects calls
 	permissionCalls      []PermissionCall      // Track permission management calls
+	starCheckCalls       []StarCheckCall       // Track star check permission calls
 }
 
 func (m *MockQuotaStore) GetQuota(consumer string) int {
@@ -131,13 +140,40 @@ func (m *MockQuotaStore) ClearAllPermissions() {
 	m.permissionData = make(map[string][]string)
 }
 
+// Star check permission methods
+func (m *MockQuotaStore) SetUserStarCheckPermission(employeeNumber string, enabled bool) error {
+	if m.starCheckData == nil {
+		m.starCheckData = make(map[string]bool)
+	}
+	m.starCheckData[employeeNumber] = enabled
+
+	// Track the call
+	call := StarCheckCall{
+		EmployeeNumber: employeeNumber,
+		Enabled:        enabled,
+		Operation:      "set",
+	}
+	m.starCheckCalls = append(m.starCheckCalls, call)
+	return nil
+}
+
+func (m *MockQuotaStore) GetStarCheckCalls() []StarCheckCall {
+	return m.starCheckCalls
+}
+
+func (m *MockQuotaStore) ClearStarCheckCalls() {
+	m.starCheckCalls = []StarCheckCall{}
+}
+
 var mockStore = &MockQuotaStore{
 	data:                 make(map[string]int),
 	usedData:             make(map[string]int),
 	starData:             make(map[string]bool),
 	permissionData:       make(map[string][]string),
+	starCheckData:        make(map[string]bool),
 	setStarProjectsCalls: []SetStarProjectsCall{},
 	permissionCalls:      []PermissionCall{},
+	starCheckCalls:       []StarCheckCall{},
 }
 
 // createMockServer create mock server
@@ -361,20 +397,32 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				starredProjects := c.PostForm("starred_projects")
 
 				if employeeNumber == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "missing employee_number parameter"})
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code":    "ai-gateway.invalid_params",
+						"message": "employee_number is required",
+						"success": false,
+					})
 					return
 				}
 
 				err := mockStore.SetGithubStarProjects(employeeNumber, starredProjects)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"code":    "ai-gateway.error",
+						"message": err.Error(),
+						"success": false,
+					})
 					return
 				}
 
 				c.JSON(http.StatusOK, gin.H{
-					"message":          "success",
-					"employee_number":  employeeNumber,
-					"starred_projects": starredProjects,
+					"code":    "ai-gateway.setstarprojects",
+					"message": "set GitHub star projects successful",
+					"success": true,
+					"data": gin.H{
+						"employee_number":  employeeNumber,
+						"starred_projects": starredProjects,
+					},
 				})
 			})
 		}
@@ -484,6 +532,46 @@ func createMockServer(shouldFail bool) *httptest.Server {
 			"success": true,
 			"data": gin.H{
 				"employee_number": employeeNumber,
+			},
+		})
+	})
+
+	// Add star check permission endpoints
+	router.POST("/check-star/set", func(c *gin.Context) {
+		// Skip auth check for this endpoint as we're testing the star check permission management
+		if shouldFail {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		employeeNumber := c.PostForm("employee_number")
+		enabledParam := c.PostForm("enabled")
+
+		if employeeNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "employee_number is required",
+			})
+			return
+		}
+
+		enabled := enabledParam == "true"
+
+		// Store star check setting in mock store
+		if err := mockStore.SetUserStarCheckPermission(employeeNumber, enabled); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to set star check permission: " + err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Star check permission set successfully",
+			"data": gin.H{
+				"employee_number": employeeNumber,
+				"enabled":         enabled,
 			},
 		})
 	})

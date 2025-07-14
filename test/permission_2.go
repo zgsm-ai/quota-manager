@@ -348,7 +348,8 @@ func testUserDepartmentChange(ctx *TestContext) TestResult {
 		DeptURL: ctx.MockServer.URL + "/api/test/departments",
 		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
-	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService)
+	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService)
 
 	// Setup HR department hierarchy data for all scenarios using new structure
 	ClearMockData()                   // Clear any existing data first

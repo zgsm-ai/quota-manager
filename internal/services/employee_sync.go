@@ -22,19 +22,26 @@ import (
 
 // EmployeeSyncService handles employee synchronization
 type EmployeeSyncService struct {
-	db               *database.DB
-	employeeSyncConf *config.EmployeeSyncConfig
-	permissionSvc    *PermissionService
-	cron             *cron.Cron
+	db                     *database.DB
+	employeeSyncConf       *config.EmployeeSyncConfig
+	permissionSvc          *PermissionService
+	starCheckPermissionSvc *StarCheckPermissionService
+	cron                   *cron.Cron
 }
 
 // NewEmployeeSyncService creates a new employee sync service
-func NewEmployeeSyncService(db *database.DB, employeeSyncConf *config.EmployeeSyncConfig, permissionSvc *PermissionService) *EmployeeSyncService {
+func NewEmployeeSyncService(
+	db *database.DB,
+	employeeSyncConf *config.EmployeeSyncConfig,
+	permissionSvc *PermissionService,
+	starCheckPermissionSvc *StarCheckPermissionService,
+) *EmployeeSyncService {
 	return &EmployeeSyncService{
-		db:               db,
-		employeeSyncConf: employeeSyncConf,
-		permissionSvc:    permissionSvc,
-		cron:             cron.New(cron.WithSeconds()),
+		db:                     db,
+		employeeSyncConf:       employeeSyncConf,
+		permissionSvc:          permissionSvc,
+		starCheckPermissionSvc: starCheckPermissionSvc,
+		cron:                   cron.New(cron.WithSeconds()),
 	}
 }
 
@@ -398,15 +405,25 @@ func (s *EmployeeSyncService) processEmployees(employees []HREmployee, deptHiera
 
 // updatePermissionsForChangedEmployees updates permissions for employees whose data changed
 func (s *EmployeeSyncService) updatePermissionsForChangedEmployees(employeeNumbers []string) error {
-	if s.permissionSvc == nil {
-		return nil
+	// Update model permissions
+	if s.permissionSvc != nil {
+		for _, empNum := range employeeNumbers {
+			if err := s.permissionSvc.UpdateEmployeePermissions(empNum); err != nil {
+				logger.Logger.Error("Failed to update model permissions for employee",
+					zap.String("employee_number", empNum),
+					zap.Error(err))
+			}
+		}
 	}
 
-	for _, empNum := range employeeNumbers {
-		if err := s.permissionSvc.UpdateEmployeePermissions(empNum); err != nil {
-			logger.Logger.Error("Failed to update permissions for employee",
-				zap.String("employee_number", empNum),
-				zap.Error(err))
+	// Update star check permissions
+	if s.starCheckPermissionSvc != nil {
+		for _, empNum := range employeeNumbers {
+			if err := s.starCheckPermissionSvc.UpdateEmployeeStarCheckPermissions(empNum); err != nil {
+				logger.Logger.Error("Failed to update star check permissions for employee",
+					zap.String("employee_number", empNum),
+					zap.Error(err))
+			}
 		}
 	}
 

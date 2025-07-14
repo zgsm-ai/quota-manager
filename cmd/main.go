@@ -123,7 +123,12 @@ func main() {
 
 	// Initialize permission management services
 	permissionService := services.NewPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
-	employeeSyncService := services.NewEmployeeSyncService(db, &cfg.EmployeeSync, permissionService)
+	starCheckPermissionService := services.NewStarCheckPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
+	unifiedPermissionService := services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, nil) // employeeSyncService will be set later
+	employeeSyncService := services.NewEmployeeSyncService(db, &cfg.EmployeeSync, permissionService, starCheckPermissionService)
+
+	// Update unified permission service with employee sync service
+	unifiedPermissionService = services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, employeeSyncService)
 
 	schedulerService := services.NewSchedulerService(quotaService, strategyService, employeeSyncService, cfg)
 
@@ -143,7 +148,9 @@ func main() {
 	// Initialize HTTP handlers
 	strategyHandler := handlers.NewStrategyHandler(strategyService)
 	quotaHandler := handlers.NewQuotaHandler(quotaService, &cfg.Server)
-	permissionHandler := handlers.NewPermissionHandler(permissionService, employeeSyncService)
+	modelPermissionHandler := handlers.NewModelPermissionHandler(permissionService)
+	starCheckPermissionHandler := handlers.NewStarCheckPermissionHandler(starCheckPermissionService)
+	unifiedPermissionHandler := handlers.NewUnifiedPermissionHandler(unifiedPermissionService)
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)
@@ -208,14 +215,23 @@ func main() {
 			// Quota management API
 			handlers.RegisterQuotaRoutes(v1, quotaHandler)
 
-			// Permission management API
-			permissions := v1.Group("/permissions")
+			// Model permissions management
+			modelPermissions := v1.Group("/model-permissions")
 			{
-				permissions.POST("/user", permissionHandler.SetUserWhitelist)
-				permissions.POST("/department", permissionHandler.SetDepartmentWhitelist)
-				permissions.GET("/effective", permissionHandler.GetEffectivePermissions)
-				permissions.POST("/sync", permissionHandler.TriggerEmployeeSync)
+				modelPermissions.POST("/user", modelPermissionHandler.SetUserWhitelist)
+				modelPermissions.POST("/department", modelPermissionHandler.SetDepartmentWhitelist)
 			}
+
+			// Star check permissions management
+			starCheckPermissions := v1.Group("/star-check-permissions")
+			{
+				starCheckPermissions.POST("/user", starCheckPermissionHandler.SetUserStarCheckSetting)
+				starCheckPermissions.POST("/department", starCheckPermissionHandler.SetDepartmentStarCheckSetting)
+			}
+
+			// Unified query and sync interfaces
+			v1.GET("/effective-permissions", unifiedPermissionHandler.GetEffectivePermissions)
+			v1.POST("/employee-sync", unifiedPermissionHandler.TriggerEmployeeSync)
 		}
 	}
 
