@@ -117,7 +117,7 @@ func testUserDepartmentStarCheckChange(ctx *TestContext) TestResult {
 			targetDept:           "Target_Dept",
 			originalSetting:      nil,
 			targetSetting:        nil,
-			expectedSetting:      true, // default enabled
+			expectedSetting:      false, // default disabled
 			expectedNotification: false,
 			description:          "User moves between departments with no star check settings",
 		},
@@ -128,8 +128,8 @@ func testUserDepartmentStarCheckChange(ctx *TestContext) TestResult {
 			targetDept:           "No_Setting_Target_Dept",
 			originalSetting:      new(bool), // false
 			targetSetting:        nil,
-			expectedSetting:      true, // default enabled
-			expectedNotification: true,
+			expectedSetting:      false, // default disabled
+			expectedNotification: false, // no change (false -> false)
 			description:          "User moves from department with disabled star check to department with no setting",
 		},
 		{
@@ -140,7 +140,7 @@ func testUserDepartmentStarCheckChange(ctx *TestContext) TestResult {
 			originalSetting:      nil,
 			targetSetting:        new(bool), // false
 			expectedSetting:      false,
-			expectedNotification: true,
+			expectedNotification: false, // no change (false -> false)
 			description:          "User moves from department with no setting to department with disabled star check",
 		},
 		{
@@ -303,8 +303,8 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 	// Clear calls before setting
 	mockStore.ClearStarCheckCalls()
 
-	// Set user star check setting
-	if err := starCheckPermissionService.SetUserStarCheckSetting("addition_001", false); err != nil {
+	// Set user star check setting to enabled (different from default false)
+	if err := starCheckPermissionService.SetUserStarCheckSetting("addition_001", true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set star check setting for new user: %v", err)}
 	}
 
@@ -314,8 +314,8 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 star check call for new user with setting, got %d", len(starCheckCalls))}
 	}
 
-	if starCheckCalls[0].EmployeeNumber != "addition_001" || starCheckCalls[0].Enabled {
-		return TestResult{Passed: false, Message: "Incorrect Higress call for new user with disabled setting"}
+	if starCheckCalls[0].EmployeeNumber != "addition_001" || !starCheckCalls[0].Enabled {
+		return TestResult{Passed: false, Message: "Incorrect Higress call for new user with enabled setting"}
 	}
 
 	// Test Scenario 2: Remove user star check setting (revert to default)
@@ -331,20 +331,36 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set identical star check setting: %v", err)}
 	}
 
-	// Verify no notification for identical setting
+	// Verify notification for setting change (from true to false)
 	starCheckCalls = mockStore.GetStarCheckCalls()
-	if len(starCheckCalls) != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 star check calls for identical setting, got %d", len(starCheckCalls))}
+	if len(starCheckCalls) != 1 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 star check call for setting change, got %d", len(starCheckCalls))}
 	}
 
-	// Test Scenario 3: Complete user removal simulation
-	employee2 := &models.EmployeeDepartment{
-		EmployeeNumber:     "removal_002",
-		Username:           "user_to_remove",
-		DeptFullLevelNames: "Tech_Group,Innovation_Center,Research_Dept",
+	// Test Scenario 3: Complete user removal simulation via EmployeeSyncService
+	// Create employee sync service to properly handle user deletion
+	employeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: true,
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
-	if err := ctx.DB.DB.Create(employee2).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee2: %v", err)}
+
+	// Create a minimal permission service for EmployeeSyncService
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService, quotaCheckPermissionService)
+
+	// Setup department hierarchy
+	SetupDefaultDepartmentHierarchy()
+
+	// Add user to mock HR data (deptID 8 corresponds to Testing_Dept_Team1)
+	AddMockEmployee("removal_002", "user_to_remove", "test_removal_002@example.com", "13800000002", 8)
+
+	// Sync the user into the system
+	if err := employeeSyncService.SyncEmployees(); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to sync new employee: %v", err)}
 	}
 
 	// Set user star check setting
@@ -361,18 +377,21 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: "Expected user to have enabled star check setting"}
 	}
 
-	// Simulate user removal by deleting from employee table
-	if err := ctx.DB.DB.Delete(employee2).Error; err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to delete employee2: %v", err)}
+	// Remove user from mock HR data (simulating HR system deletion)
+	RemoveMockEmployeeByNumber("removal_002")
+
+	// Trigger employee removal via employee sync service
+	if err := employeeSyncService.SyncEmployees(); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Employee sync for removal failed: %v", err)}
 	}
 
-	// Verify effective setting handling for removed user (should still work, return default)
+	// Verify effective setting handling for removed user (should return default)
 	removedEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("removal_002")
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective setting for removed user: %v", err)}
 	}
-	if !removedEnabled {
-		return TestResult{Passed: false, Message: "Expected default enabled setting for removed user"}
+	if removedEnabled {
+		return TestResult{Passed: false, Message: "Expected default disabled setting for removed user"}
 	}
 
 	return TestResult{Passed: true, Message: "User star check addition and removal test succeeded"}
@@ -429,8 +448,8 @@ func testNonExistentUserAndDepartmentStarCheck(ctx *TestContext) TestResult {
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get star check setting for non-existent department: %v", err)}
 	}
-	if !deptEnabled {
-		return TestResult{Passed: false, Message: "Expected default enabled setting for non-existent department"}
+	if deptEnabled {
+		return TestResult{Passed: false, Message: "Expected default disabled setting for non-existent department"}
 	}
 
 	// Test 4: Update star check permissions for non-existent user
@@ -443,8 +462,8 @@ func testNonExistentUserAndDepartmentStarCheck(ctx *TestContext) TestResult {
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get default star check setting: %v", err)}
 	}
-	if !defaultEnabled {
-		return TestResult{Passed: false, Message: "Expected default enabled setting for user with no explicit setting"}
+	if defaultEnabled {
+		return TestResult{Passed: false, Message: "Expected default disabled setting for user with no explicit setting"}
 	}
 
 	// Test 5: Test with employee sync enabled (should enforce user existence)

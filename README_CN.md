@@ -375,10 +375,50 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 2. 最具体的部门设置（子部门 > 父部门）
 3. 默认设置（启用）
 
+### 配额检查权限管理 API（新增）
+
+#### 设置用户配额检查开关
+- **POST** `/quota-manager/api/v1/quota-check-permissions/user`
+- **请求体**:
+```json
+{
+  "employee_number": "85054712",
+  "enabled": true
+}
+```
+
+#### 设置部门配额检查开关
+- **POST** `/quota-manager/api/v1/quota-check-permissions/department`
+- **请求体**:
+```json
+{
+  "department_name": "研发中心",
+  "enabled": false
+}
+```
+
+#### 统一权限查询接口（扩展）
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=quota-check&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=department&target_identifier=研发中心`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=department&target_identifier=研发中心`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=quota-check&target_type=department&target_identifier=研发中心`
+
+**查询参数说明：**
+- `type`: 权限类型，`model` (模型权限)、`star-check` (Star 检查权限) 或 `quota-check` (配额检查权限)
+- `target_type`: 目标类型，`user` 或 `department`
+- `target_identifier`: 目标标识符（用户的员工编号或部门名称）
+
+**配额检查权限优先级（从高到低）：**
+1. 用户特定设置
+2. 最具体的部门设置（子部门 > 父部门）
+3. 默认设置（不启用）
+
 #### 统一员工同步接口
 - **POST** `/quota-manager/api/v1/employee-sync`
 
-该接口会同时同步员工数据并更新模型权限和 Star 检查权限。
+该接口会同时同步员工数据并更新模型权限、Star 检查权限和配额检查权限。
 
 #### 获取策略列表
 - **GET** `/quota-manager/api/v1/strategies`

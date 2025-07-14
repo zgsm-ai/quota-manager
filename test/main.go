@@ -206,6 +206,29 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Star Check Employee Data Integrity Test", testStarCheckEmployeeDataIntegrity},
 		{"Unified Permission Queries Test", testUnifiedPermissionQueries},
 		{"Star Check Employee Sync Test", testStarCheckEmployeeSync},
+
+		// Quota Check Permission Management Tests
+		{"User Quota Check Setting Management Test", testUserQuotaCheckSettingManagement},
+		{"Department Quota Check Setting Management Test", testDepartmentQuotaCheckSettingManagement},
+		{"Quota Check Setting Priority and Inheritance Test", testQuotaCheckSettingPriorityAndInheritance},
+		{"Empty Quota Check Setting Fallback Test", testEmptyQuotaCheckSettingFallback},
+		{"Quota Check Permission Distribution Test", testQuotaCheckPermissionDistribution},
+		{"Sync Without Quota Check Setting Test", testSyncWithoutQuotaCheckSetting},
+		{"Quota Check Notification Optimization Test", testQuotaCheckNotificationOptimization},
+		{"User Quota Check Setting Distribution Test", testUserQuotaCheckSettingDistribution},
+		{"Department Quota Check Setting Distribution Test", testDepartmentQuotaCheckSettingDistribution},
+		{"Quota Check Setting Hierarchy Level 1 Test", testQuotaCheckSettingHierarchyLevel1},
+		{"Quota Check Setting Hierarchy Level 2 Test", testQuotaCheckSettingHierarchyLevel2},
+		{"Quota Check Setting Hierarchy Level 3 Test", testQuotaCheckSettingHierarchyLevel3},
+		{"Quota Check Setting Hierarchy Level 5 Test", testQuotaCheckSettingHierarchyLevel5},
+		{"User Quota Check Setting Overrides Department Test", testUserQuotaCheckSettingOverridesDepartment},
+		{"Department Quota Check Setting Change Test", testDepartmentQuotaCheckSettingChange},
+		{"User Quota Check Setting Change Test", testUserQuotaCheckSettingChange},
+		{"User Department Quota Check Change Test", testUserDepartmentQuotaCheckChange},
+		{"User Quota Check Addition and Removal Test", testUserQuotaCheckAdditionAndRemoval},
+		{"Non-existent User and Department Quota Check Test", testNonExistentUserAndDepartmentQuotaCheck},
+		{"Quota Check Employee Data Integrity Test", testQuotaCheckEmployeeDataIntegrity},
+		{"Quota Check Employee Sync Test", testQuotaCheckEmployeeSync},
 	}
 
 	for _, tc := range testCases {

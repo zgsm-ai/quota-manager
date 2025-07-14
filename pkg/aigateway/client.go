@@ -400,3 +400,53 @@ func (c *Client) SetUserStarCheckPermission(employeeNumber string, enabled bool)
 
 	return nil
 }
+
+// SetUserQuotaCheckPermission sets user quota check permission in Higress
+func (c *Client) SetUserQuotaCheckPermission(employeeNumber string, enabled bool) error {
+	// Prepare request data
+	data := url.Values{}
+	data.Set("employee_number", employeeNumber)
+	if enabled {
+		data.Set("enabled", "true")
+	} else {
+		data.Set("enabled", "false")
+	}
+
+	// Create request
+	requestURL := fmt.Sprintf("%s/check-quota/set", c.BaseURL)
+	req, err := http.NewRequest("POST", requestURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(c.AuthHeader, c.AuthValue)
+
+	// Make request
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Higress returned status: %d", resp.StatusCode)
+	}
+
+	// Parse response to check for success
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if success, ok := result["success"].(bool); !ok || !success {
+		if message, ok := result["message"].(string); ok {
+			return fmt.Errorf("Higress error: %s", message)
+		}
+		return fmt.Errorf("Higress operation failed")
+	}
+
+	return nil
+}

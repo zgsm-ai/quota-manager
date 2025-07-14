@@ -50,8 +50,8 @@ func testUserStarCheckSettingManagement(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create other employee: %v", err)}
 	}
 
-	// Test: Set user star check to disabled
-	if err := starCheckPermissionService.SetUserStarCheckSetting("200001", false); err != nil {
+	// Test: Set user star check to enabled
+	if err := starCheckPermissionService.SetUserStarCheckSetting("200001", true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user star check setting: %v", err)}
 	}
 
@@ -61,18 +61,18 @@ func testUserStarCheckSettingManagement(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get target employee star check setting: %v", err)}
 	}
 
-	if enabled {
-		return TestResult{Passed: false, Message: "Expected star check to be disabled for target employee"}
+	if !enabled {
+		return TestResult{Passed: false, Message: "Expected star check to be enabled for target employee"}
 	}
 
-	// Verify the other employee is NOT affected (should have default enabled)
+	// Verify the other employee is NOT affected (should have default disabled)
 	otherEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("200002")
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get other employee star check setting: %v", err)}
 	}
 
-	if !otherEnabled {
-		return TestResult{Passed: false, Message: "Expected star check to remain enabled for other employee"}
+	if otherEnabled {
+		return TestResult{Passed: false, Message: "Expected star check to remain disabled for other employee"}
 	}
 
 	return TestResult{Passed: true, Message: "User star check setting management test succeeded"}
@@ -124,6 +124,11 @@ func testDepartmentStarCheckSettingManagement(ctx *TestContext) TestResult {
 	// Test: Set department star check for "R&D_Center" to disabled
 	if err := starCheckPermissionService.SetDepartmentStarCheckSetting("R&D_Center", false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set department star check setting: %v", err)}
+	}
+
+	// Set department star check for "Product_Center" to enabled for comparison
+	if err := starCheckPermissionService.SetDepartmentStarCheckSetting("Product_Center", true); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set Product_Center department star check setting: %v", err)}
 	}
 
 	// Verify the target employee (in R&D_Center) has disabled star check
@@ -283,7 +288,8 @@ func testUnifiedPermissionQueries(ctx *TestContext) TestResult {
 
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
 	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
-	unifiedPermissionService := services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, nil)
+	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
+	unifiedPermissionService := services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, quotaCheckPermissionService, nil)
 
 	// Create test employee
 	employee := &models.EmployeeDepartment{
@@ -349,7 +355,8 @@ func testStarCheckEmployeeSync(ctx *TestContext) TestResult {
 
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
-	_ = services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService)
+	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+	_ = services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService, quotaCheckPermissionService)
 
 	// Create test employee with initial department
 	employee := &models.EmployeeDepartment{
@@ -384,6 +391,26 @@ func testStarCheckEmployeeSync(ctx *TestContext) TestResult {
 	// Clear previous calls
 	mockStore.ClearStarCheckCalls()
 
+	// Create temporary employee in Operations_Center department to satisfy department existence check
+	tempEmployee := &models.EmployeeDepartment{
+		EmployeeNumber:     "temp_operations_205001",
+		Username:           "temp_operations_employee",
+		DeptFullLevelNames: "Tech_Group,Operations_Center,Mobile_Support_Dept",
+	}
+	if err := ctx.DB.DB.Create(tempEmployee).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create temporary employee: %v", err)}
+	}
+
+	// Set the new department to enabled to create a change
+	if err := starCheckPermissionService.SetDepartmentStarCheckSetting("Operations_Center", true); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set Operations_Center department star check setting: %v", err)}
+	}
+
+	// Clean up temporary employee
+	if err := ctx.DB.DB.Delete(tempEmployee).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to delete temporary employee: %v", err)}
+	}
+
 	// Simulate department change - use a unique department name to avoid test interference
 	employee.DeptFullLevelNames = "Tech_Group,Operations_Center,Mobile_Support_Dept"
 	if err := ctx.DB.DB.Save(employee).Error; err != nil {
@@ -395,14 +422,14 @@ func testStarCheckEmployeeSync(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update star check permissions: %v", err)}
 	}
 
-	// Verify star check setting changed (should be enabled now due to department change)
+	// Verify star check setting changed (should be enabled now due to Operations_Center setting)
 	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("205001")
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get updated star check setting: %v", err)}
 	}
 
 	if !enabled {
-		return TestResult{Passed: false, Message: "Expected star check to be enabled after department change"}
+		return TestResult{Passed: false, Message: "Expected star check to be enabled after department change to Operations_Center"}
 	}
 
 	// Verify Higress was notified
@@ -482,8 +509,8 @@ func testEmptyStarCheckSettingFallback(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get default star check setting: %v", err)}
 	}
 
-	if !defaultEnabled {
-		return TestResult{Passed: false, Message: "Expected default star check to be enabled"}
+	if defaultEnabled {
+		return TestResult{Passed: false, Message: "Expected default star check to be disabled"}
 	}
 
 	return TestResult{Passed: true, Message: "Empty star check setting fallback test succeeded"}
@@ -533,7 +560,7 @@ func testSyncWithoutStarCheckSetting(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update star check permissions: %v", err)}
 	}
 
-	// Should NOT notify Higress for new user with default (enabled) setting
+	// Should NOT notify Higress for new user with default (disabled) setting
 	starCheckCalls := mockStore.GetStarCheckCalls()
 	if len(starCheckCalls) != 0 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 star check calls for new user with default setting, got %d", len(starCheckCalls))}
@@ -545,8 +572,8 @@ func testSyncWithoutStarCheckSetting(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective star check setting: %v", err)}
 	}
 
-	if !enabled {
-		return TestResult{Passed: false, Message: "Expected default star check to be enabled"}
+	if enabled {
+		return TestResult{Passed: false, Message: "Expected default star check to be disabled"}
 	}
 
 	return TestResult{Passed: true, Message: "Sync without star check setting test succeeded"}

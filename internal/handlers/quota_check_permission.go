@@ -1,0 +1,89 @@
+package handlers
+
+import (
+	"net/http"
+	"quota-manager/internal/services"
+	"quota-manager/internal/validation"
+
+	"github.com/gin-gonic/gin"
+)
+
+// QuotaCheckPermissionHandler handles quota check permission-related HTTP requests
+type QuotaCheckPermissionHandler struct {
+	quotaCheckPermissionService *services.QuotaCheckPermissionService
+}
+
+// NewQuotaCheckPermissionHandler creates a new quota check permission handler
+func NewQuotaCheckPermissionHandler(quotaCheckPermissionService *services.QuotaCheckPermissionService) *QuotaCheckPermissionHandler {
+	return &QuotaCheckPermissionHandler{
+		quotaCheckPermissionService: quotaCheckPermissionService,
+	}
+}
+
+// SetUserQuotaCheckRequest represents user quota check request
+type SetUserQuotaCheckRequest struct {
+	EmployeeNumber string `json:"employee_number" validate:"required,employee_number"`
+	Enabled        bool   `json:"enabled"`
+}
+
+// SetDepartmentQuotaCheckRequest represents department quota check request
+type SetDepartmentQuotaCheckRequest struct {
+	DepartmentName string `json:"department_name" validate:"required,department_name"`
+	Enabled        bool   `json:"enabled"`
+}
+
+// SetUserQuotaCheckSetting sets quota check setting for a user
+func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
+	var req SetUserQuotaCheckRequest
+
+	if err := validation.ValidateJSON(c, &req); err != nil {
+		return
+	}
+
+	if err := h.quotaCheckPermissionService.SetUserQuotaCheckSetting(req.EmployeeNumber, req.Enabled); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "quota_check_permission.set_user_setting_failed",
+			"message": "Failed to set user quota check setting: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "quota_check_permission.set_user_setting_success",
+		"message": "User quota check setting set successfully",
+		"success": true,
+		"data": gin.H{
+			"employee_number": req.EmployeeNumber,
+			"enabled":         req.Enabled,
+		},
+	})
+}
+
+// SetDepartmentQuotaCheckSetting sets quota check setting for a department
+func (h *QuotaCheckPermissionHandler) SetDepartmentQuotaCheckSetting(c *gin.Context) {
+	var req SetDepartmentQuotaCheckRequest
+
+	if err := validation.ValidateJSON(c, &req); err != nil {
+		return
+	}
+
+	if err := h.quotaCheckPermissionService.SetDepartmentQuotaCheckSetting(req.DepartmentName, req.Enabled); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "quota_check_permission.set_department_setting_failed",
+			"message": "Failed to set department quota check setting: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "quota_check_permission.set_department_setting_success",
+		"message": "Department quota check setting set successfully",
+		"success": true,
+		"data": gin.H{
+			"department_name": req.DepartmentName,
+			"enabled":         req.Enabled,
+		},
+	})
+}

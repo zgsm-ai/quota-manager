@@ -66,23 +66,23 @@ func testStarCheckNotificationOptimization(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 1 failed: Expected 0 calls for new user with default setting, got %d", len(calls))}
 	}
 
-	// Scenario 2: New user gets disabled setting - should notify Higress
+	// Scenario 2: New user gets enabled setting - should notify Higress (change from default false to true)
 	mockStore.ClearStarCheckCalls()
-	if err := starCheckPermissionService.SetUserStarCheckSetting("sc_test002", false); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting("sc_test002", true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set star check setting for sc_test002: %v", err)}
 	}
 
 	calls = mockStore.GetStarCheckCalls()
 	if len(calls) != 1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 2 failed: Expected 1 call for new user with disabled setting, got %d", len(calls))}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 2 failed: Expected 1 call for new user with enabled setting, got %d", len(calls))}
 	}
-	if calls[0].EmployeeNumber != "sc_test002" || calls[0].Enabled {
+	if calls[0].EmployeeNumber != "sc_test002" || !calls[0].Enabled {
 		return TestResult{Passed: false, Message: "Scenario 2 failed: Incorrect Higress call content"}
 	}
 
-	// Scenario 3: Existing user setting changes - should notify Higress
+	// Scenario 3: Existing user setting changes - should notify Higress (change from true to false)
 	mockStore.ClearStarCheckCalls()
-	if err := starCheckPermissionService.SetUserStarCheckSetting("sc_test002", true); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting("sc_test002", false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update star check setting for sc_test002: %v", err)}
 	}
 
@@ -90,8 +90,8 @@ func testStarCheckNotificationOptimization(ctx *TestContext) TestResult {
 	if len(calls) != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Scenario 3 failed: Expected 1 call for setting change, got %d", len(calls))}
 	}
-	if !calls[0].Enabled {
-		return TestResult{Passed: false, Message: "Scenario 3 failed: Expected enabled setting"}
+	if calls[0].Enabled {
+		return TestResult{Passed: false, Message: "Scenario 3 failed: Expected disabled setting"}
 	}
 
 	// Scenario 4: User setting doesn't change - should NOT notify Higress

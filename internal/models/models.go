@@ -253,6 +253,26 @@ type EffectiveStarCheckSetting struct {
 	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`
 }
 
+// QuotaCheckSetting represents quota check settings for users/departments
+type QuotaCheckSetting struct {
+	ID               int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	TargetType       string    `gorm:"not null;size:20;index" json:"target_type"`        // 'user' or 'department'
+	TargetIdentifier string    `gorm:"not null;size:500;index" json:"target_identifier"` // employee_number for user, department name for department
+	Enabled          bool      `gorm:"not null;default:false" json:"enabled"`            // quota check enabled/disabled
+	CreateTime       time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime       time.Time `gorm:"autoUpdateTime" json:"update_time"`
+}
+
+// EffectiveQuotaCheckSetting represents the effective quota check settings for each employee
+type EffectiveQuotaCheckSetting struct {
+	ID             int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	EmployeeNumber string    `gorm:"uniqueIndex;not null;size:100" json:"employee_number"`
+	Enabled        bool      `gorm:"not null;default:false" json:"enabled"` // effective quota check setting
+	SettingID      *int      `gorm:"index" json:"setting_id"`
+	CreateTime     time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`
+}
+
 // GetDeptFullLevelNamesAsSlice returns the department full level names as a slice
 func (e *EmployeeDepartment) GetDeptFullLevelNamesAsSlice() []string {
 	if e.DeptFullLevelNames == "" {
@@ -322,6 +342,16 @@ func (EffectiveStarCheckSetting) TableName() string {
 	return "effective_star_check_settings"
 }
 
+// TableName sets the table name for QuotaCheckSetting
+func (QuotaCheckSetting) TableName() string {
+	return "quota_check_settings"
+}
+
+// TableName sets the table name for EffectiveQuotaCheckSetting
+func (EffectiveQuotaCheckSetting) TableName() string {
+	return "effective_quota_check_settings"
+}
+
 // Constants for target types
 const (
 	TargetTypeUser       = "user"
@@ -330,11 +360,13 @@ const (
 
 // Constants for permission operations
 const (
-	OperationEmployeeSync           = "employee_sync"
-	OperationWhitelistSet           = "whitelist_set"
-	OperationPermissionUpdate       = "permission_updated"
-	OperationStarCheckSet           = "star_check_set"
-	OperationStarCheckSettingUpdate = "star_check_setting_update"
+	OperationEmployeeSync            = "employee_sync"
+	OperationWhitelistSet            = "whitelist_set"
+	OperationPermissionUpdate        = "permission_updated"
+	OperationStarCheckSet            = "star_check_set"
+	OperationStarCheckSettingUpdate  = "star_check_setting_update"
+	OperationQuotaCheckSet           = "quota_check_set"
+	OperationQuotaCheckSettingUpdate = "quota_check_setting_update"
 )
 
 // IsEnabled checks if the strategy is enabled

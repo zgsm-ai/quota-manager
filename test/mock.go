@@ -31,6 +31,13 @@ type StarCheckCall struct {
 	Operation      string // "set", "query"
 }
 
+// QuotaCheckCall represents a quota check permission call for testing
+type QuotaCheckCall struct {
+	EmployeeNumber string
+	Enabled        bool
+	Operation      string // "set", "query"
+}
+
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
 	data                 map[string]int        // Total quota
@@ -38,9 +45,11 @@ type MockQuotaStore struct {
 	starData             map[string]bool       // GitHub star status
 	permissionData       map[string][]string   // User permissions (employee_number -> models)
 	starCheckData        map[string]bool       // Star check permissions (employee_number -> enabled)
+	quotaCheckData       map[string]bool       // Quota check permissions (employee_number -> enabled)
 	setStarProjectsCalls []SetStarProjectsCall // Track SetGithubStarProjects calls
 	permissionCalls      []PermissionCall      // Track permission management calls
 	starCheckCalls       []StarCheckCall       // Track star check permission calls
+	quotaCheckCalls      []QuotaCheckCall      // Track quota check permission calls
 }
 
 func (m *MockQuotaStore) GetQuota(consumer string) int {
@@ -165,15 +174,42 @@ func (m *MockQuotaStore) ClearStarCheckCalls() {
 	m.starCheckCalls = []StarCheckCall{}
 }
 
+// Quota check permission methods
+func (m *MockQuotaStore) SetUserQuotaCheckPermission(employeeNumber string, enabled bool) error {
+	if m.quotaCheckData == nil {
+		m.quotaCheckData = make(map[string]bool)
+	}
+	m.quotaCheckData[employeeNumber] = enabled
+
+	// Track the call
+	call := QuotaCheckCall{
+		EmployeeNumber: employeeNumber,
+		Enabled:        enabled,
+		Operation:      "set",
+	}
+	m.quotaCheckCalls = append(m.quotaCheckCalls, call)
+	return nil
+}
+
+func (m *MockQuotaStore) GetQuotaCheckCalls() []QuotaCheckCall {
+	return m.quotaCheckCalls
+}
+
+func (m *MockQuotaStore) ClearQuotaCheckCalls() {
+	m.quotaCheckCalls = []QuotaCheckCall{}
+}
+
 var mockStore = &MockQuotaStore{
 	data:                 make(map[string]int),
 	usedData:             make(map[string]int),
 	starData:             make(map[string]bool),
 	permissionData:       make(map[string][]string),
 	starCheckData:        make(map[string]bool),
+	quotaCheckData:       make(map[string]bool),
 	setStarProjectsCalls: []SetStarProjectsCall{},
 	permissionCalls:      []PermissionCall{},
 	starCheckCalls:       []StarCheckCall{},
+	quotaCheckCalls:      []QuotaCheckCall{},
 }
 
 // createMockServer create mock server
@@ -569,6 +605,46 @@ func createMockServer(shouldFail bool) *httptest.Server {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "Star check permission set successfully",
+			"data": gin.H{
+				"employee_number": employeeNumber,
+				"enabled":         enabled,
+			},
+		})
+	})
+
+	// Add quota check permission endpoints
+	router.POST("/check-quota/set", func(c *gin.Context) {
+		// Skip auth check for this endpoint as we're testing the quota check permission management
+		if shouldFail {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		employeeNumber := c.PostForm("employee_number")
+		enabledParam := c.PostForm("enabled")
+
+		if employeeNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "employee_number is required",
+			})
+			return
+		}
+
+		enabled := enabledParam == "true"
+
+		// Store quota check setting in mock store
+		if err := mockStore.SetUserQuotaCheckPermission(employeeNumber, enabled); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to set quota check permission: " + err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Quota check permission set successfully",
 			"data": gin.H{
 				"employee_number": employeeNumber,
 				"enabled":         enabled,

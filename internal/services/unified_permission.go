@@ -6,21 +6,24 @@ import (
 
 // UnifiedPermissionService handles unified permission queries and sync
 type UnifiedPermissionService struct {
-	permissionService          *PermissionService
-	starCheckPermissionService *StarCheckPermissionService
-	employeeSyncService        *EmployeeSyncService
+	permissionService           *PermissionService
+	starCheckPermissionService  *StarCheckPermissionService
+	quotaCheckPermissionService *QuotaCheckPermissionService
+	employeeSyncService         *EmployeeSyncService
 }
 
 // NewUnifiedPermissionService creates a new unified permission service
 func NewUnifiedPermissionService(
 	permissionService *PermissionService,
 	starCheckPermissionService *StarCheckPermissionService,
+	quotaCheckPermissionService *QuotaCheckPermissionService,
 	employeeSyncService *EmployeeSyncService,
 ) *UnifiedPermissionService {
 	return &UnifiedPermissionService{
-		permissionService:          permissionService,
-		starCheckPermissionService: starCheckPermissionService,
-		employeeSyncService:        employeeSyncService,
+		permissionService:           permissionService,
+		starCheckPermissionService:  starCheckPermissionService,
+		quotaCheckPermissionService: quotaCheckPermissionService,
+		employeeSyncService:         employeeSyncService,
 	}
 }
 
@@ -39,6 +42,15 @@ func (s *UnifiedPermissionService) GetStarCheckEffectivePermissions(targetType, 
 		return s.starCheckPermissionService.GetUserEffectiveStarCheckSetting(targetIdentifier)
 	} else {
 		return s.starCheckPermissionService.GetDepartmentStarCheckSetting(targetIdentifier)
+	}
+}
+
+// GetQuotaCheckEffectivePermissions gets effective quota check settings
+func (s *UnifiedPermissionService) GetQuotaCheckEffectivePermissions(targetType, targetIdentifier string) (bool, error) {
+	if targetType == models.TargetTypeUser {
+		return s.quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting(targetIdentifier)
+	} else {
+		return s.quotaCheckPermissionService.GetDepartmentQuotaCheckSetting(targetIdentifier)
 	}
 }
 

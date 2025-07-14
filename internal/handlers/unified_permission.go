@@ -22,7 +22,7 @@ func NewUnifiedPermissionHandler(unifiedPermissionService *services.UnifiedPermi
 
 // GetEffectivePermissionsRequest represents unified permission query request
 type GetEffectivePermissionsRequest struct {
-	Type             string `form:"type" validate:"required,oneof=model star-check"`
+	Type             string `form:"type" validate:"required,oneof=model star-check quota-check"`
 	TargetType       string `form:"target_type" validate:"required,oneof=user department"`
 	TargetIdentifier string `form:"target_identifier" validate:"required,min=2,max=100"`
 }
@@ -40,6 +40,8 @@ func (h *UnifiedPermissionHandler) GetEffectivePermissions(c *gin.Context) {
 		h.handleModelPermissions(c, req)
 	case "star-check":
 		h.handleStarCheckPermissions(c, req)
+	case "quota-check":
+		h.handleQuotaCheckPermissions(c, req)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    "unified_permission.invalid_type",
@@ -92,6 +94,31 @@ func (h *UnifiedPermissionHandler) handleStarCheckPermissions(c *gin.Context, re
 		"success": true,
 		"data": gin.H{
 			"type":              "star-check",
+			"target_type":       req.TargetType,
+			"target_identifier": req.TargetIdentifier,
+			"enabled":           enabled,
+		},
+	})
+}
+
+// handleQuotaCheckPermissions handles quota check permission queries
+func (h *UnifiedPermissionHandler) handleQuotaCheckPermissions(c *gin.Context, req GetEffectivePermissionsRequest) {
+	enabled, err := h.unifiedPermissionService.GetQuotaCheckEffectivePermissions(req.TargetType, req.TargetIdentifier)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "quota_check_permission.get_permissions_failed",
+			"message": "Failed to get quota check permissions: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "quota_check_permission.success",
+		"message": "Quota check permissions retrieved successfully",
+		"success": true,
+		"data": gin.H{
+			"type":              "quota-check",
 			"target_type":       req.TargetType,
 			"target_identifier": req.TargetIdentifier,
 			"enabled":           enabled,

@@ -22,11 +22,12 @@ import (
 
 // EmployeeSyncService handles employee synchronization
 type EmployeeSyncService struct {
-	db                     *database.DB
-	employeeSyncConf       *config.EmployeeSyncConfig
-	permissionSvc          *PermissionService
-	starCheckPermissionSvc *StarCheckPermissionService
-	cron                   *cron.Cron
+	db                      *database.DB
+	employeeSyncConf        *config.EmployeeSyncConfig
+	permissionSvc           *PermissionService
+	starCheckPermissionSvc  *StarCheckPermissionService
+	quotaCheckPermissionSvc *QuotaCheckPermissionService
+	cron                    *cron.Cron
 }
 
 // NewEmployeeSyncService creates a new employee sync service
@@ -35,13 +36,15 @@ func NewEmployeeSyncService(
 	employeeSyncConf *config.EmployeeSyncConfig,
 	permissionSvc *PermissionService,
 	starCheckPermissionSvc *StarCheckPermissionService,
+	quotaCheckPermissionSvc *QuotaCheckPermissionService,
 ) *EmployeeSyncService {
 	return &EmployeeSyncService{
-		db:                     db,
-		employeeSyncConf:       employeeSyncConf,
-		permissionSvc:          permissionSvc,
-		starCheckPermissionSvc: starCheckPermissionSvc,
-		cron:                   cron.New(cron.WithSeconds()),
+		db:                      db,
+		employeeSyncConf:        employeeSyncConf,
+		permissionSvc:           permissionSvc,
+		starCheckPermissionSvc:  starCheckPermissionSvc,
+		quotaCheckPermissionSvc: quotaCheckPermissionSvc,
+		cron:                    cron.New(cron.WithSeconds()),
 	}
 }
 
@@ -388,6 +391,26 @@ func (s *EmployeeSyncService) processEmployees(employees []HREmployee, deptHiera
 				}
 			}
 
+			// Also clean up star check permission data
+			if s.starCheckPermissionSvc != nil {
+				if err := s.starCheckPermissionSvc.RemoveUserCompletely(existing.EmployeeNumber); err != nil {
+					logger.Logger.Error("Failed to clean up user star check permissions during removal",
+						zap.String("employee_number", existing.EmployeeNumber),
+						zap.Error(err))
+					// Continue with employee deletion even if star check permission cleanup fails
+				}
+			}
+
+			// Also clean up quota check permission data
+			if s.quotaCheckPermissionSvc != nil {
+				if err := s.quotaCheckPermissionSvc.RemoveUserCompletely(existing.EmployeeNumber); err != nil {
+					logger.Logger.Error("Failed to clean up user quota check permissions during removal",
+						zap.String("employee_number", existing.EmployeeNumber),
+						zap.Error(err))
+					// Continue with employee deletion even if quota check permission cleanup fails
+				}
+			}
+
 			// Then delete the employee record
 			if err := s.db.DB.Delete(&existing).Error; err != nil {
 				logger.Logger.Error("Failed to delete employee",
@@ -421,6 +444,17 @@ func (s *EmployeeSyncService) updatePermissionsForChangedEmployees(employeeNumbe
 		for _, empNum := range employeeNumbers {
 			if err := s.starCheckPermissionSvc.UpdateEmployeeStarCheckPermissions(empNum); err != nil {
 				logger.Logger.Error("Failed to update star check permissions for employee",
+					zap.String("employee_number", empNum),
+					zap.Error(err))
+			}
+		}
+	}
+
+	// Update quota check permissions
+	if s.quotaCheckPermissionSvc != nil {
+		for _, empNum := range employeeNumbers {
+			if err := s.quotaCheckPermissionSvc.UpdateEmployeeQuotaCheckPermissions(empNum); err != nil {
+				logger.Logger.Error("Failed to update quota check permissions for employee",
 					zap.String("employee_number", empNum),
 					zap.Error(err))
 			}

@@ -124,11 +124,12 @@ func main() {
 	// Initialize permission management services
 	permissionService := services.NewPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
 	starCheckPermissionService := services.NewStarCheckPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
-	unifiedPermissionService := services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, nil) // employeeSyncService will be set later
-	employeeSyncService := services.NewEmployeeSyncService(db, &cfg.EmployeeSync, permissionService, starCheckPermissionService)
+	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
+	unifiedPermissionService := services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, quotaCheckPermissionService, nil) // employeeSyncService will be set later
+	employeeSyncService := services.NewEmployeeSyncService(db, &cfg.EmployeeSync, permissionService, starCheckPermissionService, quotaCheckPermissionService)
 
 	// Update unified permission service with employee sync service
-	unifiedPermissionService = services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, employeeSyncService)
+	unifiedPermissionService = services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, quotaCheckPermissionService, employeeSyncService)
 
 	schedulerService := services.NewSchedulerService(quotaService, strategyService, employeeSyncService, cfg)
 
@@ -150,6 +151,7 @@ func main() {
 	quotaHandler := handlers.NewQuotaHandler(quotaService, &cfg.Server)
 	modelPermissionHandler := handlers.NewModelPermissionHandler(permissionService)
 	starCheckPermissionHandler := handlers.NewStarCheckPermissionHandler(starCheckPermissionService)
+	quotaCheckPermissionHandler := handlers.NewQuotaCheckPermissionHandler(quotaCheckPermissionService)
 	unifiedPermissionHandler := handlers.NewUnifiedPermissionHandler(unifiedPermissionService)
 
 	// Set Gin mode
@@ -227,6 +229,13 @@ func main() {
 			{
 				starCheckPermissions.POST("/user", starCheckPermissionHandler.SetUserStarCheckSetting)
 				starCheckPermissions.POST("/department", starCheckPermissionHandler.SetDepartmentStarCheckSetting)
+			}
+
+			// Quota check permissions management
+			quotaCheckPermissions := v1.Group("/quota-check-permissions")
+			{
+				quotaCheckPermissions.POST("/user", quotaCheckPermissionHandler.SetUserQuotaCheckSetting)
+				quotaCheckPermissions.POST("/department", quotaCheckPermissionHandler.SetDepartmentQuotaCheckSetting)
 			}
 
 			// Unified query and sync interfaces

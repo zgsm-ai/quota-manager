@@ -375,10 +375,50 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 2. Most specific department setting (child dept > parent dept)
 3. Default setting (enabled)
 
+### Quota Check Permission Management APIs (New)
+
+#### Set User Quota Check Setting
+- **POST** `/quota-manager/api/v1/quota-check-permissions/user`
+- **Request Body**:
+```json
+{
+  "employee_number": "85054712",
+  "enabled": true
+}
+```
+
+#### Set Department Quota Check Setting
+- **POST** `/quota-manager/api/v1/quota-check-permissions/department`
+- **Request Body**:
+```json
+{
+  "department_name": "R&D_Center",
+  "enabled": false
+}
+```
+
+#### Unified Permission Query Interface (Extended)
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=quota-check&target_type=user&target_identifier=85054712`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=department&target_identifier=R&D_Center`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=department&target_identifier=R&D_Center`
+- **GET** `/quota-manager/api/v1/effective-permissions?type=quota-check&target_type=department&target_identifier=R&D_Center`
+
+**Query Parameters:**
+- `type`: Permission type, `model` (model permissions), `star-check` (star check permissions), or `quota-check` (quota check permissions)
+- `target_type`: Target type, `user` or `department`
+- `target_identifier`: Target identifier (employee number for users or department name for departments)
+
+**Quota Check Permission Priority (High to Low):**
+1. User-specific setting
+2. Most specific department setting (child dept > parent dept)
+3. Default setting (disabled)
+
 #### Unified Employee Sync Interface
 - **POST** `/quota-manager/api/v1/employee-sync`
 
-This interface will synchronize employee data and update both model permissions and star check permissions.
+This interface will synchronize employee data and update model permissions, star check permissions, and quota check permissions.
 
 #### Get Strategy List
 - **GET** `/quota-manager/api/v1/strategies`

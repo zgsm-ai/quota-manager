@@ -29,7 +29,7 @@ func testClearData(ctx *TestContext) TestResult {
 	}
 
 	// Clear permission-related tables from main database
-	permissionTables := []string{"permission_audit", "effective_star_check_settings", "star_check_settings", "effective_permissions", "model_whitelist", "employee_department"}
+	permissionTables := []string{"permission_audit", "effective_quota_check_settings", "quota_check_settings", "effective_star_check_settings", "star_check_settings", "effective_permissions", "model_whitelist", "employee_department"}
 	for _, table := range permissionTables {
 		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
@@ -49,6 +49,7 @@ func testClearData(ctx *TestContext) TestResult {
 	mockStore.ClearAllPermissions()
 	mockStore.ClearPermissionCalls()
 	mockStore.ClearStarCheckCalls()
+	mockStore.ClearQuotaCheckCalls()
 
 	return TestResult{Passed: true, Message: "All data cleared successfully (quota + permission + auth)"}
 }
@@ -56,7 +57,7 @@ func testClearData(ctx *TestContext) TestResult {
 // clearPermissionData clears permission-related data for test isolation
 func clearPermissionData(ctx *TestContext) error {
 	// Clear permission-related tables in the correct order (to avoid foreign key constraints)
-	permissionTables := []string{"permission_audit", "effective_star_check_settings", "star_check_settings", "effective_permissions", "model_whitelist", "employee_department"}
+	permissionTables := []string{"permission_audit", "effective_quota_check_settings", "quota_check_settings", "effective_star_check_settings", "star_check_settings", "effective_permissions", "model_whitelist", "employee_department"}
 	for _, table := range permissionTables {
 		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return fmt.Errorf("failed to clear table %s: %w", table, err)
@@ -66,6 +67,7 @@ func clearPermissionData(ctx *TestContext) error {
 	// Clear mock permission calls
 	mockStore.ClearPermissionCalls()
 	mockStore.ClearStarCheckCalls()
+	mockStore.ClearQuotaCheckCalls()
 
 	return nil
 }
@@ -118,7 +120,7 @@ func setupTestEnvironment() (*TestContext, error) {
 	// }
 
 	// Auto migrate permission tables (will create them fresh)
-	if err := db.DB.AutoMigrate(&models.EmployeeDepartment{}, &models.ModelWhitelist{}, &models.EffectivePermission{}, &models.PermissionAudit{}, &models.StarCheckSetting{}, &models.EffectiveStarCheckSetting{}); err != nil {
+	if err := db.DB.AutoMigrate(&models.EmployeeDepartment{}, &models.ModelWhitelist{}, &models.EffectivePermission{}, &models.PermissionAudit{}, &models.StarCheckSetting{}, &models.EffectiveStarCheckSetting{}, &models.QuotaCheckSetting{}, &models.EffectiveQuotaCheckSetting{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate permission tables: %w", err)
 	}
 
