@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"quota-manager/internal/condition"
+	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
 	"quota-manager/pkg/aigateway"
@@ -15,24 +16,62 @@ import (
 	"gorm.io/gorm"
 )
 
-type StrategyService struct {
-	db           *database.DB
-	gateway      *aigateway.Client
-	quotaQuerier condition.QuotaQuerier
-	quotaService *QuotaService
-	cron         *cron.Cron
-	cronJobs     map[int]cron.EntryID // strategyID -> cronEntryID
-	mu           sync.RWMutex         // protect cronJobs map
+// StrategyDatabaseQuerier implements condition.DatabaseQuerier interface
+type StrategyDatabaseQuerier struct {
+	db *database.DB
 }
 
-func NewStrategyService(db *database.DB, gateway *aigateway.Client, quotaService *QuotaService) *StrategyService {
+func (q *StrategyDatabaseQuerier) QueryEmployeeDepartment(employeeNumber string) ([]string, error) {
+	var employee models.EmployeeDepartment
+	err := q.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return []string{}, nil // Return empty slice for non-existent employees
+		}
+		return nil, fmt.Errorf("failed to query employee department: %w", err)
+	}
+
+	return employee.GetDeptFullLevelNamesAsSlice(), nil
+}
+
+// StrategyConfigQuerier implements condition.ConfigQuerier interface
+type StrategyConfigQuerier struct {
+	employeeSyncConfig *config.EmployeeSyncConfig
+}
+
+func (q *StrategyConfigQuerier) IsEmployeeSyncEnabled() bool {
+	return q.employeeSyncConfig != nil && q.employeeSyncConfig.Enabled
+}
+
+type StrategyService struct {
+	db                 *database.DB
+	gateway            *aigateway.Client
+	quotaQuerier       condition.QuotaQuerier
+	quotaService       *QuotaService
+	cron               *cron.Cron
+	cronJobs           map[int]cron.EntryID // strategyID -> cronEntryID
+	mu                 sync.RWMutex         // protect cronJobs map
+	databaseQuerier    condition.DatabaseQuerier
+	configQuerier      condition.ConfigQuerier
+	employeeSyncConfig *config.EmployeeSyncConfig
+}
+
+// NewStrategyService creates a new strategy service
+func NewStrategyService(db *database.DB, gateway *aigateway.Client, quotaService *QuotaService, employeeSyncConfig *config.EmployeeSyncConfig) *StrategyService {
+	// Create queriers for condition evaluation
+	dbQuerier := &StrategyDatabaseQuerier{db: db}
+	cfgQuerier := &StrategyConfigQuerier{employeeSyncConfig: employeeSyncConfig}
+
 	return &StrategyService{
-		db:           db,
-		gateway:      gateway,
-		quotaQuerier: condition.NewAiGatewayQuotaQuerier(gateway),
-		quotaService: quotaService,
-		cron:         cron.New(cron.WithSeconds()),
-		cronJobs:     make(map[int]cron.EntryID),
+		db:                 db,
+		gateway:            gateway,
+		quotaQuerier:       condition.NewAiGatewayQuotaQuerier(gateway),
+		quotaService:       quotaService,
+		cron:               cron.New(cron.WithSeconds()),
+		cronJobs:           make(map[int]cron.EntryID),
+		databaseQuerier:    dbQuerier,
+		configQuerier:      cfgQuerier,
+		employeeSyncConfig: employeeSyncConfig,
 	}
 }
 
@@ -227,7 +266,9 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 
 		// Check condition
 		ctx := &condition.EvaluationContext{
-			QuotaQuerier: s.quotaQuerier,
+			QuotaQuerier:    s.quotaQuerier,
+			DatabaseQuerier: s.databaseQuerier,
+			ConfigQuerier:   s.configQuerier,
 		}
 		match, err := condition.CalcCondition(&user, strategy.Condition, ctx)
 		if err != nil {

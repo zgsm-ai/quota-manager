@@ -226,7 +226,11 @@ func testAiGatewayFailure(ctx *TestContext) TestResult {
 	// Create services using failed gateway configuration
 	failGateway := aigateway.NewClient(ctx.FailServer.URL, "/v1/chat/completions/quota", "X-Auth-Key", "credential3")
 	failQuotaService := services.NewQuotaService(ctx.DB, failAiGatewayConfig, failGateway, ctx.VoucherService)
-	failStrategyService := services.NewStrategyService(ctx.DB, failGateway, failQuotaService)
+	// Default employee sync config for testing (disabled by default)
+	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: false,
+	}
+	failStrategyService := services.NewStrategyService(ctx.DB, failGateway, failQuotaService, defaultEmployeeSyncConfig)
 
 	// Create strategy
 	strategy := &models.QuotaStrategy{

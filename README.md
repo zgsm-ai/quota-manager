@@ -706,7 +706,7 @@ The system supports complex condition expressions for strategy targeting:
 
 - `access-after(timestamp)`: Last access after specified time
 - `and(condition1, condition2)`: Logical AND
-- `belong-to(org)`: Belongs to specified organization
+- `belong-to(org)`: Belongs to specified organization or department. When `employee_sync.enabled = true`, checks if user belongs to the department via employee_department table using their EmployeeNumber. Supports both Chinese and English department names. Falls back to Company field when employee sync is disabled or employee number is empty.
 - `false()`: Always returns false (no users will match)
 - `github-star(project)`: Whether user has starred the specified project (checks against user's starred projects list)
 - `is-vip(level)`: VIP level greater than or equal to specified level
@@ -734,6 +734,13 @@ and(is-vip(1), access-after("2024-05-01 00:00:00"))
 
 # Recharge early registered users or VIP users
 or(register-before("2023-01-01 00:00:00"), is-vip(2))
+
+# Recharge users in specific department (supports Chinese and English names)
+belong-to("技术部")       # Chinese department name
+belong-to("Tech_Group")   # English department name
+
+# Combine department with other conditions
+and(belong-to("R&D_Center"), is-vip(2))
 
 # Complex condition with true/false functions
 or(and(is-vip(3), true()), and(false(), github-star("project")))

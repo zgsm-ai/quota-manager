@@ -706,7 +706,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 - `access-after(timestamp)`: 指定时间后的最后访问
 - `and(condition1, condition2)`: 逻辑与
-- `belong-to(org)`: 属于指定组织
+- `belong-to(org)`: 属于指定组织或部门。当 `employee_sync.enabled = true` 时，通过 employee_department 表使用用户的员工编号检查用户是否属于该部门。支持中英文部门名称。当员工同步被禁用或员工编号为空时，回退到使用 Company 字段。
 - `false()`: 始终返回 false（没有用户匹配）
 - `github-star(project)`: 检查用户是否为指定项目加星（从用户的星标项目列表中匹配）
 - `is-vip(level)`: VIP 等级大于或等于指定等级
@@ -734,6 +734,13 @@ and(is-vip(1), access-after("2024-05-01 00:00:00"))
 
 # 为早期注册用户或 VIP 用户充值
 or(register-before("2023-01-01 00:00:00"), is-vip(2))
+
+# 为特定部门的用户充值（支持中英文名称）
+belong-to("技术部")       # 中文部门名称
+belong-to("Tech_Group")   # 英文部门名称
+
+# 结合部门与其他条件
+and(belong-to("研发中心"), is-vip(2))
 
 # 使用 true/false 函数的复杂条件
 or(and(is-vip(3), true()), and(false(), github-star("project")))

@@ -13,10 +13,22 @@ type QuotaQuerier interface {
 	QueryQuota(userID string) (int, error)
 }
 
+// DatabaseQuerier interface for querying database information
+type DatabaseQuerier interface {
+	QueryEmployeeDepartment(employeeNumber string) ([]string, error)
+}
+
+// ConfigQuerier interface for accessing configuration
+type ConfigQuerier interface {
+	IsEmployeeSyncEnabled() bool
+}
+
 // EvaluationContext contains all dependencies needed for condition evaluation
 type EvaluationContext struct {
-	QuotaQuerier QuotaQuerier
-	// Can add more dependencies here in the future (e.g., database, cache, etc.)
+	QuotaQuerier    QuotaQuerier
+	DatabaseQuerier DatabaseQuerier
+	ConfigQuerier   ConfigQuerier
+	// Can add more dependencies here in the future (e.g., cache, etc.)
 }
 
 type Parser struct {
@@ -145,6 +157,29 @@ type BelongToExpr struct {
 }
 
 func (b *BelongToExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	// Check if employee sync is enabled and we have the necessary dependencies
+	if ctx.ConfigQuerier != nil && ctx.ConfigQuerier.IsEmployeeSyncEnabled() &&
+		ctx.DatabaseQuerier != nil && user.EmployeeNumber != "" {
+
+		// Use new logic: check if employee belongs to department via employee_department table
+		departments, err := ctx.DatabaseQuerier.QueryEmployeeDepartment(user.EmployeeNumber)
+		if err != nil {
+			// If query fails, fall back to original logic
+			return user.Company == b.Org, nil
+		}
+
+		// Check if the specified department/organization exists in user's department hierarchy
+		// Support both Chinese and English department names
+		for _, dept := range departments {
+			if dept == b.Org {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	}
+
+	// Fall back to original logic when employee sync is disabled or dependencies are missing
 	return user.Company == b.Org, nil
 }
 

@@ -166,7 +166,11 @@ func setupTestEnvironment() (*TestContext, error) {
 	// Create services
 	voucherService := services.NewVoucherService("test-signing-key-at-least-32-bytes-long")
 	quotaService := services.NewQuotaService(db, mockAiGatewayConfig, gateway, voucherService)
-	strategyService := services.NewStrategyService(db, gateway, quotaService)
+	// Default employee sync config for testing (disabled by default)
+	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: false,
+	}
+	strategyService := services.NewStrategyService(db, gateway, quotaService, defaultEmployeeSyncConfig)
 	quotaQuerier := condition.NewAiGatewayQuotaQuerier(gateway)
 
 	return &TestContext{
@@ -272,4 +276,9 @@ func createTestUser(id, name string, vip int) *models.UserInfo {
 		GithubStar:       "zgsm-ai.zgsm,openai.gpt-4",
 		Devices:          "{}",
 	}
+}
+
+// createStrategyServiceWithEmployeeSync creates a StrategyService with custom employee sync configuration for testing
+func (ctx *TestContext) createStrategyServiceWithEmployeeSync(employeeSyncConfig *config.EmployeeSyncConfig) *services.StrategyService {
+	return services.NewStrategyService(ctx.DB, ctx.Gateway, ctx.QuotaService, employeeSyncConfig)
 }
