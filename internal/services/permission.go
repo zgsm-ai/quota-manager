@@ -335,13 +335,20 @@ func (s *PermissionService) UpdateDepartmentPermissions(departmentName string) e
 // calculateEffectivePermissions calculates effective permissions for an employee
 func (s *PermissionService) calculateEffectivePermissions(employeeNumber string, departments []string) ([]string, *int) {
 	// Priority: User whitelist > Department whitelist (most specific department first)
+	// Note: Empty whitelist (empty model list) is treated as "not configured", continue to check parent level
 
 	// Check user whitelist first
 	var userWhitelist models.ModelWhitelist
 	err := s.db.DB.Where("target_type = ? AND target_identifier = ?",
 		models.TargetTypeUser, employeeNumber).First(&userWhitelist).Error
 	if err == nil {
-		return userWhitelist.GetAllowedModelsAsSlice(), &userWhitelist.ID
+		userModels := userWhitelist.GetAllowedModelsAsSlice()
+		// Only return user whitelist if it contains models
+		// Empty whitelist is treated as "not configured", fall back to department whitelist
+		if len(userModels) > 0 {
+			return userModels, &userWhitelist.ID
+		}
+		// User has empty whitelist, continue to check department whitelists
 	}
 
 	// Check department whitelists (from most specific to most general)
@@ -350,11 +357,17 @@ func (s *PermissionService) calculateEffectivePermissions(employeeNumber string,
 		err := s.db.DB.Where("target_type = ? AND target_identifier = ?",
 			models.TargetTypeDepartment, departments[i]).First(&deptWhitelist).Error
 		if err == nil {
-			return deptWhitelist.GetAllowedModelsAsSlice(), &deptWhitelist.ID
+			deptModels := deptWhitelist.GetAllowedModelsAsSlice()
+			// Only return department whitelist if it contains models
+			// Empty whitelist is treated as "not configured", check parent department
+			if len(deptModels) > 0 {
+				return deptModels, &deptWhitelist.ID
+			}
+			// Department has empty whitelist, continue to check parent department
 		}
 	}
 
-	// No whitelist found
+	// No non-empty whitelist found
 	return []string{}, nil
 }
 

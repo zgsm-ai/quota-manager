@@ -162,6 +162,7 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"User Whitelist Management Test", testUserWhitelistManagement},
 		{"Department Whitelist Management Test", testDepartmentWhitelistManagement},
 		{"Permission Priority and Inheritance Test", testPermissionPriorityAndInheritance},
+		{"Empty Whitelist Fallback Test", testEmptyWhitelistFallback},
 		{"Aigateway Permission Sync Test", testAigatewayPermissionSync},
 		{"Sync Without Whitelist Test", testSyncWithoutWhitelist},
 		{"Aigateway Notification Optimization Test", testAigatewayNotificationOptimization},

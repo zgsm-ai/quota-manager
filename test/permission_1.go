@@ -616,3 +616,178 @@ func testUserWhitelistDistribution(ctx *TestContext) TestResult {
 
 	return TestResult{Passed: true, Message: "User whitelist distribution test succeeded"}
 }
+
+// testEmptyWhitelistFallback tests that empty whitelists are treated as "not configured"
+// and the system falls back to parent level permissions
+func testEmptyWhitelistFallback(ctx *TestContext) TestResult {
+	// Create services
+	aiGatewayConfig := &config.AiGatewayConfig{
+		Host:       "localhost",
+		Port:       8080,
+		AdminPath:  "/model-permission",
+		AuthHeader: "x-admin-key",
+		AuthValue:  "test-key",
+	}
+
+	employeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: false,
+		HrURL:   "http://localhost:8099/api/hr/employees",
+		HrKey:   "test-hr-key",
+		DeptURL: "http://localhost:8099/api/hr/departments",
+		DeptKey: "test-dept-key",
+	}
+
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+
+	// Test Case 1: Personal empty whitelist should fallback to department whitelist
+	employee1 := &models.EmployeeDepartment{
+		EmployeeNumber:     "E001",
+		Username:           "test_user_1",
+		DeptFullLevelNames: "Company,Tech_Group,Dev_Team",
+	}
+	if err := ctx.DB.DB.Create(employee1).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee1: %v", err)}
+	}
+
+	// Set department whitelist first
+	if err := permissionService.SetDepartmentWhitelist("Dev_Team", []string{"gpt-4", "claude-3"}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set department whitelist: %v", err)}
+	}
+
+	// Set personal empty whitelist
+	if err := permissionService.SetUserWhitelist("E001", []string{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set empty user whitelist: %v", err)}
+	}
+
+	// Check effective permissions - should fallback to department whitelist
+	effectiveModels, err := permissionService.GetUserEffectivePermissions("E001")
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions: %v", err)}
+	}
+
+	if len(effectiveModels) != 2 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 2 models from department fallback, got %d: %v", len(effectiveModels), effectiveModels)}
+	}
+
+	expectedModels := map[string]bool{"gpt-4": true, "claude-3": true}
+	for _, model := range effectiveModels {
+		if !expectedModels[model] {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Unexpected model %s in fallback permissions", model)}
+		}
+	}
+
+	// Test Case 2: Sub-department empty whitelist should fallback to parent department
+	employee2 := &models.EmployeeDepartment{
+		EmployeeNumber:     "E002",
+		Username:           "test_user_2",
+		DeptFullLevelNames: "Company,Sales_Group,Marketing_Team,Digital_Team",
+	}
+	if err := ctx.DB.DB.Create(employee2).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee2: %v", err)}
+	}
+
+	// Set parent department whitelist
+	if err := permissionService.SetDepartmentWhitelist("Sales_Group", []string{"gpt-3.5", "deepseek-v3"}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set parent department whitelist: %v", err)}
+	}
+
+	// Set sub-department empty whitelist
+	if err := permissionService.SetDepartmentWhitelist("Digital_Team", []string{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set empty sub-department whitelist: %v", err)}
+	}
+
+	// Check effective permissions - should fallback to parent department
+	effectiveModels2, err := permissionService.GetUserEffectivePermissions("E002")
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions for E002: %v", err)}
+	}
+
+	if len(effectiveModels2) != 2 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 2 models from parent department fallback, got %d: %v", len(effectiveModels2), effectiveModels2)}
+	}
+
+	expectedModels2 := map[string]bool{"gpt-3.5": true, "deepseek-v3": true}
+	for _, model := range effectiveModels2 {
+		if !expectedModels2[model] {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Unexpected model %s in parent department fallback", model)}
+		}
+	}
+
+	// Test Case 3: Multiple level fallback
+	employee3 := &models.EmployeeDepartment{
+		EmployeeNumber:     "E003",
+		Username:           "test_user_3",
+		DeptFullLevelNames: "RootCompany,Operations_Group,Support_Team,Level2_Team,Level3_Team",
+	}
+	if err := ctx.DB.DB.Create(employee3).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee3: %v", err)}
+	}
+
+	// Set root department whitelist
+	if err := permissionService.SetDepartmentWhitelist("RootCompany", []string{"llama-3", "qwen-2"}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set root department whitelist: %v", err)}
+	}
+
+	// Set all intermediate departments to empty
+	if err := permissionService.SetDepartmentWhitelist("Level3_Team", []string{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set empty Level3_Team whitelist: %v", err)}
+	}
+	if err := permissionService.SetDepartmentWhitelist("Level2_Team", []string{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set empty Level2_Team whitelist: %v", err)}
+	}
+	if err := permissionService.SetDepartmentWhitelist("Support_Team", []string{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set empty Support_Team whitelist: %v", err)}
+	}
+	if err := permissionService.SetDepartmentWhitelist("Operations_Group", []string{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set empty Operations_Group whitelist: %v", err)}
+	}
+
+	// Check effective permissions - should fallback to root company level
+	effectiveModels3, err := permissionService.GetUserEffectivePermissions("E003")
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions for E003: %v", err)}
+	}
+
+	if len(effectiveModels3) != 2 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 2 models from root department fallback, got %d: %v", len(effectiveModels3), effectiveModels3)}
+	}
+
+	expectedModels3 := map[string]bool{"llama-3": true, "qwen-2": true}
+	for _, model := range effectiveModels3 {
+		if !expectedModels3[model] {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Unexpected model %s in root department fallback", model)}
+		}
+	}
+
+	// Test Case 4: Verify that non-empty whitelists still take priority
+	employee4 := &models.EmployeeDepartment{
+		EmployeeNumber:     "E004",
+		Username:           "test_user_4",
+		DeptFullLevelNames: "TestCompany,HR_Group,Recruitment_Team",
+	}
+	if err := ctx.DB.DB.Create(employee4).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee4: %v", err)}
+	}
+
+	// Set department whitelist first
+	if err := permissionService.SetDepartmentWhitelist("Recruitment_Team", []string{"gpt-3", "gemini-pro"}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set department whitelist for E004: %v", err)}
+	}
+
+	// Set personal non-empty whitelist (should override department)
+	if err := permissionService.SetUserWhitelist("E004", []string{"claude-3-opus"}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user whitelist for E004: %v", err)}
+	}
+
+	// Check effective permissions - should be personal whitelist, not department fallback
+	effectiveModels4, err := permissionService.GetUserEffectivePermissions("E004")
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions for E004: %v", err)}
+	}
+
+	if len(effectiveModels4) != 1 || effectiveModels4[0] != "claude-3-opus" {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected personal whitelist [claude-3-opus], got %v", effectiveModels4)}
+	}
+
+	return TestResult{Passed: true, Message: "Empty whitelist fallback logic works correctly"}
+}
