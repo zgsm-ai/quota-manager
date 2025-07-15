@@ -280,9 +280,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   "model": "gpt-3.5-turbo",
   "condition": "github-star(\"zgsm\")",
   "status": true
-}
-```
-- **Response**:
+  }
+  ```
 ```json
 {
   "code": "quota-manager.success",
@@ -303,10 +302,26 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-### Permission Management APIs (New)
+### Health Check
+
+#### Health Check
+- **GET** `/quota-manager/health`
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Service is running",
+  "success": true,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### Model Permission Management APIs (New)
 
 #### Set User Whitelist
-- **POST** `/quota-manager/api/v1/permissions/user`
+- **POST** `/quota-manager/api/v1/model-permissions/user`
 - **Request Body**:
 ```json
 {
@@ -316,7 +331,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 #### Set Department Whitelist
-- **POST** `/quota-manager/api/v1/permissions/department`
+- **POST** `/quota-manager/api/v1/model-permissions/department`
 - **Request Body**:
 ```json
 {
@@ -325,14 +340,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-#### Get Effective Permissions
-- **GET** `/quota-manager/api/v1/permissions/effective?target_type=user&target_identifier=85054712`
-- **GET** `/quota-manager/api/v1/permissions/effective?target_type=department&target_identifier=R&D_Center`
-
-#### Trigger Employee Sync
-- **POST** `/quota-manager/api/v1/permissions/sync`
-
-**Permission Priority (High to Low):**
+**Model Permission Priority (High to Low):**
 1. User-specific whitelist
 2. Most specific department whitelist (child dept > parent dept)
 3. No permissions (empty list)
@@ -358,17 +366,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   "enabled": false
 }
 ```
-
-#### Unified Permission Query Interface
-- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=user&target_identifier=85054712`
-- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=user&target_identifier=85054712`
-- **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=department&target_identifier=R&D_Center`
-- **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=department&target_identifier=R&D_Center`
-
-**Query Parameters:**
-- `type`: Permission type, `model` (model permissions) or `star-check` (star check permissions)
-- `target_type`: Target type, `user` or `department`
-- `target_identifier`: Target identifier (employee number for users or department name for departments)
 
 **Star Check Permission Priority (High to Low):**
 1. User-specific setting
@@ -397,7 +394,14 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-#### Unified Permission Query Interface (Extended)
+**Quota Check Permission Priority (High to Low):**
+1. User-specific setting
+2. Most specific department setting (child dept > parent dept)
+3. Default setting (disabled)
+
+### Unified Permission Query and Sync APIs (New)
+
+#### Get Effective Permissions
 - **GET** `/quota-manager/api/v1/effective-permissions?type=model&target_type=user&target_identifier=85054712`
 - **GET** `/quota-manager/api/v1/effective-permissions?type=star-check&target_type=user&target_identifier=85054712`
 - **GET** `/quota-manager/api/v1/effective-permissions?type=quota-check&target_type=user&target_identifier=85054712`
@@ -410,12 +414,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `target_type`: Target type, `user` or `department`
 - `target_identifier`: Target identifier (employee number for users or department name for departments)
 
-**Quota Check Permission Priority (High to Low):**
-1. User-specific setting
-2. Most specific department setting (child dept > parent dept)
-3. Default setting (disabled)
-
-#### Unified Employee Sync Interface
+#### Trigger Employee Sync
 - **POST** `/quota-manager/api/v1/employee-sync`
 
 This interface will synchronize employee data and update model permissions, star check permissions, and quota check permissions.
@@ -503,6 +502,36 @@ This interface will synchronize employee data and update model permissions, star
   "code": "quota-manager.success",
   "message": "Strategy scan triggered successfully",
   "success": true
+}
+```
+
+#### Get Strategy Execution Records
+- **GET** `/quota-manager/api/v1/strategies/:id/executions`
+- **Query Parameters**:
+  - `page`: Page number (default: 1)
+  - `page_size`: Page size (default: 10)
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Strategy execution records retrieved successfully",
+  "success": true,
+  "data": {
+    "total": 15,
+    "records": [
+      {
+        "id": 1,
+        "strategy_id": 1,
+        "strategy_name": "test-strategy",
+        "execution_time": "2025-01-15T10:00:00Z",
+        "status": "SUCCESS",
+        "processed_users": 5,
+        "failed_users": 0,
+        "details": {...},
+        "error_message": ""
+      }
+    ]
+  }
 }
 ```
 
@@ -597,6 +626,73 @@ This interface will synchronize employee data and update model permissions, star
       "expiry_date": "2025-07-31T23:59:59Z"
     }
   ]
+}
+```
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Quota transferred out successfully",
+  "success": true,
+  "data": {
+    "voucher_code": "ABCD1234EFGH5678",
+    "total_amount": 30,
+    "expiry_date": "2025-06-30T23:59:59Z"
+  }
+}
+```
+
+#### Transfer In Quota
+- **POST** `/quota-manager/api/v1/quota/transfer-in`
+- **Request Body**:
+```json
+{
+  "voucher_code": "ABCD1234EFGH5678"
+}
+```
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Quota transferred in successfully",
+  "success": true,
+  "data": {
+    "status": "success",
+    "message": "Transfer completed successfully",
+    "total_amount": 30,
+    "transfer_details": [...]
+  }
+}
+```
+
+#### Get User Quota Audit Records (Admin)
+- **GET** `/quota-manager/api/v1/quota/audit/:user_id?page=1&page_size=10`
+- **Path Parameters**:
+  - `user_id`: Target user ID (required)
+- **Query Parameters**:
+  - `page`: Page number (default: 1)
+  - `page_size`: Page size (default: 10)
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "User quota audit records retrieved successfully",
+  "success": true,
+  "data": {
+    "total": 25,
+    "records": [
+      {
+        "amount": 100,
+        "operation": "RECHARGE",
+        "voucher_code": "",
+        "related_user": "",
+        "strategy_name": "vip-daily-bonus",
+        "expiry_date": "2025-06-30T23:59:59Z",
+        "details": {...},
+        "create_time": "2025-05-15T10:00:00Z"
+      }
+    ]
+  }
 }
 ```
 - **Response**:
