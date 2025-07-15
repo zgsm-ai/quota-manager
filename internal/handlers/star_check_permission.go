@@ -50,6 +50,34 @@ func (h *StarCheckPermissionHandler) SetUserStarCheckSetting(c *gin.Context) {
 			return
 		}
 
+		// Check if it's a ServiceError
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorUserNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "star_check_permission.user_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDeptNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "star_check_permission.department_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "star_check_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+
+		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    "star_check_permission.set_user_setting_failed",
 			"message": "Failed to set user star check setting: " + err.Error(),
@@ -87,6 +115,34 @@ func (h *StarCheckPermissionHandler) SetDepartmentStarCheckSetting(c *gin.Contex
 			return
 		}
 
+		// Check if it's a ServiceError
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorUserNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "star_check_permission.user_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDeptNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "star_check_permission.department_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "star_check_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+
+		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    "star_check_permission.set_department_setting_failed",
 			"message": "Failed to set department star check setting: " + err.Error(),

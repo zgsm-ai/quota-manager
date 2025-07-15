@@ -41,7 +41,7 @@ func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []
 		var employee models.EmployeeDepartment
 		err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error
 		if err != nil {
-			return fmt.Errorf("user not found: employee number '%s' does not exist", employeeNumber)
+			return NewUserNotFoundError(employeeNumber)
 		}
 	}
 
@@ -59,7 +59,7 @@ func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []
 		// Update existing whitelist
 		whitelist.SetAllowedModelsFromSlice(modelList)
 		if err := s.db.DB.Save(&whitelist).Error; err != nil {
-			return fmt.Errorf("failed to update whitelist: %w", err)
+			return NewDatabaseError("update whitelist", err)
 		}
 	} else {
 		// Create new whitelist
@@ -69,7 +69,7 @@ func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []
 		}
 		whitelist.SetAllowedModelsFromSlice(modelList)
 		if err := s.db.DB.Create(&whitelist).Error; err != nil {
-			return fmt.Errorf("failed to create whitelist: %w", err)
+			return NewDatabaseError("create whitelist", err)
 		}
 	}
 
@@ -97,11 +97,11 @@ func (s *PermissionService) SetDepartmentWhitelist(departmentName string, modelL
 	var employeeCount int64
 	err := s.db.DB.Model(&models.EmployeeDepartment{}).Where("dept_full_level_names LIKE ?", "%"+departmentName+"%").Count(&employeeCount).Error
 	if err != nil {
-		return fmt.Errorf("failed to validate department existence: %w", err)
+		return NewDatabaseError("validate department existence", err)
 	}
 
 	if employeeCount == 0 {
-		return fmt.Errorf("department not found: no employees belong to department '%s'", departmentName)
+		return NewDepartmentNotFoundError(departmentName)
 	}
 
 	// Check if whitelist already exists
@@ -118,7 +118,7 @@ func (s *PermissionService) SetDepartmentWhitelist(departmentName string, modelL
 		// Update existing whitelist
 		whitelist.SetAllowedModelsFromSlice(modelList)
 		if err := s.db.DB.Save(&whitelist).Error; err != nil {
-			return fmt.Errorf("failed to update whitelist: %w", err)
+			return NewDatabaseError("update whitelist", err)
 		}
 	} else {
 		// Create new whitelist
@@ -128,7 +128,7 @@ func (s *PermissionService) SetDepartmentWhitelist(departmentName string, modelL
 		}
 		whitelist.SetAllowedModelsFromSlice(modelList)
 		if err := s.db.DB.Create(&whitelist).Error; err != nil {
-			return fmt.Errorf("failed to create whitelist: %w", err)
+			return NewDatabaseError("create whitelist", err)
 		}
 	}
 

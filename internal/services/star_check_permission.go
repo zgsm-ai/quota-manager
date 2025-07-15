@@ -41,7 +41,7 @@ func (s *StarCheckPermissionService) SetUserStarCheckSetting(employeeNumber stri
 		var employee models.EmployeeDepartment
 		err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error
 		if err != nil {
-			return fmt.Errorf("user not found: employee number '%s' does not exist", employeeNumber)
+			return NewUserNotFoundError(employeeNumber)
 		}
 	}
 
@@ -60,7 +60,7 @@ func (s *StarCheckPermissionService) SetUserStarCheckSetting(employeeNumber stri
 		// Update existing setting
 		setting.Enabled = enabled
 		if err := s.db.DB.Save(&setting).Error; err != nil {
-			return fmt.Errorf("failed to update star check setting: %w", err)
+			return NewDatabaseError("update star check setting", err)
 		}
 	} else {
 		// Create new setting
@@ -70,7 +70,7 @@ func (s *StarCheckPermissionService) SetUserStarCheckSetting(employeeNumber stri
 			Enabled:          enabled,
 		}
 		if err := s.db.DB.Create(&setting).Error; err != nil {
-			return fmt.Errorf("failed to create star check setting: %w", err)
+			return NewDatabaseError("create star check setting", err)
 		}
 	}
 
@@ -98,11 +98,11 @@ func (s *StarCheckPermissionService) SetDepartmentStarCheckSetting(departmentNam
 	var employeeCount int64
 	err := s.db.DB.Model(&models.EmployeeDepartment{}).Where("dept_full_level_names LIKE ?", "%"+departmentName+"%").Count(&employeeCount).Error
 	if err != nil {
-		return fmt.Errorf("failed to validate department existence: %w", err)
+		return NewDatabaseError("validate department existence", err)
 	}
 
 	if employeeCount == 0 {
-		return fmt.Errorf("department not found: no employees belong to department '%s'", departmentName)
+		return NewDepartmentNotFoundError(departmentName)
 	}
 
 	// Check if setting already exists
@@ -120,7 +120,7 @@ func (s *StarCheckPermissionService) SetDepartmentStarCheckSetting(departmentNam
 		// Update existing setting
 		setting.Enabled = enabled
 		if err := s.db.DB.Save(&setting).Error; err != nil {
-			return fmt.Errorf("failed to update star check setting: %w", err)
+			return NewDatabaseError("update star check setting", err)
 		}
 	} else {
 		// Create new setting
@@ -130,7 +130,7 @@ func (s *StarCheckPermissionService) SetDepartmentStarCheckSetting(departmentNam
 			Enabled:          enabled,
 		}
 		if err := s.db.DB.Create(&setting).Error; err != nil {
-			return fmt.Errorf("failed to create star check setting: %w", err)
+			return NewDatabaseError("create star check setting", err)
 		}
 	}
 

@@ -50,6 +50,34 @@ func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 			return
 		}
 
+		// Check if it's a ServiceError
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorUserNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "model_permission.user_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDeptNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "model_permission.department_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "model_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+
+		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    "model_permission.set_user_whitelist_failed",
 			"message": "Failed to set user model whitelist: " + err.Error(),
@@ -87,6 +115,34 @@ func (h *ModelPermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 			return
 		}
 
+		// Check if it's a ServiceError
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorUserNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "model_permission.user_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDeptNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "model_permission.department_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "model_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+
+		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    "model_permission.set_department_whitelist_failed",
 			"message": "Failed to set department model whitelist: " + err.Error(),
