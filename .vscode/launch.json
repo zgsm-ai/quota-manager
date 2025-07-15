@@ -10,7 +10,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/main.go",
-            "args": ["--listen=:8099", "--config", "config.yaml"],
+            "args": ["--config", "config_local.yaml"],
             "cwd": "${workspaceFolder}"
         }
     ]
