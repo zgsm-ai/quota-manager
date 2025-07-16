@@ -23,13 +23,13 @@ func NewStarCheckPermissionHandler(starCheckPermissionService *services.StarChec
 // SetUserStarCheckRequest represents user star check request
 type SetUserStarCheckRequest struct {
 	EmployeeNumber string `json:"employee_number" validate:"required,employee_number"`
-	Enabled        bool   `json:"enabled"`
+	Enabled        *bool  `json:"enabled" validate:"required"`
 }
 
 // SetDepartmentStarCheckRequest represents department star check request
 type SetDepartmentStarCheckRequest struct {
 	DepartmentName string `json:"department_name" validate:"required,department_name"`
-	Enabled        bool   `json:"enabled"`
+	Enabled        *bool  `json:"enabled" validate:"required"`
 }
 
 // SetUserStarCheckSetting sets star check setting for a user
@@ -40,7 +40,7 @@ func (h *StarCheckPermissionHandler) SetUserStarCheckSetting(c *gin.Context) {
 		return
 	}
 
-	if err := h.starCheckPermissionService.SetUserStarCheckSetting(req.EmployeeNumber, req.Enabled); err != nil {
+	if err := h.starCheckPermissionService.SetUserStarCheckSetting(req.EmployeeNumber, *req.Enabled); err != nil {
 		if err.Error() == "star check setting already exists with same value" {
 			c.JSON(http.StatusOK, gin.H{
 				"code":    "star_check_permission.setting_exists",
@@ -92,7 +92,7 @@ func (h *StarCheckPermissionHandler) SetUserStarCheckSetting(c *gin.Context) {
 		"success": true,
 		"data": gin.H{
 			"employee_number": req.EmployeeNumber,
-			"enabled":         req.Enabled,
+			"enabled":         *req.Enabled,
 		},
 	})
 }
@@ -105,7 +105,7 @@ func (h *StarCheckPermissionHandler) SetDepartmentStarCheckSetting(c *gin.Contex
 		return
 	}
 
-	if err := h.starCheckPermissionService.SetDepartmentStarCheckSetting(req.DepartmentName, req.Enabled); err != nil {
+	if err := h.starCheckPermissionService.SetDepartmentStarCheckSetting(req.DepartmentName, *req.Enabled); err != nil {
 		if err.Error() == "star check setting already exists with same value" {
 			c.JSON(http.StatusOK, gin.H{
 				"code":    "star_check_permission.setting_exists",
@@ -157,7 +157,7 @@ func (h *StarCheckPermissionHandler) SetDepartmentStarCheckSetting(c *gin.Contex
 		"success": true,
 		"data": gin.H{
 			"department_name": req.DepartmentName,
-			"enabled":         req.Enabled,
+			"enabled":         *req.Enabled,
 		},
 	})
 }

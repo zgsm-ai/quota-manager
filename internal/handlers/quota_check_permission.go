@@ -23,13 +23,13 @@ func NewQuotaCheckPermissionHandler(quotaCheckPermissionService *services.QuotaC
 // SetUserQuotaCheckRequest represents user quota check request
 type SetUserQuotaCheckRequest struct {
 	EmployeeNumber string `json:"employee_number" validate:"required,employee_number"`
-	Enabled        bool   `json:"enabled"`
+	Enabled        *bool  `json:"enabled" validate:"required"`
 }
 
 // SetDepartmentQuotaCheckRequest represents department quota check request
 type SetDepartmentQuotaCheckRequest struct {
 	DepartmentName string `json:"department_name" validate:"required,department_name"`
-	Enabled        bool   `json:"enabled"`
+	Enabled        *bool  `json:"enabled" validate:"required"`
 }
 
 // SetUserQuotaCheckSetting sets quota check setting for a user
@@ -40,7 +40,7 @@ func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 		return
 	}
 
-	if err := h.quotaCheckPermissionService.SetUserQuotaCheckSetting(req.EmployeeNumber, req.Enabled); err != nil {
+	if err := h.quotaCheckPermissionService.SetUserQuotaCheckSetting(req.EmployeeNumber, *req.Enabled); err != nil {
 		// Check if it's a ServiceError
 		if serviceErr, ok := err.(*services.ServiceError); ok {
 			switch serviceErr.Code {
@@ -83,7 +83,7 @@ func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 		"success": true,
 		"data": gin.H{
 			"employee_number": req.EmployeeNumber,
-			"enabled":         req.Enabled,
+			"enabled":         *req.Enabled,
 		},
 	})
 }
@@ -96,7 +96,7 @@ func (h *QuotaCheckPermissionHandler) SetDepartmentQuotaCheckSetting(c *gin.Cont
 		return
 	}
 
-	if err := h.quotaCheckPermissionService.SetDepartmentQuotaCheckSetting(req.DepartmentName, req.Enabled); err != nil {
+	if err := h.quotaCheckPermissionService.SetDepartmentQuotaCheckSetting(req.DepartmentName, *req.Enabled); err != nil {
 		// Check if it's a ServiceError
 		if serviceErr, ok := err.(*services.ServiceError); ok {
 			switch serviceErr.Code {
@@ -139,7 +139,7 @@ func (h *QuotaCheckPermissionHandler) SetDepartmentQuotaCheckSetting(c *gin.Cont
 		"success": true,
 		"data": gin.H{
 			"department_name": req.DepartmentName,
-			"enabled":         req.Enabled,
+			"enabled":         *req.Enabled,
 		},
 	})
 }
