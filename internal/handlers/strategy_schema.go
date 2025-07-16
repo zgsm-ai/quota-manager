@@ -91,8 +91,8 @@ func (h *StrategySchemaHandler) UpdateStrategySchema(c *gin.Context) {
 		}
 	}
 	if amount, exists := updates["amount"]; exists {
-		if amountInt, ok := amount.(float64); ok {
-			tempStrategy.Amount = int(amountInt)
+		if amountFloat, ok := amount.(float64); ok {
+			tempStrategy.Amount = amountFloat
 		}
 	}
 	if model, exists := updates["model"]; exists {

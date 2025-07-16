@@ -321,7 +321,7 @@ func generateQuotas(db *database.DB) error {
 		for j := 0; j < quotaCount; j++ {
 			quota := models.Quota{
 				UserID:     userID,
-				Amount:     rand.Intn(150) + 10, // 10-160
+				Amount:     float64(rand.Intn(150) + 10), // 10-160
 				ExpiryDate: time.Date(2025, time.Month(rand.Intn(12)+1), rand.Intn(28)+1, 23, 59, 59, 0, time.UTC),
 				Status:     models.StatusValid,
 			}
@@ -403,7 +403,7 @@ func generateAudits(db *database.DB) error {
 			operation := operations[rand.Intn(len(operations))]
 			audit := models.QuotaAudit{
 				UserID:     userID,
-				Amount:     rand.Intn(100) + 10, // 10-110
+				Amount:     float64(rand.Intn(100) + 10), // 10-110
 				Operation:  operation,
 				ExpiryDate: time.Date(2025, time.Month(rand.Intn(12)+1), rand.Intn(28)+1, 23, 59, 59, 0, time.UTC),
 			}

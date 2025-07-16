@@ -25,7 +25,7 @@ type VoucherData struct {
 
 // VoucherQuotaItem represents quota item in voucher
 type VoucherQuotaItem struct {
-	Amount     int       `json:"amount"`
+	Amount     float64   `json:"amount"`
 	ExpiryDate time.Time `json:"expiry_date"`
 }
 

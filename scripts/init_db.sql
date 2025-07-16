@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS quota_strategy (
     name VARCHAR(255) UNIQUE NOT NULL,
     title VARCHAR(255) NOT NULL,
     type VARCHAR(50) NOT NULL,
-    amount INTEGER NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
     model VARCHAR(255),
     periodic_expr VARCHAR(255),
     condition TEXT,
@@ -92,7 +92,7 @@ CREATE INDEX IF NOT EXISTS idx_quota_strategy_status ON quota_strategy(status);
 CREATE TABLE IF NOT EXISTS quota (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255) NOT NULL,
-    amount INTEGER NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
     expiry_date TIMESTAMPTZ(0) NOT NULL,
     status VARCHAR(20) DEFAULT 'VALID' NOT NULL,
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
@@ -107,7 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_quota_status ON quota(status);
 CREATE TABLE IF NOT EXISTS quota_audit (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255) NOT NULL,
-    amount INTEGER NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
     operation VARCHAR(50) NOT NULL,
     voucher_code VARCHAR(1000),
     related_user VARCHAR(255),

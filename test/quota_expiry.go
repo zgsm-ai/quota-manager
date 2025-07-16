@@ -72,7 +72,7 @@ func testTransferOutWithExpiredQuota(ctx *TestContext) TestResult {
 	}
 
 	if updatedExpiredQuota.Amount != 50 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining expired quota 50, got %d", updatedExpiredQuota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining expired quota 50, got %g", updatedExpiredQuota.Amount)}
 	}
 
 	// Execute quota expiry processing
@@ -130,7 +130,7 @@ func testTransferOutWithExpiredQuota(ctx *TestContext) TestResult {
 	}
 
 	if updatedValidQuota.Amount != 20 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining valid quota 20, got %d", updatedValidQuota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining valid quota 20, got %g", updatedValidQuota.Amount)}
 	}
 
 	// Verify that user quota info only calculates valid quota
@@ -139,9 +139,9 @@ func testTransferOutWithExpiredQuota(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get user quota failed: %v", err)}
 	}
 
-	expectedTotal := 20 // only valid quota minus the transferred part
+	expectedTotal := 20.0 // only valid quota minus the transferred part
 	if quotaInfo.TotalQuota != expectedTotal {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected total quota %d, got %d", expectedTotal, quotaInfo.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected total quota %f, got %f", expectedTotal, quotaInfo.TotalQuota)}
 	}
 
 	// Verify audit records
@@ -227,7 +227,7 @@ func testTransferInWithExpiredVoucher(ctx *TestContext) TestResult {
 	}
 
 	if validQuota.Amount != 60 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected valid quota 60, got %d", validQuota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected valid quota 60, got %g", validQuota.Amount)}
 	}
 
 	// Verify that expired quota was not created
@@ -244,7 +244,7 @@ func testTransferInWithExpiredVoucher(ctx *TestContext) TestResult {
 	}
 
 	if auditRecord.Amount != 60 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount 60, got %d", auditRecord.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount 60, got %g", auditRecord.Amount)}
 	}
 
 	// Verify transfer in status
@@ -376,7 +376,7 @@ func testQuotaExpiryDuringTransfer(ctx *TestContext) TestResult {
 	}
 
 	if finalQuota.Amount != 80 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected original expired quota amount 80, got %d", finalQuota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected original expired quota amount 80, got %g", finalQuota.Amount)}
 	}
 
 	// Verify expired quota status (may still be valid, because we didn't run expiry process)
@@ -456,9 +456,9 @@ func testBatchQuotaExpiryConsistency(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get user quota failed: %v", err)}
 	}
 
-	expectedValidTotal := 200 + 120 // only non-expired quota
+	expectedValidTotal := 200.0 + 120.0 // only non-expired quota
 	if quotaInfo.TotalQuota != expectedValidTotal {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected total valid quota %d, got %d", expectedValidTotal, quotaInfo.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected total valid quota %f, got %f", expectedValidTotal, quotaInfo.TotalQuota)}
 	}
 
 	return TestResult{Passed: true, Message: "Batch Quota Expiry Consistency Test Succeeded"}
@@ -542,7 +542,7 @@ func testTransferOutExpiryDateValidation(ctx *TestContext) TestResult {
 	}
 
 	if updatedQuota.Amount != 150 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota 150, got %d", updatedQuota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota 150, got %g", updatedQuota.Amount)}
 	}
 
 	return TestResult{Passed: true, Message: "Transfer Out Expiry Date Validation Test Succeeded"}

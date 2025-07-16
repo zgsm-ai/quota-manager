@@ -111,7 +111,7 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 	}
 
 	if updatedQuota.Amount != 70 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota 70, got %d", updatedQuota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota 70, got %g", updatedQuota.Amount)}
 	}
 
 	// Verify audit record
@@ -121,7 +121,7 @@ func testQuotaTransferOut(ctx *TestContext) TestResult {
 	}
 
 	if auditRecord.Amount != -30 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount -30, got %d", auditRecord.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount -30, got %g", auditRecord.Amount)}
 	}
 
 	// Verify no strategy name in transfer out audit record
@@ -220,7 +220,7 @@ func testTransferOutInsufficientAvailable(ctx *TestContext) TestResult {
 	// Should have 0 remaining quota (all consumed or transferred)
 	actualRemaining1 := quotaInfo1.TotalQuota - quotaInfo1.UsedQuota
 	if actualRemaining1 != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 remaining quota, got %d", actualRemaining1)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 remaining quota, got %g", actualRemaining1)}
 	}
 
 	// Try to transfer 1 more quota (should fail - no remaining quota)
@@ -465,7 +465,7 @@ func testTransferOutEmptyReceiverID(ctx *TestContext) TestResult {
 	}
 
 	if unchangedQuota.Amount != 100 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota to remain unchanged at 100, got %d", unchangedQuota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota to remain unchanged at 100, got %g", unchangedQuota.Amount)}
 	}
 
 	// Verify no audit record was created for the failed transfer

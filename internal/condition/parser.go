@@ -10,7 +10,7 @@ import (
 
 // QuotaQuerier interface for querying quota information
 type QuotaQuerier interface {
-	QueryQuota(userID string) (int, error)
+	QueryQuota(userID string) (float64, error)
 }
 
 // DatabaseQuerier interface for querying database information
@@ -127,7 +127,7 @@ func (g *GithubStarExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext)
 // QuotaLEExpr quota less than or equal expression
 type QuotaLEExpr struct {
 	Model  string
-	Amount int
+	Amount float64
 }
 
 func (q *QuotaLEExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
@@ -468,7 +468,7 @@ func (p *Parser) buildFunction(funcName string, args []string) (Evaluator, error
 		if len(args) != 2 {
 			return nil, fmt.Errorf("quota-le expects 2 arguments, got %d", len(args))
 		}
-		amount, err := strconv.Atoi(args[1])
+		amount, err := strconv.ParseFloat(args[1], 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid amount: %w", err)
 		}

@@ -42,8 +42,8 @@ func testClearData(ctx *TestContext) TestResult {
 	}
 
 	// Reset mock storage
-	mockStore.data = make(map[string]int)
-	mockStore.usedData = make(map[string]int)
+	mockStore.data = make(map[string]float64)
+	mockStore.usedData = make(map[string]float64)
 	mockStore.starData = make(map[string]bool)
 	mockStore.ClearSetStarProjectsCalls()
 	mockStore.ClearAllPermissions()

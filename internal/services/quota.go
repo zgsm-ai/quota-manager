@@ -44,20 +44,20 @@ func NewQuotaService(db *database.DB, aiGatewayConf *config.AiGatewayConfig, aiG
 
 // QuotaInfo represents user quota information
 type QuotaInfo struct {
-	TotalQuota int               `json:"total_quota"`
-	UsedQuota  int               `json:"used_quota"`
+	TotalQuota float64           `json:"total_quota"`
+	UsedQuota  float64           `json:"used_quota"`
 	QuotaList  []QuotaDetailItem `json:"quota_list"`
 }
 
 // QuotaDetailItem represents quota detail item
 type QuotaDetailItem struct {
-	Amount     int       `json:"amount"`
+	Amount     float64   `json:"amount"`
 	ExpiryDate time.Time `json:"expiry_date"`
 }
 
 // QuotaAuditRecord represents quota audit record
 type QuotaAuditRecord struct {
-	Amount       int                       `json:"amount"`
+	Amount       float64                   `json:"amount"`
 	Operation    string                    `json:"operation"`
 	VoucherCode  string                    `json:"voucher_code,omitempty"`
 	RelatedUser  string                    `json:"related_user,omitempty"`
@@ -75,7 +75,7 @@ type TransferOutRequest struct {
 
 // TransferQuotaItem represents quota item for transfer
 type TransferQuotaItem struct {
-	Amount     int       `json:"amount" validate:"required,gt=0"`
+	Amount     float64   `json:"amount" validate:"required,gt=0"`
 	ExpiryDate time.Time `json:"expiry_date" validate:"required"`
 }
 
@@ -120,14 +120,14 @@ type TransferInResponse struct {
 	QuotaList   []TransferQuotaResult `json:"quota_list"`
 	VoucherCode string                `json:"voucher_code"`
 	Operation   string                `json:"operation"`
-	Amount      int                   `json:"amount"`
+	Amount      float64               `json:"amount"`
 	Status      TransferStatus        `json:"status"`
 	Message     string                `json:"message,omitempty"`
 }
 
 // TransferQuotaResult represents transfer quota result
 type TransferQuotaResult struct {
-	Amount        int                    `json:"amount"`
+	Amount        float64                `json:"amount"`
 	ExpiryDate    time.Time              `json:"expiry_date"`
 	IsExpired     bool                   `json:"is_expired"`
 	Success       bool                   `json:"success"`
@@ -254,12 +254,12 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 	}
 
 	// Calculate remaining quotas for each expiry date
-	quotaAvailabilityMap := make(map[string]int) // key: expiry_date as string, value: available amount
+	quotaAvailabilityMap := make(map[string]float64) // key: expiry_date as string, value: available amount
 	remainingUsed := usedQuota
 
 	for _, quota := range quotas {
 		dateKey := quota.ExpiryDate.Format("2006-01-02T15:04:05Z07:00")
-		var availableFromThisQuota int
+		var availableFromThisQuota float64
 		if remainingUsed <= 0 {
 			availableFromThisQuota = quota.Amount
 		} else if quota.Amount > remainingUsed {
@@ -293,12 +293,12 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 
 		if available < quotaItem.Amount {
 			tx.Rollback()
-			return nil, fmt.Errorf("insufficient available quota for expiry date %v: have %d, need %d",
+			return nil, fmt.Errorf("insufficient available quota for expiry date %v: have %g, need %g",
 				quotaItem.ExpiryDate, available, quotaItem.Amount)
 		}
 
 		// Also validate the total quota exists in database for this expiry date
-		var totalQuotaAmount int64
+		var totalQuotaAmount float64
 		if err := tx.Model(&models.Quota{}).
 			Where("user_id = ? AND expiry_date = ? AND status = ?",
 				giver.ID, quotaItem.ExpiryDate, models.StatusValid).
@@ -308,10 +308,10 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 			return nil, fmt.Errorf("failed to check quota for expiry date %v: %w", quotaItem.ExpiryDate, err)
 		}
 
-		if int(totalQuotaAmount) < quotaItem.Amount {
+		if totalQuotaAmount < quotaItem.Amount {
 			tx.Rollback()
-			return nil, fmt.Errorf("insufficient quota for expiry date %v: have %d, need %d",
-				quotaItem.ExpiryDate, int(totalQuotaAmount), quotaItem.Amount)
+			return nil, fmt.Errorf("insufficient quota for expiry date %v: have %f, need %f",
+				quotaItem.ExpiryDate, totalQuotaAmount, quotaItem.Amount)
 		}
 	}
 
@@ -370,7 +370,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 	}
 
 	// Calculate total amount for audit record
-	totalAmount := 0
+	totalAmount := 0.0
 	// Find earliest expiry date for audit record
 	var earliestExpiryDate time.Time
 	for i, item := range req.QuotaList {
@@ -492,7 +492,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 		}, nil
 	}
 
-	totalAmount := 0
+	totalAmount := 0.0
 	successCount := 0
 	quotaResults := make([]TransferQuotaResult, len(voucherData.QuotaList))
 	var earliestExpiryDate time.Time
@@ -697,7 +697,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 }
 
 // AddQuotaForStrategy adds quota for strategy execution
-func (s *QuotaService) AddQuotaForStrategy(userID string, amount int, strategyName string) error {
+func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strategyName string) error {
 	// Calculate expiry date (end of this/next month)
 	now := time.Now().Truncate(time.Second)
 	var expiryDate time.Time
@@ -813,7 +813,7 @@ func (s *QuotaService) ExpireQuotas() error {
 	}
 
 	// Group by user
-	userQuotaMap := make(map[string]int)
+	userQuotaMap := make(map[string]float64)
 	for _, quota := range expiredQuotas {
 		userQuotaMap[quota.UserID] += quota.Amount
 	}
@@ -837,7 +837,7 @@ func (s *QuotaService) ExpireQuotas() error {
 	// Process each user
 	for userID := range userQuotaMap {
 		// Get user's remaining valid quota
-		var validQuotaSum int64
+		var validQuotaSum float64
 		if err := tx.Model(&models.Quota{}).
 			Where("user_id = ? AND status = ?", userID, models.StatusValid).
 			Select("COALESCE(SUM(amount), 0)").Scan(&validQuotaSum).Error; err != nil {
@@ -867,8 +867,8 @@ func (s *QuotaService) ExpireQuotas() error {
 		}
 
 		// Adjust total quota
-		validQuota := int(validQuotaSum)
-		var newTotalQuota int
+		validQuota := validQuotaSum
+		var newTotalQuota float64
 		if validQuota >= remainingQuota {
 			newTotalQuota = validQuota
 		} else {
@@ -895,7 +895,7 @@ func (s *QuotaService) MergeQuotaRecords() error {
 		UserID      string    `gorm:"column:user_id"`
 		ExpiryDate  time.Time `gorm:"column:expiry_date"`
 		Status      string    `gorm:"column:status"`
-		TotalAmount int       `gorm:"column:total_amount"`
+		TotalAmount float64   `gorm:"column:total_amount"`
 		RecordCount int       `gorm:"column:record_count"`
 	}
 
@@ -949,7 +949,7 @@ func (s *QuotaService) MergeQuotaRecords() error {
 
 // Helper methods for AiGateway communication
 
-func (s *QuotaService) getQuotaFromAiGateway(userID string) (int, error) {
+func (s *QuotaService) getQuotaFromAiGateway(userID string) (float64, error) {
 	url := fmt.Sprintf("%s%s?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -988,10 +988,10 @@ func (s *QuotaService) getQuotaFromAiGateway(userID string) (int, error) {
 		return 0, fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
 	}
 
-	return int(result.Data.Quota), nil
+	return result.Data.Quota, nil
 }
 
-func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
+func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (float64, error) {
 	url := fmt.Sprintf("%s%s/used?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -1030,15 +1030,15 @@ func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (int, error) {
 		return 0, fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
 	}
 
-	return int(result.Data.Quota), nil
+	return result.Data.Quota, nil
 }
 
-func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
+func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta float64) error {
 	reqURL := fmt.Sprintf("%s%s/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)
-	data.Set("value", strconv.Itoa(delta))
+	data.Set("value", strconv.FormatFloat(delta, 'f', -1, 64))
 
 	req, err := http.NewRequest("POST", reqURL, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -1076,12 +1076,12 @@ func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta int) error {
 	return nil
 }
 
-func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta int) error {
+func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta float64) error {
 	reqURL := fmt.Sprintf("%s%s/used/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)
-	data.Set("value", strconv.Itoa(delta))
+	data.Set("value", strconv.FormatFloat(delta, 'f', -1, 64))
 
 	req, err := http.NewRequest("POST", reqURL, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -1120,7 +1120,7 @@ func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta int) error
 }
 
 // DeltaUsedQuotaInAiGateway is a public wrapper for deltaUsedQuotaInAiGateway
-func (s *QuotaService) DeltaUsedQuotaInAiGateway(userID string, delta int) error {
+func (s *QuotaService) DeltaUsedQuotaInAiGateway(userID string, delta float64) error {
 	return s.deltaUsedQuotaInAiGateway(userID, delta)
 }
 

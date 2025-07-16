@@ -65,7 +65,7 @@ type QuotaStrategy struct {
 	Name         string    `gorm:"uniqueIndex;not null" json:"name" validate:"required,min=1,max=100"`
 	Title        string    `gorm:"not null" json:"title" validate:"required,min=1,max=200"`
 	Type         string    `gorm:"not null" json:"type" validate:"required,oneof=single periodic"` // periodic/single
-	Amount       int       `gorm:"not null" json:"amount"`
+	Amount       float64   `gorm:"not null" json:"amount"`
 	Model        string    `json:"model" validate:"omitempty,min=1,max=100"`
 	PeriodicExpr string    `gorm:"column:periodic_expr" json:"periodic_expr" validate:"omitempty,cron"`
 	Condition    string    `json:"condition" validate:"omitempty"`
@@ -112,7 +112,7 @@ type UserInfo struct {
 type Quota struct {
 	ID         int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID     string    `gorm:"not null;index;size:255" json:"user_id"`
-	Amount     int       `gorm:"not null" json:"amount"`
+	Amount     float64   `gorm:"not null" json:"amount"`
 	ExpiryDate time.Time `gorm:"not null;index" json:"expiry_date"`
 	Status     string    `gorm:"not null;default:VALID;index;size:20" json:"status"` // VALID/EXPIRED
 	CreateTime time.Time `gorm:"autoCreateTime" json:"create_time"`
@@ -123,7 +123,7 @@ type Quota struct {
 type QuotaAudit struct {
 	ID           int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID       string    `gorm:"not null;index;size:255" json:"user_id"`
-	Amount       int       `gorm:"not null" json:"amount"`                  // positive or negative
+	Amount       float64   `gorm:"not null" json:"amount"`                  // positive or negative
 	Operation    string    `gorm:"not null;index;size:50" json:"operation"` // RECHARGE/TRANSFER_IN/TRANSFER_OUT
 	VoucherCode  string    `gorm:"index;size:1000" json:"voucher_code,omitempty"`
 	RelatedUser  string    `gorm:"size:255" json:"related_user,omitempty"`
@@ -142,22 +142,22 @@ type QuotaAuditDetails struct {
 
 // QuotaAuditSummary contains summary information
 type QuotaAuditSummary struct {
-	TotalAmount        int    `json:"total_amount"`
-	TotalItems         int    `json:"total_items"`
-	SuccessfulItems    int    `json:"successful_items,omitempty"`
-	FailedItems        int    `json:"failed_items,omitempty"`
-	ExpiredItems       int    `json:"expired_items,omitempty"`
-	EarliestExpiryDate string `json:"earliest_expiry_date"`
+	TotalAmount        float64 `json:"total_amount"`
+	TotalItems         int     `json:"total_items"`
+	SuccessfulItems    int     `json:"successful_items,omitempty"`
+	FailedItems        int     `json:"failed_items,omitempty"`
+	ExpiredItems       int     `json:"expired_items,omitempty"`
+	EarliestExpiryDate string  `json:"earliest_expiry_date"`
 }
 
 // QuotaAuditDetailItem represents individual quota item in audit
 type QuotaAuditDetailItem struct {
-	Amount        int    `json:"amount"`
-	ExpiryDate    string `json:"expiry_date"`
-	Status        string `json:"status"` // SUCCESS/FAILED/EXPIRED
-	FailureReason string `json:"failure_reason,omitempty"`
-	OriginalQuota int    `json:"original_quota,omitempty"` // For TRANSFER_IN: existing quota before transfer
-	NewQuota      int    `json:"new_quota,omitempty"`      // For TRANSFER_IN: quota after transfer
+	Amount        float64 `json:"amount"`
+	ExpiryDate    string  `json:"expiry_date"`
+	Status        string  `json:"status"` // SUCCESS/FAILED/EXPIRED
+	FailureReason string  `json:"failure_reason,omitempty"`
+	OriginalQuota float64 `json:"original_quota,omitempty"` // For TRANSFER_IN: existing quota before transfer
+	NewQuota      float64 `json:"new_quota,omitempty"`      // For TRANSFER_IN: quota after transfer
 }
 
 // VoucherRedemption track redeemed vouchers to prevent duplicate redemption

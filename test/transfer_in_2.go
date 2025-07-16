@@ -83,7 +83,7 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	}
 
 	if transferInResp.Amount != 230 { // 80 + 150
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 230 transferred amount, got %d", transferInResp.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 230 transferred amount, got %g", transferInResp.Amount)}
 	}
 
 	// Verify all quotas are marked as successful
@@ -171,7 +171,7 @@ func testTransferInStatusCases(ctx *TestContext) TestResult {
 	}
 
 	if transferInResp2.Amount != 80 { // Only valid quota
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 80 transferred amount (excluding expired), got %d", transferInResp2.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 80 transferred amount (excluding expired), got %g", transferInResp2.Amount)}
 	}
 
 	// Verify quota results contain failure reasons

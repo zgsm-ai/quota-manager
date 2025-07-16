@@ -375,7 +375,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 	logger.Info("Recharge completed",
 		zap.String("user", user.ID),
 		zap.String("strategy", strategy.Name),
-		zap.Int("amount", strategy.Amount),
+		zap.Float64("amount", strategy.Amount),
 		zap.String("model", strategy.Model),
 		zap.Time("expiry_date", expiryDate))
 

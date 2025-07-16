@@ -122,14 +122,14 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 	}
 
 	type UpdateStrategyRequest struct {
-		Name         *string `json:"name" validate:"omitempty,min=1,max=100"`
-		Title        *string `json:"title" validate:"omitempty,min=1,max=200"`
-		Type         *string `json:"type" validate:"omitempty,oneof=single periodic"`
-		Amount       *int    `json:"amount" validate:"omitempty"`
-		PeriodicExpr *string `json:"periodic_expr" validate:"omitempty,cron"`
-		Model        *string `json:"model" validate:"omitempty,min=1,max=100"`
-		Condition    *string `json:"condition" validate:"omitempty"`
-		Status       *bool   `json:"status"`
+		Name         *string  `json:"name" validate:"omitempty,min=1,max=100"`
+		Title        *string  `json:"title" validate:"omitempty,min=1,max=200"`
+		Type         *string  `json:"type" validate:"omitempty,oneof=single periodic"`
+		Amount       *float64 `json:"amount" validate:"omitempty"`
+		PeriodicExpr *string  `json:"periodic_expr" validate:"omitempty,cron"`
+		Model        *string  `json:"model" validate:"omitempty,min=1,max=100"`
+		Condition    *string  `json:"condition" validate:"omitempty"`
+		Status       *bool    `json:"status"`
 	}
 
 	var req UpdateStrategyRequest

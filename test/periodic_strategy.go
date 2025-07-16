@@ -147,7 +147,7 @@ func testPeriodicStrategyCronRegistration(ctx *TestContext) TestResult {
 	}
 
 	if updatedStrategy.Amount != 50 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy amount not updated, expected 50, got %d", updatedStrategy.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy amount not updated, expected 50, got %g", updatedStrategy.Amount)}
 	}
 
 	return TestResult{Passed: true, Message: "Periodic Cron Registration Test Succeeded"}
@@ -181,7 +181,7 @@ func testPeriodicCronExpressionValidation(ctx *TestContext) TestResult {
 			Name:         fmt.Sprintf("cron-validation-%d", i),
 			Title:        fmt.Sprintf("Cron Validation Test - %s", tc.expected),
 			Type:         "periodic",
-			Amount:       10 + i*5,
+			Amount:       float64(10 + i*5),
 			Model:        "test-model",
 			PeriodicExpr: tc.expr,
 			Condition:    "true()",
@@ -261,7 +261,7 @@ func testPeriodicStrategyCRUDOperations(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get updated strategy failed: %v", err)}
 	}
 	if updatedStrategy.Amount != 150 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy amount not updated, expected 150, got %d", updatedStrategy.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy amount not updated, expected 150, got %g", updatedStrategy.Amount)}
 	}
 	if updatedStrategy.PeriodicExpr != "0 0 18 * * *" {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Strategy cron expression not updated, expected '0 0 18 * * *', got '%s'", updatedStrategy.PeriodicExpr)}
@@ -520,7 +520,7 @@ func testPeriodicStrategyConcurrentModifications(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get updated strategy failed: %v", err)}
 	}
 	if updatedStrategy.Amount != 150 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Amount update failed, expected 150, got %d", updatedStrategy.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Amount update failed, expected 150, got %g", updatedStrategy.Amount)}
 	}
 
 	// Test execution after concurrent modifications

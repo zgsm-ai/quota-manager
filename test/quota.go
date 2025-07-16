@@ -140,7 +140,7 @@ func testStrategyWithExpiryDate(ctx *TestContext) TestResult {
 	}
 
 	if quota.Amount != 75 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 75, got %d", quota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 75, got %g", quota.Amount)}
 	}
 
 	if quota.Status != models.StatusValid {
@@ -263,13 +263,13 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get user1 quota failed: %v", err)}
 	}
 
-	expectedTotalUser1 := 120 // 100 initial + 50 additional - 30 transferred out
-	expectedUsedUser1 := 20
+	expectedTotalUser1 := 120.0 // 100 initial + 50 additional - 30 transferred out
+	expectedUsedUser1 := 20.0
 	if quotaInfo1.TotalQuota != expectedTotalUser1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User1 total quota incorrect: expected %d, got %d", expectedTotalUser1, quotaInfo1.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User1 total quota incorrect: expected %f, got %f", expectedTotalUser1, quotaInfo1.TotalQuota)}
 	}
 	if quotaInfo1.UsedQuota != expectedUsedUser1 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User1 used quota incorrect: expected %d, got %d", expectedUsedUser1, quotaInfo1.UsedQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User1 used quota incorrect: expected %f, got %f", expectedUsedUser1, quotaInfo1.UsedQuota)}
 	}
 
 	// Verify user2 quota calculations
@@ -278,13 +278,13 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get user2 quota failed: %v", err)}
 	}
 
-	expectedTotalUser2 := 30 // 30 transferred in
-	expectedUsedUser2 := 10
+	expectedTotalUser2 := 30.0 // 30 transferred in
+	expectedUsedUser2 := 10.0
 	if quotaInfo2.TotalQuota != expectedTotalUser2 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User2 total quota incorrect: expected %d, got %d", expectedTotalUser2, quotaInfo2.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User2 total quota incorrect: expected %f, got %f", expectedTotalUser2, quotaInfo2.TotalQuota)}
 	}
 	if quotaInfo2.UsedQuota != expectedUsedUser2 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User2 used quota incorrect: expected %d, got %d", expectedUsedUser2, quotaInfo2.UsedQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User2 used quota incorrect: expected %f, got %f", expectedUsedUser2, quotaInfo2.UsedQuota)}
 	}
 
 	// Verify audit records count
@@ -376,25 +376,25 @@ func testUserQuotaConsumptionOrder(ctx *TestContext) TestResult {
 
 	// Verify remaining amounts - first item (mid expiry) should have 50 remaining
 	if quotaInfo.QuotaList[0].Amount != 50 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected first item to have 50 remaining, got %d", quotaInfo.QuotaList[0].Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected first item to have 50 remaining, got %g", quotaInfo.QuotaList[0].Amount)}
 	}
 
 	// Second item (late expiry) should have 100 remaining
 	if quotaInfo.QuotaList[1].Amount != 100 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected second item to have 100 remaining, got %d", quotaInfo.QuotaList[1].Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected second item to have 100 remaining, got %g", quotaInfo.QuotaList[1].Amount)}
 	}
 
 	// Verify total remaining quota (calculate from quota list)
 	expectedRemaining := quotaInfo.TotalQuota - quotaInfo.UsedQuota // Should be 300 - 150 = 150
 	actualRemaining := quotaInfo.TotalQuota - quotaInfo.UsedQuota
 	if actualRemaining != expectedRemaining {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota %d, got %d", expectedRemaining, actualRemaining)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota %g, got %g", expectedRemaining, actualRemaining)}
 	}
 
 	// Verify used quota
-	expectedUsed := 150
+	expectedUsed := 150.0
 	if quotaInfo.UsedQuota != expectedUsed {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected used quota %d, got %d", expectedUsed, quotaInfo.UsedQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected used quota %f, got %f", expectedUsed, quotaInfo.UsedQuota)}
 	}
 
 	return TestResult{Passed: true, Message: "User quota consumption order test succeeded"}

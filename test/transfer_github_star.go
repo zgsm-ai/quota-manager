@@ -280,7 +280,7 @@ func testTransferOutGithubStarNotSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 quota item, got %d", len(voucherData.QuotaList))}
 	}
 	if voucherData.QuotaList[0].Amount != 100 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 100, got %d", voucherData.QuotaList[0].Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 100, got %g", voucherData.QuotaList[0].Amount)}
 	}
 
 	return TestResult{Passed: true, Message: "Transfer-out correctly sets GiverGithubStar with all giver's starred projects"}
@@ -363,7 +363,7 @@ func testTransferOutGithubStarSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 quota item, got %d", len(voucherData.QuotaList))}
 	}
 	if voucherData.QuotaList[0].Amount != 100 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 100, got %d", voucherData.QuotaList[0].Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected quota amount 100, got %g", voucherData.QuotaList[0].Amount)}
 	}
 
 	return TestResult{Passed: true, Message: "Transfer-out correctly sets GiverGithubStar with projects when giver stars zgsm-ai.zgsm"}

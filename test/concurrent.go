@@ -117,21 +117,21 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get final quota info failed: %v", err)}
 	}
 
-	expectedTotal := 460 // 500 + 50 - 90
-	expectedUsed := 50   // 5 * 10
+	expectedTotal := 460.0 // 500 + 50 - 90
+	expectedUsed := 50.0   // 5 * 10
 	expectedRemaining := expectedTotal - expectedUsed
 
 	if finalQuotaInfo.TotalQuota != expectedTotal {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected total quota %d, got %d", expectedTotal, finalQuotaInfo.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected total quota %f, got %f", expectedTotal, finalQuotaInfo.TotalQuota)}
 	}
 
 	if finalQuotaInfo.UsedQuota != expectedUsed {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected used quota %d, got %d", expectedUsed, finalQuotaInfo.UsedQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected used quota %f, got %f", expectedUsed, finalQuotaInfo.UsedQuota)}
 	}
 
 	actualRemaining := finalQuotaInfo.TotalQuota - finalQuotaInfo.UsedQuota
 	if actualRemaining != expectedRemaining {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota %d, got %d", expectedRemaining, actualRemaining)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected remaining quota %f, got %f", expectedRemaining, actualRemaining)}
 	}
 
 	// Verify audit records consistency

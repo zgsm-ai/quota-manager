@@ -40,8 +40,8 @@ type QuotaCheckCall struct {
 
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
-	data                 map[string]int        // Total quota
-	usedData             map[string]int        // Used quota
+	data                 map[string]float64    // Total quota
+	usedData             map[string]float64    // Used quota
 	starData             map[string]bool       // GitHub star status
 	permissionData       map[string][]string   // User permissions (employee_number -> models)
 	starCheckData        map[string]bool       // Star check permissions (employee_number -> enabled)
@@ -52,34 +52,34 @@ type MockQuotaStore struct {
 	quotaCheckCalls      []QuotaCheckCall      // Track quota check permission calls
 }
 
-func (m *MockQuotaStore) GetQuota(consumer string) int {
+func (m *MockQuotaStore) GetQuota(consumer string) float64 {
 	if quota, exists := m.data[consumer]; exists {
 		return quota
 	}
 	return 0
 }
 
-func (m *MockQuotaStore) SetQuota(consumer string, quota int) {
+func (m *MockQuotaStore) SetQuota(consumer string, quota float64) {
 	m.data[consumer] = quota
 }
 
-func (m *MockQuotaStore) DeltaQuota(consumer string, delta int) int {
+func (m *MockQuotaStore) DeltaQuota(consumer string, delta float64) float64 {
 	m.data[consumer] += delta
 	return m.data[consumer]
 }
 
-func (m *MockQuotaStore) GetUsed(consumer string) int {
+func (m *MockQuotaStore) GetUsed(consumer string) float64 {
 	if used, exists := m.usedData[consumer]; exists {
 		return used
 	}
 	return 0
 }
 
-func (m *MockQuotaStore) SetUsed(consumer string, used int) {
+func (m *MockQuotaStore) SetUsed(consumer string, used float64) {
 	m.usedData[consumer] = used
 }
 
-func (m *MockQuotaStore) DeltaUsed(consumer string, delta int) int {
+func (m *MockQuotaStore) DeltaUsed(consumer string, delta float64) float64 {
 	m.usedData[consumer] += delta
 	return m.usedData[consumer]
 }
@@ -200,8 +200,8 @@ func (m *MockQuotaStore) ClearQuotaCheckCalls() {
 }
 
 var mockStore = &MockQuotaStore{
-	data:                 make(map[string]int),
-	usedData:             make(map[string]int),
+	data:                 make(map[string]float64),
+	usedData:             make(map[string]float64),
 	starData:             make(map[string]bool),
 	permissionData:       make(map[string][]string),
 	starCheckData:        make(map[string]bool),
@@ -308,11 +308,11 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				}
 
 				// Simulate quota increase
-				var delta int
-				if _, err := fmt.Sscanf(value, "%d", &delta); err != nil {
+				var delta float64
+				if _, err := fmt.Sscanf(value, "%f", &delta); err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{
 						"code":    "ai-gateway.invalid_params",
-						"message": "value must be integer",
+						"message": "value must be numeric",
 						"success": false,
 					})
 					return
@@ -384,11 +384,11 @@ func createMockServer(shouldFail bool) *httptest.Server {
 				}
 
 				// Parse and update used quota
-				var delta int
-				if _, err := fmt.Sscanf(value, "%d", &delta); err != nil {
+				var delta float64
+				if _, err := fmt.Sscanf(value, "%f", &delta); err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{
 						"code":    "ai-gateway.invalid_params",
-						"message": "value must be integer",
+						"message": "value must be numeric",
 						"success": false,
 					})
 					return

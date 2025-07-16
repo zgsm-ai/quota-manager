@@ -66,7 +66,7 @@ func testQuotaTransferIn(ctx *TestContext) TestResult {
 	}
 
 	if quota.Amount != 30 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected receiver quota 30, got %d", quota.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected receiver quota 30, got %g", quota.Amount)}
 	}
 
 	// Verify audit record
@@ -76,7 +76,7 @@ func testQuotaTransferIn(ctx *TestContext) TestResult {
 	}
 
 	if auditRecord.Amount != 30 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount 30, got %d", auditRecord.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected audit amount 30, got %g", auditRecord.Amount)}
 	}
 
 	// Verify voucher redemption record
@@ -179,7 +179,7 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Get user3 quota failed: %v", err)}
 	}
 	if quotaInfo3.TotalQuota != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User3 should have no quota, got %d", quotaInfo3.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User3 should have no quota, got %g", quotaInfo3.TotalQuota)}
 	}
 
 	// Verify no audit records for user3
@@ -275,7 +275,7 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	// Verify that only valid quota was transferred
 	// Should only get 50 quota (expired quota should be ignored)
 	if transferInResp.Amount != 50 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 50 transferred quota (excluding expired), got %d", transferInResp.Amount)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 50 transferred quota (excluding expired), got %g", transferInResp.Amount)}
 	}
 
 	// Verify user2's quota records - should only contain the valid quota
@@ -324,7 +324,7 @@ func testTransferInExpiredQuota(ctx *TestContext) TestResult {
 	}
 
 	if quotaInfo2.TotalQuota != 50 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected user2 total quota 50, got %d", quotaInfo2.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected user2 total quota 50, got %g", quotaInfo2.TotalQuota)}
 	}
 
 	return TestResult{Passed: true, Message: "Transfer in expired quota test succeeded"}
@@ -383,7 +383,7 @@ func testTransferInInvalidVoucher(ctx *TestContext) TestResult {
 	}
 
 	if quotaInfo.TotalQuota != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("User should have no quota after failed transfers, got %d", quotaInfo.TotalQuota)}
+		return TestResult{Passed: false, Message: fmt.Sprintf("User should have no quota after failed transfers, got %g", quotaInfo.TotalQuota)}
 	}
 
 	// Verify no audit records were created

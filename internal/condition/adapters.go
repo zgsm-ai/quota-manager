@@ -13,6 +13,6 @@ func NewAiGatewayQuotaQuerier(client *aigateway.Client) QuotaQuerier {
 }
 
 // QueryQuota implements QuotaQuerier interface
-func (a *AiGatewayQuotaQuerier) QueryQuota(userID string) (int, error) {
+func (a *AiGatewayQuotaQuerier) QueryQuota(userID string) (float64, error) {
 	return a.client.QueryQuotaValue(userID)
 }

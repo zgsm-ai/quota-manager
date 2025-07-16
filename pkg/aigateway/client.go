@@ -28,8 +28,8 @@ type ResponseData struct {
 }
 
 type QuotaResponse struct {
-	Quota  int    `json:"quota"`
-	UserID string `json:"user_id"`
+	Quota  float64 `json:"quota"`
+	UserID string  `json:"user_id"`
 }
 
 type StarProjectsResponse struct {
@@ -139,18 +139,18 @@ func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
 	}
 
 	return &QuotaResponse{
-		Quota:  int(quota),
+		Quota:  quota,
 		UserID: userID,
 	}, nil
 }
 
 // DeltaQuota increases or decreases user quota
-func (c *Client) DeltaQuota(userID string, value int) error {
+func (c *Client) DeltaQuota(userID string, value float64) error {
 	apiUrl := fmt.Sprintf("%s%s/delta", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)
-	data.Set("value", strconv.Itoa(value))
+	data.Set("value", strconv.FormatFloat(value, 'f', -1, 64))
 
 	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -189,8 +189,8 @@ func (c *Client) DeltaQuota(userID string, value int) error {
 }
 
 // QueryQuotaValue implements the QuotaQuerier interface
-// Returns only the quota value as an integer
-func (c *Client) QueryQuotaValue(userID string) (int, error) {
+// Returns only the quota value as a float64
+func (c *Client) QueryQuotaValue(userID string) (float64, error) {
 	resp, err := c.QueryQuota(userID)
 	if err != nil {
 		return 0, err
