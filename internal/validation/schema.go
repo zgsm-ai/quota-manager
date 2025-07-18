@@ -53,13 +53,13 @@ func validateCron(fl validator.FieldLevel) bool {
 // validateEmployeeNumber validates employee number format
 func validateEmployeeNumber(fl validator.FieldLevel) bool {
 	employeeNumber := fl.Field().String()
-	if len(employeeNumber) < 2 || len(employeeNumber) > 20 {
+	if len(employeeNumber) < 2 || len(employeeNumber) > 100 {
 		return false
 	}
 
 	// Check if it contains only alphanumeric characters
 	for _, char := range employeeNumber {
-		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9')) {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' || char == '-') {
 			return false
 		}
 	}

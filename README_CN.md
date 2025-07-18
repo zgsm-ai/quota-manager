@@ -793,6 +793,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `quota-manager.voucher_already_redeemed`: 兑换码已使用 - 兑换码已被使用
 - `quota-manager.quota_transfer_failed`: 配额转账失败 - 配额转账失败
 - `quota-manager.strategy_create_failed`: 策略创建失败 - 策略创建失败
+- `quota-manager.user_not_found`: 用户未找到 - 指定的用户不存在
 - `quota-manager.strategy_update_failed`: 策略更新失败 - 策略更新失败
 - `quota-manager.strategy_delete_failed`: 策略删除失败 - 策略删除失败
 - `quota-manager.database_error`: 数据库错误 - 数据库操作失败

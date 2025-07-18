@@ -833,6 +833,7 @@ All error responses follow the same format:
 - `quota-manager.database_error`: Database Error - Database operation failed
 - `quota-manager.aigateway_error`: AiGateway Error - AiGateway service error
 - `quota-manager.internal_error`: Internal Server Error - Unexpected server error
+- `quota-manager.user_not_found`: User not found - The specified user does not exist
 
 ## Condition Expressions
 
