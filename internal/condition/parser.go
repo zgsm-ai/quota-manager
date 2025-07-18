@@ -81,11 +81,16 @@ func (n *NotExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool,
 
 // MatchUserExpr match user expression
 type MatchUserExpr struct {
-	UserID string
+	UserIDs []string
 }
 
 func (m *MatchUserExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
-	return user.ID == m.UserID, nil
+	for _, id := range m.UserIDs {
+		if user.ID == id {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // RegisterBeforeExpr registration time before expression
@@ -153,7 +158,7 @@ func (i *IsVipExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (boo
 
 // BelongToExpr belongs to organization expression
 type BelongToExpr struct {
-	Org string
+	Orgs []string
 }
 
 func (b *BelongToExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
@@ -164,23 +169,34 @@ func (b *BelongToExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (
 		// Use new logic: check if employee belongs to department via employee_department table
 		departments, err := ctx.DatabaseQuerier.QueryEmployeeDepartment(user.EmployeeNumber)
 		if err != nil {
-			// If query fails, fall back to original logic
-			return user.Company == b.Org, nil
+			// If query fails, check against all provided organizations
+			for _, org := range b.Orgs {
+				if user.Company == org {
+					return true, nil
+				}
+			}
+			return false, nil
 		}
 
-		// Check if the specified department/organization exists in user's department hierarchy
-		// Support both Chinese and English department names
-		for _, dept := range departments {
-			if dept == b.Org {
-				return true, nil
+		// Check if user belongs to any of the specified organizations
+		for _, org := range b.Orgs {
+			for _, dept := range departments {
+				if dept == org {
+					return true, nil
+				}
 			}
 		}
 
 		return false, nil
 	}
 
-	// Fall back to original logic when employee sync is disabled or dependencies are missing
-	return user.Company == b.Org, nil
+	// Fall back to original logic: check against all provided organizations
+	for _, org := range b.Orgs {
+		if user.Company == org {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // TrueExpr always returns true
@@ -433,10 +449,11 @@ func (p *Parser) parseFunction() (Evaluator, error) {
 func (p *Parser) buildFunction(funcName string, args []string) (Evaluator, error) {
 	switch funcName {
 	case "match-user":
-		if len(args) != 1 {
-			return nil, fmt.Errorf("match-user expects 1 argument, got %d", len(args))
+		userIDs := make([]string, len(args))
+		for i, arg := range args {
+			userIDs[i] = strings.Trim(arg, "\"")
 		}
-		return &MatchUserExpr{UserID: strings.Trim(args[0], "\"")}, nil
+		return &MatchUserExpr{UserIDs: userIDs}, nil
 
 	case "register-before":
 		if len(args) != 1 {
@@ -485,10 +502,12 @@ func (p *Parser) buildFunction(funcName string, args []string) (Evaluator, error
 		return &IsVipExpr{Level: level}, nil
 
 	case "belong-to":
-		if len(args) != 1 {
-			return nil, fmt.Errorf("belong-to expects 1 argument, got %d", len(args))
+		// Support one or more organization arguments
+		orgs := make([]string, len(args))
+		for i, arg := range args {
+			orgs[i] = strings.Trim(arg, "\"")
 		}
-		return &BelongToExpr{Org: strings.Trim(args[0], "\"")}, nil
+		return &BelongToExpr{Orgs: orgs}, nil
 
 	case "true":
 		if len(args) != 0 {

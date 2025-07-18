@@ -843,11 +843,11 @@ The system supports complex condition expressions for strategy targeting:
 
 - `access-after(timestamp)`: Last access after specified time
 - `and(condition1, condition2)`: Logical AND
-- `belong-to(org)`: Belongs to specified organization or department. When `employee_sync.enabled = true`, checks if user belongs to the department via employee_department table using their EmployeeNumber. Supports both Chinese and English department names. Falls back to Company field when employee sync is disabled or employee number is empty.
+- `belong-to(org1, org2)`: Belongs to specified organization or department. When `employee_sync.enabled = true`, checks if user belongs to the department via employee_department table using their EmployeeNumber. Supports both Chinese and English department names. Falls back to Company field when employee sync is disabled or employee number is empty.
 - `false()`: Always returns false (no users will match)
 - `github-star(project)`: Whether user has starred the specified project (checks against user's starred projects list)
 - `is-vip(level)`: VIP level greater than or equal to specified level
-- `match-user(user)`: Match specific user
+- `match-user("user1", "user2", ...)`: Check if the current user's ID is present in the provided list of IDs (supports multiple parameters)
 - `not(condition)`: Logical NOT
 - `or(condition1, condition2)`: Logical OR
 - `quota-le(model, amount)`: Quota balance less than or equal to amount
@@ -874,7 +874,10 @@ or(register-before("2023-01-01 00:00:00"), is-vip(2))
 
 # Recharge users in specific department (supports Chinese and English names)
 belong-to("技术部")       # Chinese department name
-belong-to("Tech_Group")   # English department name
+belong-to("Tech_Group_1", "Tech_Group_2")   # English department name
+
+# Recharge specific user IDs
+match-user("user123", "user456")
 
 # Combine department with other conditions
 and(belong-to("R&D_Center"), is-vip(2))

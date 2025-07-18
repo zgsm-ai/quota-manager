@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"quota-manager/internal/condition"
 	"quota-manager/internal/config"
 	"quota-manager/internal/models"
 	"time"
@@ -231,4 +232,120 @@ func testBelongToWithNoEmployeeNumber(ctx *TestContext) TestResult {
 	}
 
 	return TestResult{Passed: true, Message: "belong-to with no employee number test succeeded"}
+}
+
+func testBelongToMultipleOrgs(ctx *TestContext) TestResult {
+	// Test multiple organization parameters
+	conditionStr := `belong-to("org1", "org2", "org3")`
+	parser := condition.NewParser(conditionStr)
+	expr, err := parser.Parse()
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Failed to parse condition: %v", err),
+		}
+	}
+
+	// Create evaluation context
+	evalCtx := &condition.EvaluationContext{}
+
+	// Test scenario 1: User belongs to one of the organizations
+	user1 := &models.UserInfo{
+		Company: "org2",
+	}
+	result1, err := expr.Evaluate(user1, evalCtx)
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Evaluation error: %v", err),
+		}
+	}
+	if !result1 {
+		return TestResult{
+			Passed:  false,
+			Message: "Expected true when user belongs to one of the organizations",
+		}
+	}
+
+	// Test scenario 2: User does not belong to any organization
+	user2 := &models.UserInfo{
+		Company: "org4",
+	}
+	result2, err := expr.Evaluate(user2, evalCtx)
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Evaluation error: %v", err),
+		}
+	}
+	if result2 {
+		return TestResult{
+			Passed:  false,
+			Message: "Expected false when user does not belong to any organization",
+		}
+	}
+
+	// Test with employee sync enabled
+	evalCtx.ConfigQuerier = &testConfigQuerier{enabled: true}
+	evalCtx.DatabaseQuerier = &testDatabaseQuerier{}
+
+	// Scenario 3: Employee's department is in one of the organizations
+	user3 := &models.UserInfo{
+		EmployeeNumber: "emp123",
+		Company:        "orgX", // Should not be used; department query should be used instead
+	}
+	result3, err := expr.Evaluate(user3, evalCtx)
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Evaluation error with employee sync: %v", err),
+		}
+	}
+	if !result3 {
+		return TestResult{
+			Passed:  false,
+			Message: "Expected true when employee department matches one organization",
+		}
+	}
+
+	// Scenario 4: Employee's department is not in any organization
+	user4 := &models.UserInfo{
+		EmployeeNumber: "emp999",
+		Company:        "orgX",
+	}
+	result4, err := expr.Evaluate(user4, evalCtx)
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Evaluation error with employee sync: %v", err),
+		}
+	}
+	if result4 {
+		return TestResult{
+			Passed:  false,
+			Message: "Expected false when employee department matches no organization",
+		}
+	}
+
+	return TestResult{Passed: true}
+}
+
+// Mock ConfigQuerier for testing
+type testConfigQuerier struct {
+	enabled bool
+}
+
+func (t *testConfigQuerier) IsEmployeeSyncEnabled() bool {
+	return t.enabled
+}
+
+// Mock DatabaseQuerier for testing
+type testDatabaseQuerier struct{}
+
+func (t *testDatabaseQuerier) QueryEmployeeDepartment(employeeNumber string) ([]string, error) {
+	// Simulate database query
+	if employeeNumber == "emp123" {
+		return []string{"deptA", "org2", "deptC"}, nil // contains org2
+	}
+	return []string{"deptX", "deptY", "deptZ"}, nil
 }

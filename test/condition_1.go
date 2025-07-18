@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"quota-manager/internal/condition"
 	"quota-manager/internal/models"
 )
 
@@ -92,6 +93,55 @@ func testMatchUserCondition(ctx *TestContext) TestResult {
 	}
 
 	return TestResult{Passed: true, Message: "match-user condition test succeeded"}
+}
+
+func testMatchUserMultipleIds(ctx *TestContext) TestResult {
+	// Test matching with multiple user IDs
+	conditionStr := `match-user("user1", "user2", "user3")`
+	parser := condition.NewParser(conditionStr)
+	expr, err := parser.Parse()
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Failed to parse condition: %v", err),
+		}
+	}
+
+	evalCtx := &condition.EvaluationContext{}
+
+	// Test case 1: User ID matches one of the IDs
+	user1 := &models.UserInfo{ID: "user2"}
+	result1, err := expr.Evaluate(user1, evalCtx)
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Evaluation error: %v", err),
+		}
+	}
+	if !result1 {
+		return TestResult{
+			Passed:  false,
+			Message: "Expected true when user ID matches one of the IDs",
+		}
+	}
+
+	// Test case 2: User ID matches none of the IDs
+	user2 := &models.UserInfo{ID: "user4"}
+	result2, err := expr.Evaluate(user2, evalCtx)
+	if err != nil {
+		return TestResult{
+			Passed:  false,
+			Message: fmt.Sprintf("Evaluation error: %v", err),
+		}
+	}
+	if result2 {
+		return TestResult{
+			Passed:  false,
+			Message: "Expected false when user ID matches no ID",
+		}
+	}
+
+	return TestResult{Passed: true}
 }
 
 // testRegisterBeforeCondition test register-before condition
