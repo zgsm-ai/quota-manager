@@ -167,7 +167,8 @@ func setupTestEnvironment() (*TestContext, error) {
 
 	// Create services
 	voucherService := services.NewVoucherService("test-signing-key-at-least-32-bytes-long")
-	quotaService := services.NewQuotaService(db, mockAiGatewayConfig, gateway, voucherService)
+	cfg.AiGateway = *mockAiGatewayConfig
+	quotaService := services.NewQuotaService(db, cfg, gateway, voucherService)
 	// Default employee sync config for testing (disabled by default)
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
 		Enabled: false,

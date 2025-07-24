@@ -118,7 +118,7 @@ func main() {
 
 	// Initialize services
 	voucherService := services.NewVoucherService(cfg.Voucher.SigningKey)
-	quotaService := services.NewQuotaService(db, &cfg.AiGateway, gateway, voucherService)
+	quotaService := services.NewQuotaService(db, cfg, gateway, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService, &cfg.EmployeeSync)
 
 	// Initialize permission management services

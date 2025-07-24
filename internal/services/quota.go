@@ -22,6 +22,7 @@ import (
 type QuotaService struct {
 	db              *database.DB
 	aiGatewayConf   *config.AiGatewayConfig
+	config          *config.Config
 	aiGatewayClient interface {
 		QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
 		SetGithubStarProjects(employeeNumber string, starredProjects string) error
@@ -30,13 +31,14 @@ type QuotaService struct {
 }
 
 // NewQuotaService creates a new quota service
-func NewQuotaService(db *database.DB, aiGatewayConf *config.AiGatewayConfig, aiGatewayClient interface {
+func NewQuotaService(db *database.DB, config *config.Config, aiGatewayClient interface {
 	QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
 	SetGithubStarProjects(employeeNumber string, starredProjects string) error
 }, voucherSvc *VoucherService) *QuotaService {
 	return &QuotaService{
 		db:              db,
-		aiGatewayConf:   aiGatewayConf,
+		aiGatewayConf:   &config.AiGateway,
+		config:          config,
 		aiGatewayClient: aiGatewayClient,
 		voucherSvc:      voucherSvc,
 	}
@@ -47,6 +49,7 @@ type QuotaInfo struct {
 	TotalQuota float64           `json:"total_quota"`
 	UsedQuota  float64           `json:"used_quota"`
 	QuotaList  []QuotaDetailItem `json:"quota_list"`
+	IsStar     string            `json:"is_star,omitempty"`
 }
 
 // QuotaDetailItem represents quota detail item
@@ -177,6 +180,36 @@ func (s *QuotaService) GetUserQuota(userID string) (*QuotaInfo, error) {
 			// This quota is fully consumed
 			remainingUsed -= quota.Amount
 		}
+	}
+
+	// checkGithubStar checks if user has starred the required GitHub repository
+	if s.config.GithubStarCheck.Enabled {
+		// Get giver's starred projects from database
+		var giverGithubStar string
+		var userInfo models.UserInfo
+		if err := s.db.AuthDB.Where("id = ?", userID).First(&userInfo).Error; err == nil {
+			// Store all starred projects as comma-separated string
+			giverGithubStar = userInfo.GithubStar
+		}
+
+		isStar := "false"
+		// Parse comma-separated starred projects
+		starredProjects := strings.Split(giverGithubStar, ",")
+
+		// Check if required repo is starred
+		requiredRepo := strings.TrimSpace(s.config.GithubStarCheck.RequiredRepo)
+		for _, project := range starredProjects {
+			project = strings.TrimSpace(project)
+			if project == requiredRepo {
+				isStar = "true"
+			}
+		}
+		return &QuotaInfo{
+			TotalQuota: totalQuota,
+			UsedQuota:  usedQuota,
+			QuotaList:  quotaList,
+			IsStar:     isStar,
+		}, nil
 	}
 
 	return &QuotaInfo{
