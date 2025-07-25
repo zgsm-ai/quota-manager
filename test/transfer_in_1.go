@@ -122,7 +122,7 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user1.ID, 100)
 
 	// Add quota for user1
-	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, "test-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, 0, "test-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add quota failed: %v", err)}
 	}
 

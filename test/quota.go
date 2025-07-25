@@ -71,7 +71,7 @@ func testQuotaAuditRecords(ctx *TestContext) TestResult {
 	}
 
 	// Add quota using strategy execution
-	if err := ctx.QuotaService.AddQuotaForStrategy(user.ID, 50, "test-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(user.ID, 50, 0, "test-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add quota for strategy failed: %v", err)}
 	}
 
@@ -192,7 +192,7 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 	mockStore.SetQuota(user2.ID, 0)
 
 	// 1. Add initial quota via strategy for user1
-	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, "initial-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, 0, "initial-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add initial quota failed: %v", err)}
 	}
 
@@ -240,7 +240,7 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 	ctx.QuotaService.DeltaUsedQuotaInAiGateway(user2.ID, 10)
 
 	// 5. Add more quota via strategy for user1
-	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 50, "additional-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 50, 0, "additional-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add additional quota failed: %v", err)}
 	}
 
@@ -420,7 +420,7 @@ func testStrategyExpiryDateCoverage(ctx *TestContext) TestResult {
 
 	// Test case 1: Strategy execution when >30 days remaining in current month
 	// Add quota for user1 (should expire at end of current month since >30 days remaining)
-	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, "test-strategy-1"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, 0, "test-strategy-1"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add quota for user1 failed: %v", err)}
 	}
 
@@ -455,7 +455,7 @@ func testStrategyExpiryDateCoverage(ctx *TestContext) TestResult {
 
 	// Test case 2: Strategy execution when <30 days remaining in current month
 	// This is simulated by the automatic logic in AddQuotaForStrategy
-	if err := ctx.QuotaService.AddQuotaForStrategy(user2.ID, 100, "test-strategy-2"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(user2.ID, 100, 0, "test-strategy-2"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add quota for user2 failed: %v", err)}
 	}
 

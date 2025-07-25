@@ -360,7 +360,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 	}
 
 	// 2. Add quota using QuotaService
-	err := s.quotaService.AddQuotaForStrategy(user.ID, strategy.Amount, strategy.Name)
+	err := s.quotaService.AddQuotaForStrategy(user.ID, strategy.Amount, strategy.ID, strategy.Name)
 	if err != nil {
 		// Update execution status to failed
 		s.db.Model(execute).Update("status", "failed")

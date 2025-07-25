@@ -127,6 +127,7 @@ type QuotaAudit struct {
 	Operation    string    `gorm:"not null;index;size:50" json:"operation"` // RECHARGE/TRANSFER_IN/TRANSFER_OUT
 	VoucherCode  string    `gorm:"index;size:1000" json:"voucher_code,omitempty"`
 	RelatedUser  string    `gorm:"size:255" json:"related_user,omitempty"`
+	StrategyID   *int      `gorm:"index" json:"strategy_id,omitempty"`            // Strategy ID for RECHARGE operations
 	StrategyName string    `gorm:"index;size:100" json:"strategy_name,omitempty"` // Strategy name for RECHARGE operations
 	ExpiryDate   time.Time `gorm:"not null" json:"expiry_date"`
 	Details      string    `gorm:"type:text" json:"details,omitempty"` // JSON string with detailed operation info

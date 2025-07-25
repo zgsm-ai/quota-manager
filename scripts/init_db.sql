@@ -55,7 +55,7 @@ ALTER TABLE "public"."auth_users" ADD CONSTRAINT "auth_users_pkey" PRIMARY KEY (
 -- Quota strategy table
 CREATE TABLE IF NOT EXISTS quota_strategy (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
     title VARCHAR(255) NOT NULL,
     type VARCHAR(50) NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS quota_audit (
     operation VARCHAR(50) NOT NULL,
     voucher_code VARCHAR(1000),
     related_user VARCHAR(255),
+    strategy_id INTEGER,
     strategy_name VARCHAR(100),
     expiry_date TIMESTAMPTZ(0) NOT NULL,
     details TEXT,

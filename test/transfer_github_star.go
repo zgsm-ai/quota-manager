@@ -229,7 +229,7 @@ func testTransferOutGithubStarNotSet(ctx *TestContext) TestResult {
 	}
 
 	// Add quota with the same expiry date that will be used in transfer
-	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, "test-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to add quota: %v", err)}
 	}
 
@@ -312,7 +312,7 @@ func testTransferOutGithubStarSet(ctx *TestContext) TestResult {
 	}
 
 	// Add quota with the same expiry date that will be used in transfer
-	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, "test-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to add quota: %v", err)}
 	}
 

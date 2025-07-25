@@ -730,7 +730,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 }
 
 // AddQuotaForStrategy adds quota for strategy execution
-func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strategyName string) error {
+func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strategyID int, strategyName string) error {
 	// Calculate expiry date (end of this/next month)
 	now := time.Now().Truncate(time.Second)
 	var expiryDate time.Time
@@ -809,6 +809,7 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strate
 		UserID:       userID,
 		Amount:       amount,
 		Operation:    models.OperationRecharge,
+		StrategyID:   &strategyID,
 		StrategyName: strategyName,
 		ExpiryDate:   expiryDate,
 	}
