@@ -87,6 +87,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create config manager
+	configManager := config.NewManager(cfg)
+
 	// Set timezone from configuration
 	setTimezone(cfg.Server.Timezone)
 
@@ -118,7 +121,7 @@ func main() {
 
 	// Initialize services
 	voucherService := services.NewVoucherService(cfg.Voucher.SigningKey)
-	quotaService := services.NewQuotaService(db, cfg, gateway, voucherService)
+	quotaService := services.NewQuotaService(db, configManager, gateway, voucherService)
 	strategyService := services.NewStrategyService(db, gateway, quotaService, &cfg.EmployeeSync)
 
 	// Initialize permission management services
@@ -126,7 +129,7 @@ func main() {
 	starCheckPermissionService := services.NewStarCheckPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
 	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(db, &cfg.AiGateway, &cfg.EmployeeSync, gateway)
 	unifiedPermissionService := services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, quotaCheckPermissionService, nil) // employeeSyncService will be set later
-	employeeSyncService := services.NewEmployeeSyncService(db, &cfg.EmployeeSync, permissionService, starCheckPermissionService, quotaCheckPermissionService)
+	employeeSyncService := services.NewEmployeeSyncService(db, configManager, permissionService, starCheckPermissionService, quotaCheckPermissionService)
 
 	// Update unified permission service with employee sync service
 	unifiedPermissionService = services.NewUnifiedPermissionService(permissionService, starCheckPermissionService, quotaCheckPermissionService, employeeSyncService)

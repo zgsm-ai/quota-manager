@@ -22,7 +22,7 @@ import (
 type QuotaService struct {
 	db              *database.DB
 	aiGatewayConf   *config.AiGatewayConfig
-	config          *config.Config
+	configManager   *config.Manager
 	aiGatewayClient interface {
 		QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
 		SetGithubStarProjects(employeeNumber string, starredProjects string) error
@@ -30,15 +30,20 @@ type QuotaService struct {
 	voucherSvc *VoucherService
 }
 
+// GetConfigManager returns the config manager
+func (s *QuotaService) GetConfigManager() *config.Manager {
+	return s.configManager
+}
+
 // NewQuotaService creates a new quota service
-func NewQuotaService(db *database.DB, config *config.Config, aiGatewayClient interface {
+func NewQuotaService(db *database.DB, configManager *config.Manager, aiGatewayClient interface {
 	QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
 	SetGithubStarProjects(employeeNumber string, starredProjects string) error
 }, voucherSvc *VoucherService) *QuotaService {
 	return &QuotaService{
 		db:              db,
-		aiGatewayConf:   &config.AiGateway,
-		config:          config,
+		aiGatewayConf:   &configManager.GetDirect().AiGateway,
+		configManager:   configManager,
 		aiGatewayClient: aiGatewayClient,
 		voucherSvc:      voucherSvc,
 	}
@@ -183,7 +188,7 @@ func (s *QuotaService) GetUserQuota(userID string) (*QuotaInfo, error) {
 	}
 
 	// checkGithubStar checks if user has starred the required GitHub repository
-	if s.config.GithubStarCheck.Enabled {
+	if s.configManager.GetDirect().GithubStarCheck.Enabled {
 		// Get giver's starred projects from database
 		var giverGithubStar string
 		var userInfo models.UserInfo
@@ -197,7 +202,7 @@ func (s *QuotaService) GetUserQuota(userID string) (*QuotaInfo, error) {
 		starredProjects := strings.Split(giverGithubStar, ",")
 
 		// Check if required repo is starred
-		requiredRepo := strings.TrimSpace(s.config.GithubStarCheck.RequiredRepo)
+		requiredRepo := strings.TrimSpace(s.configManager.GetDirect().GithubStarCheck.RequiredRepo)
 		for _, project := range starredProjects {
 			project = strings.TrimSpace(project)
 			if project == requiredRepo {

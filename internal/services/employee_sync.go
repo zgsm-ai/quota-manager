@@ -23,7 +23,7 @@ import (
 // EmployeeSyncService handles employee synchronization
 type EmployeeSyncService struct {
 	db                      *database.DB
-	employeeSyncConf        *config.EmployeeSyncConfig
+	configManager           *config.Manager
 	permissionSvc           *PermissionService
 	starCheckPermissionSvc  *StarCheckPermissionService
 	quotaCheckPermissionSvc *QuotaCheckPermissionService
@@ -33,14 +33,14 @@ type EmployeeSyncService struct {
 // NewEmployeeSyncService creates a new employee sync service
 func NewEmployeeSyncService(
 	db *database.DB,
-	employeeSyncConf *config.EmployeeSyncConfig,
+	configManager *config.Manager,
 	permissionSvc *PermissionService,
 	starCheckPermissionSvc *StarCheckPermissionService,
 	quotaCheckPermissionSvc *QuotaCheckPermissionService,
 ) *EmployeeSyncService {
 	return &EmployeeSyncService{
 		db:                      db,
-		employeeSyncConf:        employeeSyncConf,
+		configManager:           configManager,
 		permissionSvc:           permissionSvc,
 		starCheckPermissionSvc:  starCheckPermissionSvc,
 		quotaCheckPermissionSvc: quotaCheckPermissionSvc,
@@ -59,7 +59,7 @@ func (s *EmployeeSyncService) IsEmployeeDepartmentTableEmpty() (bool, error) {
 
 // StartCron starts the employee sync cron job
 func (s *EmployeeSyncService) StartCron() error {
-	if !s.employeeSyncConf.Enabled {
+	if !s.configManager.GetDirect().EmployeeSync.Enabled {
 		logger.Logger.Info("Employee sync is disabled, skipping cron setup")
 		return nil
 	}
@@ -96,7 +96,7 @@ func (s *EmployeeSyncService) StopCron() {
 
 // TriggerInitialSyncIfNeeded checks if employee_department table is empty and triggers sync if needed
 func (s *EmployeeSyncService) TriggerInitialSyncIfNeeded() error {
-	if !s.employeeSyncConf.Enabled {
+	if !s.configManager.GetDirect().EmployeeSync.Enabled {
 		logger.Logger.Info("Employee sync is disabled, skipping initial sync check")
 		return nil
 	}
@@ -152,7 +152,7 @@ type HRDepartment struct {
 
 // SyncEmployees synchronizes employees from HR system
 func (s *EmployeeSyncService) SyncEmployees() error {
-	if !s.employeeSyncConf.Enabled {
+	if !s.configManager.GetDirect().EmployeeSync.Enabled {
 		logger.Logger.Info("Employee sync is disabled")
 		return nil
 	}
@@ -204,7 +204,7 @@ func (s *EmployeeSyncService) SyncEmployees() error {
 // fetchEmployeesFromHR fetches employees from HR system
 func (s *EmployeeSyncService) fetchEmployeesFromHR() ([]HREmployee, error) {
 	var employees []HREmployee
-	err := s.fetchAndDeserialize(s.employeeSyncConf.HrURL, s.employeeSyncConf.HrKey, &employees)
+	err := s.fetchAndDeserialize(s.configManager.GetDirect().EmployeeSync.HrURL, s.configManager.GetDirect().EmployeeSync.HrKey, &employees)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func (s *EmployeeSyncService) fetchEmployeesFromHR() ([]HREmployee, error) {
 // fetchDepartmentsFromHR fetches departments from HR system
 func (s *EmployeeSyncService) fetchDepartmentsFromHR() ([]*HRDepartment, error) {
 	var departments []*HRDepartment
-	err := s.fetchAndDeserialize(s.employeeSyncConf.DeptURL, s.employeeSyncConf.DeptKey, &departments)
+	err := s.fetchAndDeserialize(s.configManager.GetDirect().EmployeeSync.DeptURL, s.configManager.GetDirect().EmployeeSync.DeptKey, &departments)
 	if err != nil {
 		return nil, err
 	}

@@ -350,7 +350,7 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 	// Create a minimal permission service for EmployeeSyncService
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
-	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService, quotaCheckPermissionService)
+	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, config.NewManager(&config.Config{EmployeeSync: *employeeSyncConfig}), permissionService, starCheckPermissionService, quotaCheckPermissionService)
 
 	// Setup department hierarchy
 	SetupDefaultDepartmentHierarchy()

@@ -356,7 +356,9 @@ func testStarCheckEmployeeSync(ctx *TestContext) TestResult {
 	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
-	_ = services.NewEmployeeSyncService(ctx.DB, employeeSyncConfig, permissionService, starCheckPermissionService, quotaCheckPermissionService)
+	// Create a config manager for the employee sync service
+	configManager := config.NewManager(&config.Config{EmployeeSync: *employeeSyncConfig})
+	_ = services.NewEmployeeSyncService(ctx.DB, configManager, permissionService, starCheckPermissionService, quotaCheckPermissionService)
 
 	// Create test employee with initial department
 	employee := &models.EmployeeDepartment{

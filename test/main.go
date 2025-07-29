@@ -208,6 +208,10 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Star Check Employee Data Integrity Test", testStarCheckEmployeeDataIntegrity},
 		{"Unified Permission Queries Test", testUnifiedPermissionQueries},
 		{"Star Check Employee Sync Test", testStarCheckEmployeeSync},
+		{"GitHub Star Check Disabled Test", testGithubStarCheckDisabled},
+		{"GitHub Star Check Enabled User Not Star Test", testGithubStarCheckEnabledUserNotStar},
+		{"GitHub Star Check Enabled User Starred Test", testGithubStarCheckEnabledUserStarred},
+		{"GitHub Star Check Enabled User Starred Other Test", testGithubStarCheckEnabledUserStarredOther},
 
 		// Quota Check Permission Management Tests
 		{"User Quota Check Setting Management Test", testUserQuotaCheckSettingManagement},
