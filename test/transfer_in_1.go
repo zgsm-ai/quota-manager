@@ -131,15 +131,9 @@ func testTransferInUserIDMismatch(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("AddQuotaForStrategy strategy name verification failed: %v", err)}
 	}
 
-	// Transfer quota from user1 to user2 - use same expiry date as created by strategy
+	// Transfer quota from user1 to user2 - use same expiry date as created by strategy - always set to end of current month
 	now := time.Now().Truncate(time.Second)
-	var transferExpiryDate time.Time
-	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-	if endOfMonth.Sub(now).Hours() < 24*30 {
-		transferExpiryDate = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-	} else {
-		transferExpiryDate = endOfMonth
-	}
+	transferExpiryDate := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	transferOutReq := &services.TransferOutRequest{
 		ReceiverID: user2.ID,

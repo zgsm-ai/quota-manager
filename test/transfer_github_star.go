@@ -218,15 +218,9 @@ func testTransferOutGithubStarNotSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create receiver: %v", err)}
 	}
 
-	// Calculate transfer expiry date (same as other transfer tests)
+	// Calculate transfer expiry date - always set to end of current month
 	now := time.Now().Truncate(time.Second)
-	var transferExpiryDate time.Time
-	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-	if endOfMonth.Sub(now).Hours() < 24*30 {
-		transferExpiryDate = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-	} else {
-		transferExpiryDate = endOfMonth
-	}
+	transferExpiryDate := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// Add quota with the same expiry date that will be used in transfer
 	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy"); err != nil {
@@ -301,15 +295,9 @@ func testTransferOutGithubStarSet(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create receiver: %v", err)}
 	}
 
-	// Calculate transfer expiry date (same as other transfer tests)
+	// Calculate transfer expiry date - always set to end of current month
 	now := time.Now().Truncate(time.Second)
-	var transferExpiryDate time.Time
-	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-	if endOfMonth.Sub(now).Hours() < 24*30 {
-		transferExpiryDate = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-	} else {
-		transferExpiryDate = endOfMonth
-	}
+	transferExpiryDate := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// Add quota with the same expiry date that will be used in transfer
 	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy"); err != nil {

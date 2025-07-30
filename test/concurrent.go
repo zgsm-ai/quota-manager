@@ -45,15 +45,9 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 	// Concurrent operation 2: Multiple transfer outs
 	go func() {
 		<-startChan
-		// Use the same expiry date calculation as AddQuotaForStrategy
+		// Use the same expiry date calculation as AddQuotaForStrategy - always set to end of current month
 		now := time.Now().Truncate(time.Second)
-		var expiry time.Time
-		endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-		if endOfMonth.Sub(now).Hours() < 24*30 {
-			expiry = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-		} else {
-			expiry = endOfMonth
-		}
+		expiry := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 		for i := 0; i < 3; i++ {
 			transferOutReq := &services.TransferOutRequest{

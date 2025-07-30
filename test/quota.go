@@ -147,15 +147,9 @@ func testStrategyWithExpiryDate(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected valid status, got %s", quota.Status)}
 	}
 
-	// Verify expiry date is set correctly (end of month or next month)
+	// Verify expiry date is set correctly - always set to end of current month
 	now := time.Now()
-	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-	var expectedExpiry time.Time
-	if endOfMonth.Sub(now).Hours() < 24*30 {
-		expectedExpiry = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-	} else {
-		expectedExpiry = endOfMonth
-	}
+	expectedExpiry := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	if !quota.ExpiryDate.Equal(expectedExpiry) {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected expiry date %v, got %v", expectedExpiry, quota.ExpiryDate)}
@@ -201,15 +195,9 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Initial strategy name verification failed: %v", err)}
 	}
 
-	// 2. Transfer some quota from user1 to user2 - use same expiry date as created by strategy
+	// 2. Transfer some quota from user1 to user2 - use same expiry date as created by strategy - always set to end of current month
 	now := time.Now()
-	var transferExpiryDate time.Time
-	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-	if endOfMonth.Sub(now).Hours() < 24*30 {
-		transferExpiryDate = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-	} else {
-		transferExpiryDate = endOfMonth
-	}
+	transferExpiryDate := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	transferOutReq := &services.TransferOutRequest{
 		ReceiverID: user2.ID,
@@ -418,8 +406,8 @@ func testStrategyExpiryDateCoverage(ctx *TestContext) TestResult {
 
 	now := time.Now()
 
-	// Test case 1: Strategy execution when >30 days remaining in current month
-	// Add quota for user1 (should expire at end of current month since >30 days remaining)
+	// Test case 1: Strategy execution - always set to end of current month
+	// Add quota for user1 (should expire at end of current month)
 	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 100, 0, "test-strategy-1"); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add quota for user1 failed: %v", err)}
 	}
@@ -434,16 +422,8 @@ func testStrategyExpiryDateCoverage(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: "No quota records found for user1"}
 	}
 
-	// Calculate expected expiry date based on AddQuotaForStrategy logic
-	endOfCurrentMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-	endOfNextMonth := time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-
-	var expectedExpiry time.Time
-	if endOfCurrentMonth.Sub(now).Hours() < 24*30 {
-		expectedExpiry = endOfNextMonth
-	} else {
-		expectedExpiry = endOfCurrentMonth
-	}
+	// Calculate expected expiry date - always set to end of current month
+	expectedExpiry := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// Verify user1's quota expiry date
 	quotaExpiry := user1Quotas[0].ExpiryDate

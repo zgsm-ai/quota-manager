@@ -740,13 +740,8 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strate
 	now := time.Now().Truncate(time.Second)
 	var expiryDate time.Time
 
-	// If less than 30 days until end of month, set expiry to end of next month
-	endOfMonth := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
-	if endOfMonth.Sub(now).Hours() < 24*30 {
-		expiryDate = time.Date(now.Year(), now.Month()+2, 0, 23, 59, 59, 0, now.Location())
-	} else {
-		expiryDate = endOfMonth
-	}
+	// 始终设为本月底
+	expiryDate = time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// Start transaction
 	tx := s.db.DB.Begin()
