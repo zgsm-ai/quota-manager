@@ -156,6 +156,7 @@ func main() {
 	starCheckPermissionHandler := handlers.NewStarCheckPermissionHandler(starCheckPermissionService)
 	quotaCheckPermissionHandler := handlers.NewQuotaCheckPermissionHandler(quotaCheckPermissionService)
 	unifiedPermissionHandler := handlers.NewUnifiedPermissionHandler(unifiedPermissionService)
+	scanHandler := handlers.NewScanHandler(strategyService, unifiedPermissionService, schedulerService)
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)
@@ -210,9 +211,6 @@ func main() {
 				strategies.POST("/:id/enable", strategyHandler.EnableStrategy)
 				strategies.POST("/:id/disable", strategyHandler.DisableStrategy)
 
-				// Manually trigger strategy scan
-				strategies.POST("/scan", strategyHandler.TriggerScan)
-
 				// Strategy execution records
 				strategies.GET("/:id/executions", strategyHandler.GetStrategyExecuteRecords)
 			}
@@ -243,7 +241,9 @@ func main() {
 
 			// Unified query and sync interfaces
 			v1.GET("/effective-permissions", unifiedPermissionHandler.GetEffectivePermissions)
-			v1.POST("/employee-sync", unifiedPermissionHandler.TriggerEmployeeSync)
+
+			// Unified scan interface
+			v1.POST("/scan", scanHandler.TriggerScan)
 		}
 	}
 

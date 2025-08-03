@@ -103,3 +103,8 @@ func (s *SchedulerService) expireQuotasTask() {
 
 	logger.Info("Quota expiry task completed")
 }
+
+// ExpireQuotasTask is a public wrapper for expireQuotasTask to allow external triggering
+func (s *SchedulerService) ExpireQuotasTask() {
+	s.expireQuotasTask()
+}
