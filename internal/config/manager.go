@@ -4,38 +4,38 @@ import (
 	"sync"
 )
 
-// Manager 配置管理器，用于管理配置的访问和更新
+// Manager configuration manager, used to manage configuration access and updates
 type Manager struct {
 	config *Config
 	mutex  sync.RWMutex
 }
 
-// NewManager 创建一个新的配置管理器
+// NewManager creates a new configuration manager
 func NewManager(cfg *Config) *Manager {
 	return &Manager{
 		config: cfg,
 	}
 }
 
-// Get 获取当前配置的副本
+// Get gets a copy of the current configuration
 func (m *Manager) Get() *Config {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
-	// 返回配置的副本以避免外部修改直接影响原始配置
-	// 注意：对于包含指针或切片的复杂结构体，可能需要深度复制
+	// Return a copy of the configuration to avoid external modifications directly affecting the original configuration
+	// Note: For complex structures containing pointers or slices, deep copying may be required
 	configCopy := *m.config
 	return &configCopy
 }
 
-// Update 更新配置值
+// Update updates configuration values
 func (m *Manager) Update(updater func(*Config)) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	updater(m.config)
 }
 
-// GetDirect 获取当前配置的直接引用（谨慎使用）
+// GetDirect gets a direct reference to the current configuration (use with caution)
 func (m *Manager) GetDirect() *Config {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()

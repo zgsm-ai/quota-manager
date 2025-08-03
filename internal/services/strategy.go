@@ -8,9 +8,12 @@ import (
 	"quota-manager/internal/models"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
+	"strings"
 	"sync"
 	"time"
 
+	"database/sql"
+	"errors"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -178,13 +181,44 @@ func (s *StrategyService) executePeriodicStrategy(strategyID int) {
 	s.ExecStrategy(strategy, users)
 }
 
-// loadEnabledPeriodicStrategies loads enabled periodic strategies
+// loadEnabledPeriodicStrategies loads enabled periodic strategies with retry mechanism
 func (s *StrategyService) loadEnabledPeriodicStrategies() ([]models.QuotaStrategy, error) {
 	var strategies []models.QuotaStrategy
-	if err := s.db.Where("status = ? AND type = ?", true, "periodic").Find(&strategies).Error; err != nil {
-		return nil, fmt.Errorf("failed to query enabled periodic strategies: %w", err)
+	var err error
+
+	// Retry mechanism, maximum 3 attempts
+	for i := 0; i < 3; i++ {
+		// Check if connection is healthy
+		if sqlDB, dbErr := s.db.DB.DB(); dbErr == nil {
+			if pingErr := sqlDB.Ping(); pingErr != nil {
+				logger.Warn("DB connection ping failed in loadEnabledPeriodicStrategies, attempting to reconnect",
+					zap.Int("attempt", i+1), zap.Error(pingErr))
+				time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+				continue
+			}
+		}
+
+		err = s.db.Where("status = ? AND type = ?", true, "periodic").Find(&strategies).Error
+		if err == nil {
+			logger.Info("Successfully loaded enabled periodic strategies", zap.Int("count", len(strategies)))
+			return strategies, nil
+		}
+
+		// Retry if it's a network-related error
+		if isNetworkError(err) {
+			logger.Warn("Network error occurred while loading enabled periodic strategies, retrying",
+				zap.Int("attempt", i+1),
+				zap.Error(err),
+				zap.Bool("is_network_error", true))
+			time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+			continue
+		}
+
+		// Non-network error, return directly
+		break
 	}
-	return strategies, nil
+
+	return nil, fmt.Errorf("failed to query enabled periodic strategies after retries: %w", err)
 }
 
 // TraverseSingleStrategies traverses single-type strategies only
@@ -218,22 +252,123 @@ func (s *StrategyService) TraverseSingleStrategies() {
 	logger.Info("Single strategy traversal completed")
 }
 
-// loadEnabledSingleStrategies loads enabled single-type strategies
+// loadEnabledSingleStrategies loads enabled single-type strategies with retry mechanism
 func (s *StrategyService) loadEnabledSingleStrategies() ([]models.QuotaStrategy, error) {
 	var strategies []models.QuotaStrategy
-	if err := s.db.Where("status = ? AND type = ?", true, "single").Find(&strategies).Error; err != nil {
-		return nil, fmt.Errorf("failed to query enabled single strategies: %w", err)
+	var err error
+
+	// Retry mechanism, maximum 3 attempts
+	for i := 0; i < 3; i++ {
+		// Check if connection is healthy
+		if sqlDB, dbErr := s.db.DB.DB(); dbErr == nil {
+			if pingErr := sqlDB.Ping(); pingErr != nil {
+				logger.Warn("DB connection ping failed in loadEnabledSingleStrategies, attempting to reconnect",
+					zap.Int("attempt", i+1), zap.Error(pingErr))
+				time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+				continue
+			}
+		}
+
+		err = s.db.Where("status = ? AND type = ?", true, "single").Find(&strategies).Error
+		if err == nil {
+			logger.Info("Successfully loaded enabled single strategies", zap.Int("count", len(strategies)))
+			return strategies, nil
+		}
+
+		// Retry if it's a network-related error
+		if isNetworkError(err) {
+			logger.Warn("Network error occurred while loading enabled single strategies, retrying",
+				zap.Int("attempt", i+1),
+				zap.Error(err),
+				zap.Bool("is_network_error", true))
+			time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+			continue
+		}
+
+		// Non-network error, return directly
+		break
 	}
-	return strategies, nil
+
+	logger.Error("Failed to load enabled single strategies after all retries",
+		zap.Error(err),
+		zap.Bool("is_network_error", isNetworkError(err)),
+		zap.Int("retry_attempts", 3))
+
+	return nil, fmt.Errorf("failed to query enabled single strategies after retries: %w", err)
 }
 
-// loadUsers loads the user list
+// loadUsers loads the user list with retry mechanism
 func (s *StrategyService) loadUsers() ([]models.UserInfo, error) {
 	var users []models.UserInfo
-	if err := s.db.AuthDB.Find(&users).Error; err != nil {
-		return nil, fmt.Errorf("failed to query users: %w", err)
+	var err error
+
+	// Retry mechanism, maximum 3 attempts
+	for i := 0; i < 3; i++ {
+		// Check if connection is healthy
+		if sqlDB, dbErr := s.db.AuthDB.DB(); dbErr == nil {
+			if pingErr := sqlDB.Ping(); pingErr != nil {
+				logger.Warn("AuthDB connection ping failed, attempting to reconnect",
+					zap.Int("attempt", i+1), zap.Error(pingErr))
+				time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+				continue
+			}
+		}
+
+		err = s.db.AuthDB.Find(&users).Error
+		if err == nil {
+			return users, nil
+		}
+
+		// Retry if it's a network-related error
+		if isNetworkError(err) {
+			logger.Warn("Network error occurred while loading users, retrying",
+				zap.Int("attempt", i+1), zap.Error(err))
+			time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+			continue
+		}
+
+		// Non-network error, return directly
+		break
 	}
-	return users, nil
+
+	return nil, fmt.Errorf("failed to query users after retries: %w", err)
+}
+
+// isNetworkError checks if the error is network-related
+func isNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if it's a network connection related error
+	var netErr error
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	// Check specific database errors
+	if errors.Is(err, sql.ErrConnDone) ||
+		errors.Is(err, sql.ErrTxDone) ||
+		errors.Is(err, gorm.ErrInvalidDB) {
+		return true
+	}
+
+	// Check if error message contains network-related keywords
+	errMsg := strings.ToLower(err.Error())
+	networkKeywords := []string{
+		"connection reset", "connection refused", "connection timeout",
+		"network is unreachable", "no route to host", "broken pipe",
+		"unexpected eof", "connection closed", "timeout",
+		"temporary failure", "resource temporarily unavailable",
+	}
+
+	for _, keyword := range networkKeywords {
+		if strings.Contains(errMsg, keyword) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // loadStrategies loads all strategy list
@@ -338,7 +473,7 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 	now := time.Now().Truncate(time.Second)
 	var expiryDate time.Time
 
-	// 始终设为本月底
+	// Always set to end of current month
 	expiryDate = time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// 1. Record execution status as processing

@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"quota-manager/internal/config"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -38,16 +39,22 @@ func NewDB(cfg *config.Config) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get main sql.DB: %w", err)
 	}
-	mainSqlDB.SetMaxIdleConns(10)
-	mainSqlDB.SetMaxOpenConns(100)
+	// Optimize connection pool configuration
+	mainSqlDB.SetMaxIdleConns(25)                  // Increase idle connections
+	mainSqlDB.SetMaxOpenConns(200)                 // Increase max connections
+	mainSqlDB.SetConnMaxLifetime(time.Hour)        // Set connection max lifetime
+	mainSqlDB.SetConnMaxIdleTime(30 * time.Minute) // Set idle connection max lifetime
 
 	// Set auth database connection pool
 	authSqlDB, err := authDB.DB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get auth sql.DB: %w", err)
 	}
-	authSqlDB.SetMaxIdleConns(5)
-	authSqlDB.SetMaxOpenConns(50)
+	// Optimize connection pool configuration
+	authSqlDB.SetMaxIdleConns(15)                  // Increase idle connections
+	authSqlDB.SetMaxOpenConns(100)                 // Increase max connections
+	authSqlDB.SetConnMaxLifetime(time.Hour)        // Set connection max lifetime
+	authSqlDB.SetConnMaxIdleTime(30 * time.Minute) // Set idle connection max lifetime
 
 	return &DB{DB: mainDB, AuthDB: authDB}, nil
 }

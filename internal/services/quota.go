@@ -740,7 +740,7 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strate
 	now := time.Now().Truncate(time.Second)
 	var expiryDate time.Time
 
-	// 始终设为本月底
+	// Always set to end of current month
 	expiryDate = time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// Start transaction
