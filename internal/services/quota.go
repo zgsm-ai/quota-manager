@@ -869,7 +869,7 @@ func (s *QuotaService) ExpireQuotas() error {
 	}
 
 	// Process each user
-	for userID := range userQuotaMap {
+	for userID, expiredAmount := range userQuotaMap {
 		// Get user's remaining valid quota
 		var validQuotaSum float64
 		if err := tx.Model(&models.Quota{}).
@@ -915,6 +915,19 @@ func (s *QuotaService) ExpireQuotas() error {
 				tx.Rollback()
 				return fmt.Errorf("failed to adjust total quota for user %s: %w", userID, err)
 			}
+		}
+
+		// Create audit record for quota expiry
+		auditRecord := &models.QuotaAudit{
+			UserID:      userID,
+			Amount:      -expiredAmount, // Negative amount for expiry
+			Operation:   "EXPIRE",
+			ExpiryDate:  now, // Use current time as expiry time
+			CreateTime:  now,
+		}
+		if err := tx.Create(auditRecord).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to create expiry audit record for user %s: %w", userID, err)
 		}
 	}
 

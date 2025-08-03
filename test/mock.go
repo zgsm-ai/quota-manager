@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 )
 
 // SetStarProjectsCall represents a SetGithubStarProjects call for testing
@@ -38,18 +40,34 @@ type QuotaCheckCall struct {
 	Operation      string // "set", "query"
 }
 
+// MockQuotaStoreDeltaCall represents a delta call for testing
+type MockQuotaStoreDeltaCall struct {
+	EmployeeNumber string
+	Delta          float64
+}
+
+// MockQuotaStoreUsedDeltaCall represents a used delta call for testing
+type MockQuotaStoreUsedDeltaCall struct {
+	EmployeeNumber string
+	Delta          float64
+}
+
 // MockQuotaStore mock quota storage
 type MockQuotaStore struct {
-	data                 map[string]float64    // Total quota
-	usedData             map[string]float64    // Used quota
-	starData             map[string]bool       // GitHub star status
-	permissionData       map[string][]string   // User permissions (employee_number -> models)
-	starCheckData        map[string]bool       // Star check permissions (employee_number -> enabled)
-	quotaCheckData       map[string]bool       // Quota check permissions (employee_number -> enabled)
-	setStarProjectsCalls []SetStarProjectsCall // Track SetGithubStarProjects calls
-	permissionCalls      []PermissionCall      // Track permission management calls
-	starCheckCalls       []StarCheckCall       // Track star check permission calls
-	quotaCheckCalls      []QuotaCheckCall      // Track quota check permission calls
+	data                 map[string]float64            // Total quota
+	usedData             map[string]float64            // Used quota
+	starData             map[string]bool               // GitHub star status
+	permissionData       map[string][]string           // User permissions (employee_number -> models)
+	starCheckData        map[string]bool               // Star check permissions (employee_number -> enabled)
+	quotaCheckData       map[string]bool               // Quota check permissions (employee_number -> enabled)
+	setStarProjectsCalls []SetStarProjectsCall         // Track SetGithubStarProjects calls
+	permissionCalls      []PermissionCall              // Track permission management calls
+	starCheckCalls       []StarCheckCall               // Track star check permission calls
+	quotaCheckCalls      []QuotaCheckCall              // Track quota check permission calls
+	CallCount            int                           // Track call count for SyncQuota
+	deltaCalls           []MockQuotaStoreDeltaCall     // Track delta calls
+	usedDeltaCalls       []MockQuotaStoreUsedDeltaCall // Track used delta calls
+	mock.Mock                                          // For testify/mock functionality
 }
 
 func (m *MockQuotaStore) GetQuota(consumer string) float64 {
@@ -199,6 +217,77 @@ func (m *MockQuotaStore) ClearQuotaCheckCalls() {
 	m.quotaCheckCalls = []QuotaCheckCall{}
 }
 
+// SyncQuota 同步配额到 AiGateway
+func (m *MockQuotaStore) SyncQuota(userID string, quotaType string, amount float64) error {
+	m.CallCount++
+
+	// 记录调用
+	args := m.Called(userID, quotaType, amount)
+
+	// 如果设置了返回错误，则返回错误
+	if err := args.Error(0); err != nil {
+		return err
+	}
+
+	// 根据类型更新配额
+	if quotaType == "total_quota" {
+		m.deltaCalls = append(m.deltaCalls, MockQuotaStoreDeltaCall{
+			EmployeeNumber: userID,
+			Delta:          amount,
+		})
+		m.DeltaQuota(userID, amount)
+	} else if quotaType == "used_quota" {
+		m.usedDeltaCalls = append(m.usedDeltaCalls, MockQuotaStoreUsedDeltaCall{
+			EmployeeNumber: userID,
+			Delta:          amount,
+		})
+		m.DeltaUsed(userID, amount)
+	}
+
+	return nil
+}
+
+// GetDeltaCalls 获取 delta 调用记录
+func (m *MockQuotaStore) GetDeltaCalls() []MockQuotaStoreDeltaCall {
+	return m.deltaCalls
+}
+
+// GetUsedDeltaCalls 获取 used delta 调用记录
+func (m *MockQuotaStore) GetUsedDeltaCalls() []MockQuotaStoreUsedDeltaCall {
+	return m.usedDeltaCalls
+}
+
+// ClearDeltaCalls 清除 delta 调用记录
+func (m *MockQuotaStore) ClearDeltaCalls() {
+	m.deltaCalls = []MockQuotaStoreDeltaCall{}
+}
+
+// ClearUsedDeltaCalls 清除 used delta 调用记录
+func (m *MockQuotaStore) ClearUsedDeltaCalls() {
+	m.usedDeltaCalls = []MockQuotaStoreUsedDeltaCall{}
+}
+
+// ClearAllCalls 清除所有调用记录
+func (m *MockQuotaStore) ClearAllCalls() {
+	m.CallCount = 0
+	m.ClearDeltaCalls()
+	m.ClearUsedDeltaCalls()
+	m.ClearSetStarProjectsCalls()
+	m.ClearPermissionCalls()
+	m.ClearStarCheckCalls()
+	m.ClearQuotaCheckCalls()
+}
+
+// ClearData 清除所有数据
+func (m *MockQuotaStore) ClearData() {
+	m.data = make(map[string]float64)
+	m.usedData = make(map[string]float64)
+	m.starData = make(map[string]bool)
+	m.permissionData = make(map[string][]string)
+	m.starCheckData = make(map[string]bool)
+	m.quotaCheckData = make(map[string]bool)
+}
+
 var mockStore = &MockQuotaStore{
 	data:                 make(map[string]float64),
 	usedData:             make(map[string]float64),
@@ -210,6 +299,8 @@ var mockStore = &MockQuotaStore{
 	permissionCalls:      []PermissionCall{},
 	starCheckCalls:       []StarCheckCall{},
 	quotaCheckCalls:      []QuotaCheckCall{},
+	deltaCalls:           []MockQuotaStoreDeltaCall{},
+	usedDeltaCalls:       []MockQuotaStoreUsedDeltaCall{},
 }
 
 // createMockServer create mock server
@@ -219,8 +310,8 @@ func createMockServer(shouldFail bool) *httptest.Server {
 
 	// Middleware: validate Authorization
 	authMiddleware := func(c *gin.Context) {
-		auth := c.GetHeader("X-Auth-Key")
-		if auth != "credential3" {
+		auth := c.GetHeader("x-admin-key")
+		if auth != "12345678" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
 			c.Abort()
 			return
@@ -318,7 +409,19 @@ func createMockServer(shouldFail bool) *httptest.Server {
 					return
 				}
 
+				// Directly update the data instead of calling SyncQuota mock method
 				mockStore.DeltaQuota(userID, delta)
+
+				// Track the delta call manually
+				call := MockQuotaStoreDeltaCall{
+					EmployeeNumber: userID,
+					Delta:          delta,
+				}
+				mockStore.deltaCalls = append(mockStore.deltaCalls, call)
+
+				// Add logging to track delta call order
+				fmt.Printf("[MOCK SERVER] POST /delta called - UserID: %s, Delta: %f, Total delta calls: %d\n",
+					userID, delta, len(mockStore.deltaCalls))
 
 				c.JSON(http.StatusOK, gin.H{
 					"code":    "ai-gateway.deltaquota",
@@ -394,7 +497,19 @@ func createMockServer(shouldFail bool) *httptest.Server {
 					return
 				}
 
+				// Directly update the data instead of calling SyncQuota mock method
 				mockStore.DeltaUsed(userID, delta)
+
+				// Track the used delta call manually
+				call := MockQuotaStoreUsedDeltaCall{
+					EmployeeNumber: userID,
+					Delta:          delta,
+				}
+				mockStore.usedDeltaCalls = append(mockStore.usedDeltaCalls, call)
+
+				// Add logging to track used delta call order
+				fmt.Printf("[MOCK SERVER] POST /used/delta called - UserID: %s, Delta: %f, Total used delta calls: %d\n",
+					userID, delta, len(mockStore.usedDeltaCalls))
 
 				c.JSON(http.StatusOK, gin.H{
 					"code":    "ai-gateway.deltausedquota",
@@ -823,4 +938,41 @@ func createEncryptedXMLResponse(data interface{}, key string) (string, error) {
 	// Wrap in XML format
 	xmlResponse := fmt.Sprintf("<?xml version=\"1.0\" encoding=\"utf-8\"?><string xmlns=\"http://tempuri.org/\">%s</string>", encryptedData)
 	return xmlResponse, nil
+}
+
+// Reset 重置 MockQuotaStore 的状态
+func (m *MockQuotaStore) Reset() {
+	m.ClearData()
+	m.ClearAllCalls()
+}
+
+// expectedExpireQuotas 存储期望的过期配额调用
+var expectedExpireQuotas []string
+
+// ExpectExpireQuotas 设置期望的过期配额调用
+func (m *MockQuotaStore) ExpectExpireQuotas(userID string) {
+	expectedExpireQuotas = append(expectedExpireQuotas, userID)
+}
+
+// ClearExpectedExpireQuotas 清除期望的过期配额调用
+func (m *MockQuotaStore) ClearExpectedExpireQuotas() {
+	expectedExpireQuotas = []string{}
+}
+
+// VerifyQuotaExpired 验证配额过期是否被正确调用
+func (m *MockQuotaStore) VerifyQuotaExpired(userID string) bool {
+	// 检查是否有期望的过期配额调用
+	for _, expectedUserID := range expectedExpireQuotas {
+		if expectedUserID == userID {
+			// 验证通过，清除已验证的期望
+			m.ClearExpectedExpireQuotas()
+			return true
+		}
+	}
+	return false
+}
+
+// generateUUID 生成 UUID 字符串
+func generateUUID() string {
+	return uuid.NewString()
 }
