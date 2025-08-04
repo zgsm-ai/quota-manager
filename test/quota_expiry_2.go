@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"time"
-)
 
-import (
 	"quota-manager/internal/models"
 )
 
@@ -346,6 +344,109 @@ func testExpireQuotasTaskJustExpired(ctx *TestContext) TestResult {
 		Message:   "Just Expired Quota (1 Minute Ago) Test Succeeded",
 		Duration:  duration,
 		TestName:  "testExpireQuotasTaskJustExpired",
+		StartTime: startTime,
+		EndTime:   time.Now(),
+	}
+}
+
+// AiGateway Sync Failure Test
+func testExpireQuotasTaskAiGatewayFail(ctx *TestContext) TestResult {
+	startTime := time.Now()
+
+	// Clean up previous test data
+	cleanupMockQuotaStore(ctx)
+
+	// Create test user
+	user := createTestUser("test_user_aigateway_fail", "Test User AiGateway Fail", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Create expired quota record (amount 120.0, expiry time: last month end 23:59:59, status VALID)
+	quota, err := createExpiredTestQuota(ctx, user.ID, 120.0)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create expired quota failed: %v", err)}
+	}
+
+	// Set MockQuotaStore initial state: total quota 120.0, used quota 40.0
+	ctx.MockQuotaStore.SetQuota(user.ID, 120.0)
+	ctx.MockQuotaStore.SetUsed(user.ID, 40.0)
+
+	// Configure AiGateway client to use failure server (simulate network failure or network internal error)
+	restoreFunc := ctx.UseFailServer()
+	defer restoreFunc()
+
+	// Execute expireQuotasTask function
+	if err := executeExpireQuotasTask(ctx); err == nil {
+		return TestResult{Passed: false, Message: "Expected expireQuotasTask to fail, but it succeeded"}
+	}
+
+	// Comprehensive verification: verify transaction rollback correctly, all data remains unchanged
+
+	// Verify quota status was not updated (still VALID)
+	if err := verifyQuotaStatus(ctx, fmt.Sprintf("%d", quota.ID), models.StatusValid); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Quota status verification failed: %v", err)}
+	}
+
+	// Verify user's valid quota count remains 1
+	if err := verifyUserValidQuotaCount(ctx, user.ID, 1); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Valid quota count verification failed: %v", err)}
+	}
+
+	// Verify user's expired quota count remains 0
+	if err := verifyUserExpiredQuotaCount(ctx, user.ID, 0); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expired quota count verification failed: %v", err)}
+	}
+
+	// Verify user's valid quota amount remains 120.0
+	if err := verifyUserQuotaAmountByStatus(ctx, user.ID, models.StatusValid, 120.0); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Valid quota amount verification failed: %v", err)}
+	}
+
+	// Verify user's expired quota amount remains 0.0
+	if err := verifyUserQuotaAmountByStatus(ctx, user.ID, models.StatusExpired, 0.0); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expired quota amount verification failed: %v", err)}
+	}
+
+	// Verify MockQuotaStore data remains unchanged
+	if err := verifyMockQuotaStoreTotalQuota(ctx, user.ID, 120.0); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("MockQuotaStore total quota verification failed: %v", err)}
+	}
+
+	if err := verifyMockQuotaStoreUsedQuota(ctx, user.ID, 40.0); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("MockQuotaStore used quota verification failed: %v", err)}
+	}
+
+	// Verify no MockQuotaStore delta calls (due to transaction rollback)
+	if err := verifyMockQuotaStoreDeltaCalls(ctx, []MockQuotaStoreDeltaCall{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("MockQuotaStore delta calls verification failed: %v", err)}
+	}
+
+	// Verify no MockQuotaStore used delta calls (due to transaction rollback)
+	if err := verifyMockQuotaStoreUsedDeltaCalls(ctx, []MockQuotaStoreUsedDeltaCall{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("MockQuotaStore used delta calls verification failed: %v", err)}
+	}
+
+	// Verify no quota status change audit records were generated due to transaction rollback
+	if err := verifyNoUnexpectedAuditRecords(ctx, user.ID, []string{}); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Unexpected audit records verification failed: %v", err)}
+	}
+
+	// Verify quota record integrity: 1 valid record, amount 120.0, status VALID
+	expectedRecords := []QuotaRecordExpectation{
+		{Amount: 120.0, ExpiryDate: quota.ExpiryDate, Status: models.StatusValid},
+	}
+
+	if err := verifyUserQuotaRecordsIntegrity(ctx, user.ID, expectedRecords); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Quota records integrity verification failed: %v", err)}
+	}
+
+	duration := time.Since(startTime)
+	return TestResult{
+		Passed:    true,
+		Message:   "MockQuotaStore Sync Failure Test Succeeded",
+		Duration:  duration,
+		TestName:  "testExpireQuotasTaskAiGatewayFail",
 		StartTime: startTime,
 		EndTime:   time.Now(),
 	}

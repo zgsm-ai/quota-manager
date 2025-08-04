@@ -905,7 +905,7 @@ func (s *QuotaService) ExpireQuotas() error {
 		validQuota := validQuotaSum
 		var newTotalQuota float64
 		if validQuota >= remainingQuota {
-			newTotalQuota = validQuota
+			newTotalQuota = remainingQuota
 		} else {
 			newTotalQuota = validQuota
 		}

@@ -27,6 +27,11 @@ func testClearData(ctx *TestContext) TestResult {
 		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
 		}
+		// Reset sequence for tables with SERIAL PRIMARY KEY
+		if err := ctx.DB.DB.Exec("SELECT setval('" + table + "_id_seq', 1, false)").Error; err != nil {
+			// Ignore error if sequence doesn't exist (for tables without SERIAL PRIMARY KEY)
+			fmt.Printf("Warning: Failed to reset sequence for table %s: %v\n", table, err)
+		}
 	}
 
 	// Clear permission-related tables from main database
@@ -35,11 +40,22 @@ func testClearData(ctx *TestContext) TestResult {
 		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Clear table %s failed: %v", table, err)}
 		}
+		// Reset sequence for tables with SERIAL PRIMARY KEY
+		if err := ctx.DB.DB.Exec("SELECT setval('" + table + "_id_seq', 1, false)").Error; err != nil {
+			// Ignore error if sequence doesn't exist (for tables without SERIAL PRIMARY KEY)
+			fmt.Printf("Warning: Failed to reset sequence for table %s: %v\n", table, err)
+		}
 	}
 
 	// Clear auth_users table from auth database
 	if err := ctx.DB.AuthDB.Exec("DELETE FROM auth_users").Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Clear table auth_users failed: %v", err)}
+	}
+
+	// Log mock store state before clearing
+	fmt.Printf("[DEBUG] testClearData: Before clearing - used delta calls count: %d\n", len(mockStore.usedDeltaCalls))
+	for i, call := range mockStore.usedDeltaCalls {
+		fmt.Printf("[DEBUG] testClearData: Before clearing - call %d: EmployeeNumber=%s, Delta=%f\n", i, call.EmployeeNumber, call.Delta)
 	}
 
 	// Reset mock storage
@@ -51,6 +67,10 @@ func testClearData(ctx *TestContext) TestResult {
 	mockStore.ClearPermissionCalls()
 	mockStore.ClearStarCheckCalls()
 	mockStore.ClearQuotaCheckCalls()
+	mockStore.ClearUsedDeltaCalls()
+
+	// Log mock store state after clearing
+	fmt.Printf("[DEBUG] testClearData: After clearing - used delta calls count: %d\n", len(mockStore.usedDeltaCalls))
 
 	return TestResult{Passed: true, Message: "All data cleared successfully (quota + permission + auth)"}
 }
@@ -62,6 +82,11 @@ func clearPermissionData(ctx *TestContext) error {
 	for _, table := range permissionTables {
 		if err := ctx.DB.DB.Exec("DELETE FROM " + table).Error; err != nil {
 			return fmt.Errorf("failed to clear table %s: %w", table, err)
+		}
+		// Reset sequence for tables with SERIAL PRIMARY KEY
+		if err := ctx.DB.DB.Exec("ALTER SEQUENCE " + table + "_id_seq RESTART WITH 1").Error; err != nil {
+			// Ignore error if sequence doesn't exist (for tables without SERIAL PRIMARY KEY)
+			fmt.Printf("Warning: Failed to reset sequence for table %s: %v\n", table, err)
 		}
 	}
 
