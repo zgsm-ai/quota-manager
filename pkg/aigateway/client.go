@@ -1,6 +1,7 @@
 package aigateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"quota-manager/internal/utils"
 )
 
 type Client struct {
@@ -49,8 +52,16 @@ func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
 	}
 }
 
-// RefreshQuota refreshes user quota
+// RefreshQuota refreshes user quota with retry mechanism
 func (c *Client) RefreshQuota(userID string, quota int) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.refreshQuotaImpl(userID, quota)
+	})
+	return err
+}
+
+// refreshQuotaImpl implements the actual RefreshQuota logic
+func (c *Client) refreshQuotaImpl(userID string, quota int) error {
 	apiUrl := fmt.Sprintf("%s%s/refresh", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
@@ -87,14 +98,25 @@ func (c *Client) RefreshQuota(userID string, quota int) error {
 	}
 
 	if !respData.Success {
-		return fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
+		// Wrap error with HTTP status code for retry classification
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("AI Gateway error: %s - %s", respData.Code, respData.Message),
+		}
 	}
 
 	return nil
 }
 
-// QueryQuota queries user quota
+// QueryQuota queries user quota with retry mechanism
 func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
+	return utils.WithRetry(context.Background(), func() (*QuotaResponse, error) {
+		return c.queryQuotaImpl(userID)
+	})
+}
+
+// queryQuotaImpl implements the actual QueryQuota logic
+func (c *Client) queryQuotaImpl(userID string) (*QuotaResponse, error) {
 	apiUrl := fmt.Sprintf("%s%s?user_id=%s", c.BaseURL, c.AdminPath, userID)
 
 	req, err := http.NewRequest("GET", apiUrl, nil)
@@ -124,7 +146,10 @@ func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
 	}
 
 	if !respData.Success {
-		return nil, fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
+		return nil, &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("AI Gateway error: %s - %s", respData.Code, respData.Message),
+		}
 	}
 
 	// Parse the data field
@@ -144,8 +169,16 @@ func (c *Client) QueryQuota(userID string) (*QuotaResponse, error) {
 	}, nil
 }
 
-// DeltaQuota increases or decreases user quota
+// DeltaQuota increases or decreases user quota with retry mechanism
 func (c *Client) DeltaQuota(userID string, value float64) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.deltaQuotaImpl(userID, value)
+	})
+	return err
+}
+
+// deltaQuotaImpl implements the actual DeltaQuota logic
+func (c *Client) deltaQuotaImpl(userID string, value float64) error {
 	apiUrl := fmt.Sprintf("%s%s/delta", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
@@ -182,15 +215,25 @@ func (c *Client) DeltaQuota(userID string, value float64) error {
 	}
 
 	if !respData.Success {
-		return fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("AI Gateway error: %s - %s", respData.Code, respData.Message),
+		}
 	}
 
 	return nil
 }
 
-// QueryQuotaValue implements the QuotaQuerier interface
+// QueryQuotaValue implements the QuotaQuerier interface with retry mechanism
 // Returns only the quota value as a float64
 func (c *Client) QueryQuotaValue(userID string) (float64, error) {
+	return utils.WithRetry(context.Background(), func() (float64, error) {
+		return c.queryQuotaValueImpl(userID)
+	})
+}
+
+// queryQuotaValueImpl implements the actual QueryQuotaValue logic
+func (c *Client) queryQuotaValueImpl(userID string) (float64, error) {
 	resp, err := c.QueryQuota(userID)
 	if err != nil {
 		return 0, err
@@ -198,8 +241,15 @@ func (c *Client) QueryQuotaValue(userID string) (float64, error) {
 	return resp.Quota, nil
 }
 
-// QueryGithubStarProjects queries user's starred GitHub projects (returns comma-separated list)
+// QueryGithubStarProjects queries user's starred GitHub projects with retry mechanism (returns comma-separated list)
 func (c *Client) QueryGithubStarProjects(employeeNumber string) (*StarProjectsResponse, error) {
+	return utils.WithRetry(context.Background(), func() (*StarProjectsResponse, error) {
+		return c.queryGithubStarProjectsImpl(employeeNumber)
+	})
+}
+
+// queryGithubStarProjectsImpl implements the actual QueryGithubStarProjects logic
+func (c *Client) queryGithubStarProjectsImpl(employeeNumber string) (*StarProjectsResponse, error) {
 	apiUrl := fmt.Sprintf("%s%s/star/projects/query?employee_number=%s", c.BaseURL, c.AdminPath, employeeNumber)
 
 	req, err := http.NewRequest("GET", apiUrl, nil)
@@ -224,7 +274,10 @@ func (c *Client) QueryGithubStarProjects(employeeNumber string) (*StarProjectsRe
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("API returned status %d: %s", resp.StatusCode, string(body)),
+		}
 	}
 
 	var response ResponseData
@@ -233,7 +286,10 @@ func (c *Client) QueryGithubStarProjects(employeeNumber string) (*StarProjectsRe
 	}
 
 	if !response.Success {
-		return nil, fmt.Errorf("API returned error: %s", response.Message)
+		return nil, &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("API returned error: %s", response.Message),
+		}
 	}
 
 	// Parse the data field
@@ -255,8 +311,16 @@ func (c *Client) QueryGithubStarProjects(employeeNumber string) (*StarProjectsRe
 	}, nil
 }
 
-// SetGithubStarProjects sets user's starred GitHub projects (comma-separated list)
+// SetGithubStarProjects sets user's starred GitHub projects (comma-separated list) with retry mechanism
 func (c *Client) SetGithubStarProjects(employeeNumber string, starredProjects string) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.setGithubStarProjectsImpl(employeeNumber, starredProjects)
+	})
+	return err
+}
+
+// setGithubStarProjectsImpl implements the actual SetGithubStarProjects logic
+func (c *Client) setGithubStarProjectsImpl(employeeNumber string, starredProjects string) error {
 	apiUrl := fmt.Sprintf("%s%s/star/projects/set", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
@@ -293,14 +357,26 @@ func (c *Client) SetGithubStarProjects(employeeNumber string, starredProjects st
 	}
 
 	if !respData.Success {
-		return fmt.Errorf("AI Gateway error: %s - %s", respData.Code, respData.Message)
+		// Wrap error with HTTP status code for retry classification
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("AI Gateway error: %s - %s", respData.Code, respData.Message),
+		}
 	}
 
 	return nil
 }
 
-// SetUserPermission sets user permission in Higress
+// SetUserPermission sets user permission in Higress with retry mechanism
 func (c *Client) SetUserPermission(employeeNumber string, models []string) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.setUserPermissionImpl(employeeNumber, models)
+	})
+	return err
+}
+
+// setUserPermissionImpl implements the actual SetUserPermission logic
+func (c *Client) setUserPermissionImpl(employeeNumber string, models []string) error {
 	// Prepare request data
 	data := url.Values{}
 	data.Set("employee_number", employeeNumber)
@@ -332,7 +408,10 @@ func (c *Client) SetUserPermission(employeeNumber string, models []string) error
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Higress returned status: %d", resp.StatusCode)
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("Higress returned status: %d", resp.StatusCode),
+		}
 	}
 
 	// Parse response to check for success
@@ -343,16 +422,30 @@ func (c *Client) SetUserPermission(employeeNumber string, models []string) error
 
 	if success, ok := result["success"].(bool); !ok || !success {
 		if message, ok := result["message"].(string); ok {
-			return fmt.Errorf("Higress error: %s", message)
+			return &utils.HTTPError{
+				StatusCode: resp.StatusCode,
+				Message:    fmt.Sprintf("Higress error: %s", message),
+			}
 		}
-		return fmt.Errorf("Higress operation failed")
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    "Higress operation failed",
+		}
 	}
 
 	return nil
 }
 
-// SetUserStarCheckPermission sets user star check permission in Higress
+// SetUserStarCheckPermission sets user star check permission in Higress with retry mechanism
 func (c *Client) SetUserStarCheckPermission(employeeNumber string, enabled bool) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.setUserStarCheckPermissionImpl(employeeNumber, enabled)
+	})
+	return err
+}
+
+// setUserStarCheckPermissionImpl implements the actual SetUserStarCheckPermission logic
+func (c *Client) setUserStarCheckPermissionImpl(employeeNumber string, enabled bool) error {
 	// Prepare request data
 	data := url.Values{}
 	data.Set("employee_number", employeeNumber)
@@ -382,7 +475,10 @@ func (c *Client) SetUserStarCheckPermission(employeeNumber string, enabled bool)
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Higress returned status: %d", resp.StatusCode)
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("Higress returned status: %d", resp.StatusCode),
+		}
 	}
 
 	// Parse response to check for success
@@ -393,16 +489,30 @@ func (c *Client) SetUserStarCheckPermission(employeeNumber string, enabled bool)
 
 	if success, ok := result["success"].(bool); !ok || !success {
 		if message, ok := result["message"].(string); ok {
-			return fmt.Errorf("Higress error: %s", message)
+			return &utils.HTTPError{
+				StatusCode: resp.StatusCode,
+				Message:    fmt.Sprintf("Higress error: %s", message),
+			}
 		}
-		return fmt.Errorf("Higress operation failed")
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    "Higress operation failed",
+		}
 	}
 
 	return nil
 }
 
-// SetUserQuotaCheckPermission sets user quota check permission in Higress
+// SetUserQuotaCheckPermission sets user quota check permission in Higress with retry mechanism
 func (c *Client) SetUserQuotaCheckPermission(employeeNumber string, enabled bool) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.setUserQuotaCheckPermissionImpl(employeeNumber, enabled)
+	})
+	return err
+}
+
+// setUserQuotaCheckPermissionImpl implements the actual SetUserQuotaCheckPermission logic
+func (c *Client) setUserQuotaCheckPermissionImpl(employeeNumber string, enabled bool) error {
 	// Prepare request data
 	data := url.Values{}
 	data.Set("employee_number", employeeNumber)
@@ -432,7 +542,10 @@ func (c *Client) SetUserQuotaCheckPermission(employeeNumber string, enabled bool
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Higress returned status: %d", resp.StatusCode)
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("Higress returned status: %d", resp.StatusCode),
+		}
 	}
 
 	// Parse response to check for success
@@ -443,9 +556,15 @@ func (c *Client) SetUserQuotaCheckPermission(employeeNumber string, enabled bool
 
 	if success, ok := result["success"].(bool); !ok || !success {
 		if message, ok := result["message"].(string); ok {
-			return fmt.Errorf("Higress error: %s", message)
+			return &utils.HTTPError{
+				StatusCode: resp.StatusCode,
+				Message:    fmt.Sprintf("Higress error: %s", message),
+			}
 		}
-		return fmt.Errorf("Higress operation failed")
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    "Higress operation failed",
+		}
 	}
 
 	return nil
