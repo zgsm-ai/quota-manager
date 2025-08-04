@@ -48,13 +48,17 @@ func createExpiredTestQuota(ctx *TestContext, userID string, amount float64) (*m
 
 // 创建未过期的测试配额数据
 func createValidTestQuota(ctx *TestContext, userID string, amount float64) (*models.Quota, error) {
-	expiryTime := time.Now().AddDate(0, 1, 0) // 一个月后过期
+	// 使用秒级精度创建时间，避免数据库存储时的纳秒精度问题
+	rawTime := time.Now().AddDate(0, 1, 0)
+	expiryTime := time.Date(rawTime.Year(), rawTime.Month(), rawTime.Day(), rawTime.Hour(), rawTime.Minute(), rawTime.Second(), 0, rawTime.Location())
 	return createTestQuota(ctx, userID, amount, models.StatusValid, expiryTime)
 }
 
 // 创建指定过期时间的测试配额数据
 func createTestQuotaWithExpiry(ctx *TestContext, userID string, amount float64, expiryTime time.Time) (*models.Quota, error) {
-	return createTestQuota(ctx, userID, amount, models.StatusValid, expiryTime)
+	// 使用秒级精度创建时间，避免数据库存储时的纳秒精度问题
+	normalizedTime := time.Date(expiryTime.Year(), expiryTime.Month(), expiryTime.Day(), expiryTime.Hour(), expiryTime.Minute(), expiryTime.Second(), 0, expiryTime.Location())
+	return createTestQuota(ctx, userID, amount, models.StatusValid, normalizedTime)
 }
 
 // 创建测试配额数据（通用函数）
@@ -168,8 +172,11 @@ func verifyUserQuotaRecordsIntegrity(ctx *TestContext, userID string, expectedRe
 		if math.Abs(quota.Amount-expected.Amount) > 0.0001 {
 			return fmt.Errorf("quota record %d: expected amount %f, got %f", i, expected.Amount, quota.Amount)
 		}
+
+		// 使用秒级精度比较时间，避免数据库存储时纳秒精度截断导致的问题
 		if quota.ExpiryDate.Unix() != expected.ExpiryDate.Unix() {
-			return fmt.Errorf("quota record %d: expected expiry time %v, got %v", i, expected.ExpiryDate, quota.ExpiryDate)
+			return fmt.Errorf("quota record %d: expiry time mismatch (Unix timestamp): expected %d (%v), got %d (%v)",
+				i, expected.ExpiryDate.Unix(), expected.ExpiryDate, quota.ExpiryDate.Unix(), quota.ExpiryDate)
 		}
 	}
 	return nil

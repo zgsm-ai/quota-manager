@@ -4,6 +4,22 @@ import (
 	"sync"
 )
 
+// globalConfigManager holds the global configuration manager instance
+var globalConfigManager *Manager
+
+// SetGlobalConfig sets the global configuration manager instance
+func SetGlobalConfig(manager *Manager) {
+	globalConfigManager = manager
+}
+
+// GetGlobalConfig gets the global configuration manager instance
+func GetGlobalConfig() *Config {
+	if globalConfigManager == nil {
+		return nil
+	}
+	return globalConfigManager.GetDirect()
+}
+
 // Manager configuration manager, used to manage configuration access and updates
 type Manager struct {
 	config *Config

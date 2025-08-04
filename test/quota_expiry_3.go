@@ -2,14 +2,8 @@ package main
 
 import (
 	"fmt"
-	"net/http"
-	"net/url"
-	"strconv"
 	"time"
-)
 
-import (
-	"quota-manager/internal/config"
 	"quota-manager/internal/models"
 )
 
@@ -37,49 +31,8 @@ func testExpireQuotasTaskAiGatewayFail(ctx *TestContext) TestResult {
 	ctx.MockQuotaStore.SetUsed(user.ID, 40.0)
 
 	// Configure AiGateway client to use failure server (simulate network failure or network internal error)
-	originalBaseURL := ctx.Gateway.BaseURL
-
-	// Update Gateway client to use fail server
-	ctx.Gateway.BaseURL = ctx.FailServer.URL
-
-	// Update the AiGateway config in the config manager to ensure consistency
-	failURL, err := url.Parse(ctx.FailServer.URL)
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to parse fail server URL: %v", err)}
-	}
-
-	failHost := failURL.Hostname()
-	failPort := failURL.Port()
-	if failPort == "" {
-		failPort = "80"
-	}
-
-	failPortInt := 80
-	if port, err := strconv.Atoi(failPort); err == nil {
-		failPortInt = port
-	}
-
-	// Update the AiGateway config in the config manager
-	configManager := ctx.QuotaService.GetConfigManager()
-	if configManager != nil {
-		configManager.Update(func(cfg *config.Config) {
-			cfg.AiGateway.Host = failHost
-			cfg.AiGateway.Port = failPortInt
-		})
-	}
-
-	// Create a new HTTP client to ensure the new BaseURL is used
-	ctx.Gateway.HTTPClient = &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			DisableKeepAlives: true,
-		},
-	}
-
-	// Restore original BaseURL after test completes
-	defer func() {
-		ctx.Gateway.BaseURL = originalBaseURL
-	}()
+	restoreFunc := ctx.UseFailServer()
+	defer restoreFunc()
 
 	// Execute expireQuotasTask function
 	if err := executeExpireQuotasTask(ctx); err == nil {

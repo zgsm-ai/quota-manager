@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"quota-manager/internal/config"
+	"quota-manager/internal/utils"
 )
 
 // AuthUser struct for parsing user info from JWT
@@ -392,7 +395,16 @@ func (q *Quota) IsValid() bool {
 
 // IsExpired checks if quota is expired
 func (q *Quota) IsExpired() bool {
-	return time.Now().Truncate(time.Second).After(q.ExpiryDate.Truncate(time.Second))
+	// For model methods, we need to get config from the global config manager
+	// This is a temporary solution - ideally we should pass config as parameter
+	cfg := config.GetGlobalConfig()
+	if cfg == nil {
+		// Fallback to system timezone if config is not available
+		return time.Now().Truncate(time.Second).After(q.ExpiryDate.Truncate(time.Second))
+	}
+
+	now := utils.NowInConfigTimezone(cfg).Truncate(time.Second)
+	return now.After(q.ExpiryDate.Truncate(time.Second))
 }
 
 // Expire sets quota status to expired

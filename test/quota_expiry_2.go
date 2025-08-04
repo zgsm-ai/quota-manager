@@ -284,3 +284,69 @@ func testExpireQuotasTaskEmpty(ctx *TestContext) TestResult {
 		EndTime:   time.Now(),
 	}
 }
+
+// Quota Expiry Test - Just Expired 1 Minute Ago
+func testExpireQuotasTaskJustExpired(ctx *TestContext) TestResult {
+	startTime := time.Now()
+
+	// Clean up previous test data
+	cleanupMockQuotaStore(ctx)
+
+	// Create test user
+	user := createTestUser("test_user_just_expired", "Test User Just Expired", 0)
+	if err := ctx.DB.AuthDB.Create(user).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create user failed: %v", err)}
+	}
+
+	// Create quota record that expired just 1 minute ago (status: VALID, expiry time: current time - 1 minute, amount: 100.0)
+	expiryTime := time.Now().Add(-1 * time.Minute)
+	quota, err := createTestQuotaWithExpiry(ctx, user.ID, 100.0, expiryTime)
+	if err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Create just expired quota failed: %v", err)}
+	}
+
+	// Set AiGateway Mock initial state: total quota 100.0, used quota 30.0
+	ctx.MockQuotaStore.SetQuota(user.ID, 100.0)
+	ctx.MockQuotaStore.SetUsed(user.ID, 30.0)
+
+	// Execute expireQuotasTask function
+	if err := executeExpireQuotasTask(ctx); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Execute expireQuotasTask failed: %v", err)}
+	}
+
+	// Comprehensive verification conditions
+	expectedData := QuotaExpiryExpectation{
+		ValidQuotaCount:          0,
+		ExpiredQuotaCount:        1,
+		ValidQuotaAmount:         0.0,
+		ExpiredQuotaAmount:       100.0,
+		MockQuotaStoreTotalQuota: 0.0,
+		MockQuotaStoreUsedQuota:  0.0,
+		ExpectedDeltaCalls:       []MockQuotaStoreDeltaCall{{EmployeeNumber: user.ID, Delta: -100.0}},
+		ExpectedUsedDeltaCalls:   []MockQuotaStoreUsedDeltaCall{{EmployeeNumber: user.ID, Delta: -30.0}},
+		ExpectedAuditAmount:      -100.0,
+		AllowedAuditOperations:   []string{"EXPIRE"},
+		ExpectedQuotaRecords: []QuotaRecordExpectation{
+			{Amount: 100.0, ExpiryDate: quota.ExpiryDate, Status: models.StatusExpired},
+		},
+	}
+
+	if err := verifyQuotaExpiryDataConsistency(ctx, user.ID, expectedData); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Data consistency verification failed: %v", err)}
+	}
+
+	// Verify quota status changed from VALID to EXPIRED
+	if err := verifyQuotaStatus(ctx, fmt.Sprintf("%d", quota.ID), models.StatusExpired); err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Quota status verification failed: %v", err)}
+	}
+
+	duration := time.Since(startTime)
+	return TestResult{
+		Passed:    true,
+		Message:   "Just Expired Quota (1 Minute Ago) Test Succeeded",
+		Duration:  duration,
+		TestName:  "testExpireQuotasTaskJustExpired",
+		StartTime: startTime,
+		EndTime:   time.Now(),
+	}
+}

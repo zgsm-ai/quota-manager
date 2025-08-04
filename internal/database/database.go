@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"quota-manager/internal/config"
+	"quota-manager/internal/utils"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -16,19 +17,28 @@ type DB struct {
 }
 
 func NewDB(cfg *config.Config) (*DB, error) {
+	// Get configured timezone
+	tz := utils.GetTimezone(cfg)
+
 	// Connect to main database (quota_manager)
-	mainDSN := cfg.Database.DSN()
+	mainDSN := cfg.Database.DSN() + " TimeZone=" + tz.String()
 	mainDB, err := gorm.Open(postgres.Open(mainDSN), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
+		NowFunc: func() time.Time {
+			return time.Now().In(tz)
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect main database: %w", err)
 	}
 
 	// Connect to auth database (auth) - read-only access
-	authDSN := cfg.AuthDatabase.DSN()
+	authDSN := cfg.AuthDatabase.DSN() + " TimeZone=" + tz.String()
 	authDB, err := gorm.Open(postgres.Open(authDSN), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
+		NowFunc: func() time.Time {
+			return time.Now().In(tz)
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect auth database: %w", err)

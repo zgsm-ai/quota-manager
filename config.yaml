@@ -25,7 +25,9 @@ server:
   port: 8099
   mode: "release"
   token_header: "authorization"
-  timezone: "Asia/Shanghai"  # Beijing Time (UTC+8)
+
+# Timezone configuration for the entire system
+timezone: "Asia/Shanghai"  # Beijing Time (UTC+8)
 
 scheduler:
   scan_interval: "0 0 * * * *" # Scan every hour (6 fields: second minute hour day month weekday)

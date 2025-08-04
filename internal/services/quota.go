@@ -8,6 +8,7 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
+	"quota-manager/internal/utils"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
 	"strconv"
@@ -538,7 +539,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 
 	// Process quota transfer
 	for i, quotaItem := range voucherData.QuotaList {
-		isExpired := time.Now().Truncate(time.Second).After(quotaItem.ExpiryDate.Truncate(time.Second))
+		isExpired := utils.NowInConfigTimezone(s.configManager.GetDirect()).Truncate(time.Second).After(quotaItem.ExpiryDate.Truncate(time.Second))
 
 		quotaResult := TransferQuotaResult{
 			Amount:     quotaItem.Amount,
@@ -737,7 +738,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 // AddQuotaForStrategy adds quota for strategy execution
 func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strategyID int, strategyName string) error {
 	// Calculate expiry date (end of this/next month)
-	now := time.Now().Truncate(time.Second)
+	now := utils.NowInConfigTimezone(s.configManager.GetDirect()).Truncate(time.Second)
 	var expiryDate time.Time
 
 	// Always set to end of current month
@@ -834,7 +835,7 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strate
 
 // ExpireQuotas expires quotas and synchronizes with AiGateway
 func (s *QuotaService) ExpireQuotas() error {
-	now := time.Now().Truncate(time.Second)
+	now := utils.NowInConfigTimezone(s.configManager.GetDirect()).Truncate(time.Second)
 
 	// Find expired but still valid quotas
 	var expiredQuotas []models.Quota
@@ -919,11 +920,11 @@ func (s *QuotaService) ExpireQuotas() error {
 
 		// Create audit record for quota expiry
 		auditRecord := &models.QuotaAudit{
-			UserID:      userID,
-			Amount:      -expiredAmount, // Negative amount for expiry
-			Operation:   "EXPIRE",
-			ExpiryDate:  now, // Use current time as expiry time
-			CreateTime:  now,
+			UserID:     userID,
+			Amount:     -expiredAmount, // Negative amount for expiry
+			Operation:  "EXPIRE",
+			ExpiryDate: now, // Use current time as expiry time
+			CreateTime: utils.NowInConfigTimezone(s.configManager.GetDirect()),
 		}
 		if err := tx.Create(auditRecord).Error; err != nil {
 			tx.Rollback()

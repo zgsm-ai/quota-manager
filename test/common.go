@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -281,6 +282,60 @@ func createTestUser(id, name string, vip int) *models.UserInfo {
 		EmployeeNumber:   fmt.Sprintf("EMP%s", id),
 		GithubStar:       "zgsm-ai.zgsm,openai.gpt-4",
 		Devices:          "{}",
+	}
+}
+
+// UseFailServer 切换到 failure server 并返回恢复函数
+// 使用方法：
+// restoreFunc := ctx.UseFailServer()
+// defer restoreFunc()
+func (ctx *TestContext) UseFailServer() (restoreFunc func()) {
+	// 保存原始状态
+	originalBaseURL := ctx.Gateway.BaseURL
+	originalConfig := ctx.QuotaService.GetConfigManager().Get()
+
+	// 切换到 failure server
+	ctx.Gateway.BaseURL = ctx.FailServer.URL
+
+	// 自动解析和更新配置
+	failURL, err := url.Parse(ctx.FailServer.URL)
+	if err != nil {
+		// 如果解析失败，直接返回空恢复函数
+		return func() {}
+	}
+
+	failHost := failURL.Hostname()
+	failPort := failURL.Port()
+	if failPort == "" {
+		failPort = "80"
+	}
+
+	failPortInt := 80
+	if port, err := strconv.Atoi(failPort); err == nil {
+		failPortInt = port
+	}
+
+	// 更新配置
+	ctx.QuotaService.GetConfigManager().Update(func(cfg *config.Config) {
+		cfg.AiGateway.Host = failHost
+		cfg.AiGateway.Port = failPortInt
+	})
+
+	// 创建新的 HTTP 客户端
+	ctx.Gateway.HTTPClient = &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
+	}
+
+	// 返回恢复函数
+	return func() {
+		ctx.Gateway.BaseURL = originalBaseURL
+		ctx.QuotaService.GetConfigManager().Update(func(cfg *config.Config) {
+			cfg.AiGateway.Host = originalConfig.AiGateway.Host
+			cfg.AiGateway.Port = originalConfig.AiGateway.Port
+		})
 	}
 }
 

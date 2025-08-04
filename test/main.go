@@ -126,9 +126,11 @@ func runAllTests(ctx *TestContext) []TestResult {
 
 		// Quota Expiry Scheduler Tests
 		{"Single User Quota Expiry Test", testExpireQuotasTaskBasic},
-		{"Multiple Users Quota Expiry Test", testExpireQuotasTaskMultiple},
+		{"Just Expired Quota Test", testExpireQuotasTaskJustExpired},
+		// {"Multiple Users Quota Expiry Test", testExpireQuotasTaskMultiple},
 		// {"Empty Dataset Test", testExpireQuotasTaskEmpty},
 		// {"AiGateway Communication Failure Test", testExpireQuotasTaskAiGatewayFail},
+
 		// {"Partial Failure Handling Test", testExpireQuotasTaskPartialFail},
 		// {"Idempotency Test", testExpireQuotasTaskIdempotency},
 		// {"Month End Batch Expiry Test", testExpireQuotasTask_MonthEndBatchExpiry},

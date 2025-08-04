@@ -16,6 +16,7 @@ type Config struct {
 	Log             LogConfig             `mapstructure:"log"`
 	EmployeeSync    EmployeeSyncConfig    `mapstructure:"employee_sync"`
 	GithubStarCheck GithubStarCheckConfig `mapstructure:"github_star_check"`
+	Timezone        string                `mapstructure:"timezone"`
 }
 
 type DatabaseConfig struct {
@@ -39,7 +40,6 @@ type ServerConfig struct {
 	Port        int    `mapstructure:"port"`
 	Mode        string `mapstructure:"mode"`
 	TokenHeader string `mapstructure:"token_header"`
-	Timezone    string `mapstructure:"timezone"`
 }
 
 type SchedulerConfig struct {

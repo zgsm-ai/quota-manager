@@ -2,6 +2,7 @@ package services
 
 import (
 	"quota-manager/internal/config"
+	"quota-manager/internal/utils"
 	"quota-manager/pkg/logger"
 
 	"github.com/robfig/cron/v3"
@@ -19,12 +20,15 @@ type SchedulerService struct {
 
 // NewSchedulerService creates a new scheduler service
 func NewSchedulerService(quotaService *QuotaService, strategyService *StrategyService, employeeSyncService *EmployeeSyncService, cfg *config.Config) *SchedulerService {
+	// Get configured timezone
+	tz := utils.GetTimezone(cfg)
+
 	return &SchedulerService{
 		quotaService:        quotaService,
 		strategyService:     strategyService,
 		employeeSyncService: employeeSyncService,
 		config:              cfg,
-		cron:                cron.New(cron.WithSeconds()),
+		cron:                cron.New(cron.WithSeconds(), cron.WithLocation(tz)),
 	}
 }
 
@@ -71,6 +75,7 @@ func (s *SchedulerService) Start() error {
 	}
 
 	// Add quota expiry task - run at 00:01 on the first day of every month (6 fields with seconds)
+	// Cron expression: second minute hour day month weekday
 	_, err = s.cron.AddFunc("0 1 0 1 * *", s.expireQuotasTask)
 	if err != nil {
 		logger.Error("Failed to add quota expiry task", zap.Error(err))

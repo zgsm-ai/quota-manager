@@ -90,8 +90,11 @@ func main() {
 	// Create config manager
 	configManager := config.NewManager(cfg)
 
+	// Set global config manager for model layer access
+	config.SetGlobalConfig(configManager)
+
 	// Set timezone from configuration
-	setTimezone(cfg.Server.Timezone)
+	setTimezone(cfg.Timezone)
 
 	// Initialize logging with configured level
 	logLevel := cfg.Log.Level
