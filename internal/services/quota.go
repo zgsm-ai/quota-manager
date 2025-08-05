@@ -1,17 +1,13 @@
 package services
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
 	"quota-manager/internal/utils"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
-	"strconv"
 	"strings"
 	"time"
 
@@ -24,11 +20,8 @@ type QuotaService struct {
 	db              *database.DB
 	aiGatewayConf   *config.AiGatewayConfig
 	configManager   *config.Manager
-	aiGatewayClient interface {
-		QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
-		SetGithubStarProjects(employeeNumber string, starredProjects string) error
-	}
-	voucherSvc *VoucherService
+	aiGatewayClient *aigateway.Client
+	voucherSvc      *VoucherService
 }
 
 // GetConfigManager returns the config manager
@@ -37,10 +30,7 @@ func (s *QuotaService) GetConfigManager() *config.Manager {
 }
 
 // NewQuotaService creates a new quota service
-func NewQuotaService(db *database.DB, configManager *config.Manager, aiGatewayClient interface {
-	QueryGithubStarProjects(employeeNumber string) (*aigateway.StarProjectsResponse, error)
-	SetGithubStarProjects(employeeNumber string, starredProjects string) error
-}, voucherSvc *VoucherService) *QuotaService {
+func NewQuotaService(db *database.DB, configManager *config.Manager, aiGatewayClient *aigateway.Client, voucherSvc *VoucherService) *QuotaService {
 	return &QuotaService{
 		db:              db,
 		aiGatewayConf:   &configManager.GetDirect().AiGateway,
@@ -146,13 +136,13 @@ type TransferQuotaResult struct {
 // GetUserQuota retrieves user quota information
 func (s *QuotaService) GetUserQuota(userID string) (*QuotaInfo, error) {
 	// Get total quota from AiGateway
-	totalQuota, err := s.getQuotaFromAiGateway(userID)
+	totalQuota, err := s.aiGatewayClient.QueryQuotaValue(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total quota: %w", err)
 	}
 
 	// Get used quota from AiGateway
-	usedQuota, err := s.getUsedQuotaFromAiGateway(userID)
+	usedQuota, err := s.aiGatewayClient.QueryUsedQuotaValue(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get used quota: %w", err)
 	}
@@ -280,7 +270,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 	}
 
 	// Get used quota from AiGateway to check availability
-	usedQuota, err := s.getUsedQuotaFromAiGateway(giver.ID)
+	usedQuota, err := s.aiGatewayClient.QueryUsedQuotaValue(giver.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get used quota: %w", err)
 	}
@@ -460,7 +450,7 @@ func (s *QuotaService) TransferOut(giver *models.AuthUser, req *TransferOutReque
 	}
 
 	// Update AiGateway quota
-	if err := s.deltaQuotaInAiGateway(giver.ID, -totalAmount); err != nil {
+	if err := s.aiGatewayClient.DeltaQuota(giver.ID, -totalAmount); err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to update AiGateway quota: %w", err)
 	}
@@ -672,7 +662,7 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 
 	// Update AiGateway quota only for valid quota
 	if totalAmount > 0 {
-		if err := s.deltaQuotaInAiGateway(receiver.ID, totalAmount); err != nil {
+		if err := s.aiGatewayClient.DeltaQuota(receiver.ID, totalAmount); err != nil {
 			tx.Rollback()
 			return &TransferInResponse{
 				Status:  TransferStatusFailed,
@@ -824,7 +814,7 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strate
 	}
 
 	// Update AiGateway quota
-	if err := s.deltaQuotaInAiGateway(userID, amount); err != nil {
+	if err := s.aiGatewayClient.DeltaQuota(userID, amount); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to update AiGateway quota: %w", err)
 	}
@@ -881,13 +871,13 @@ func (s *QuotaService) ExpireQuotas() error {
 		}
 
 		// Get current quota info from AiGateway
-		totalQuota, err := s.getQuotaFromAiGateway(userID)
+		totalQuota, err := s.aiGatewayClient.QueryQuotaValue(userID)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to get total quota from AiGateway for user %s: %w", userID, err)
 		}
 
-		usedQuota, err := s.getUsedQuotaFromAiGateway(userID)
+		usedQuota, err := s.aiGatewayClient.QueryUsedQuotaValue(userID)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to get used quota from AiGateway for user %s: %w", userID, err)
@@ -896,7 +886,7 @@ func (s *QuotaService) ExpireQuotas() error {
 		remainingQuota := totalQuota - usedQuota
 
 		// Reset used quota first
-		if err := s.deltaUsedQuotaInAiGateway(userID, -usedQuota); err != nil {
+		if err := s.aiGatewayClient.DeltaUsedQuota(userID, -usedQuota); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to reset used quota for user %s: %w", userID, err)
 		}
@@ -912,7 +902,7 @@ func (s *QuotaService) ExpireQuotas() error {
 
 		deltaQuota := newTotalQuota - totalQuota
 		if deltaQuota != 0 {
-			if err := s.deltaQuotaInAiGateway(userID, deltaQuota); err != nil {
+			if err := s.aiGatewayClient.DeltaQuota(userID, deltaQuota); err != nil {
 				tx.Rollback()
 				return fmt.Errorf("failed to adjust total quota for user %s: %w", userID, err)
 			}
@@ -993,183 +983,6 @@ func (s *QuotaService) MergeQuotaRecords() error {
 
 	tx.Commit()
 	return nil
-}
-
-// Helper methods for AiGateway communication
-
-func (s *QuotaService) getQuotaFromAiGateway(userID string) (float64, error) {
-	url := fmt.Sprintf("%s%s?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set admin key header if configured
-	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
-		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get total quota: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Success bool   `json:"success"`
-		Data    struct {
-			UserID string  `json:"user_id"`
-			Quota  float64 `json:"quota"`
-			Type   string  `json:"type"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if !result.Success {
-		return 0, fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
-	}
-
-	return result.Data.Quota, nil
-}
-
-func (s *QuotaService) getUsedQuotaFromAiGateway(userID string) (float64, error) {
-	url := fmt.Sprintf("%s%s/used?user_id=%s", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath, userID)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set admin key header if configured
-	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
-		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get used quota: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Success bool   `json:"success"`
-		Data    struct {
-			UserID string  `json:"user_id"`
-			Quota  float64 `json:"quota"`
-			Type   string  `json:"type"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if !result.Success {
-		return 0, fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
-	}
-
-	return result.Data.Quota, nil
-}
-
-func (s *QuotaService) deltaQuotaInAiGateway(userID string, delta float64) error {
-	reqURL := fmt.Sprintf("%s%s/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
-
-	data := url.Values{}
-	data.Set("user_id", userID)
-	data.Set("value", strconv.FormatFloat(delta, 'f', -1, 64))
-
-	req, err := http.NewRequest("POST", reqURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set admin key header if configured
-	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
-		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to delta quota: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Success bool   `json:"success"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if !result.Success {
-		return fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
-	}
-
-	return nil
-}
-
-func (s *QuotaService) deltaUsedQuotaInAiGateway(userID string, delta float64) error {
-	reqURL := fmt.Sprintf("%s%s/used/delta", s.aiGatewayConf.GetBaseURL(), s.aiGatewayConf.AdminPath)
-
-	data := url.Values{}
-	data.Set("user_id", userID)
-	data.Set("value", strconv.FormatFloat(delta, 'f', -1, 64))
-
-	req, err := http.NewRequest("POST", reqURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set admin key header if configured
-	if s.aiGatewayConf.AuthHeader != "" && s.aiGatewayConf.AuthValue != "" {
-		req.Header.Set(s.aiGatewayConf.AuthHeader, s.aiGatewayConf.AuthValue)
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to delta used quota: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Success bool   `json:"success"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if !result.Success {
-		return fmt.Errorf("AI Gateway error: %s - %s", result.Code, result.Message)
-	}
-
-	return nil
-}
-
-// DeltaUsedQuotaInAiGateway is a public wrapper for deltaUsedQuotaInAiGateway
-func (s *QuotaService) DeltaUsedQuotaInAiGateway(userID string, delta float64) error {
-	return s.deltaUsedQuotaInAiGateway(userID, delta)
 }
 
 // GetUserQuotaAuditRecords gets quota audit records for a specific user (admin function)

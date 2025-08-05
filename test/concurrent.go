@@ -37,7 +37,7 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 	go func() {
 		<-startChan
 		for i := 0; i < 5; i++ {
-			ctx.QuotaService.DeltaUsedQuotaInAiGateway(user1.ID, 10)
+			ctx.Gateway.DeltaUsedQuota(user1.ID, 10)
 		}
 		resultChan <- nil
 	}()

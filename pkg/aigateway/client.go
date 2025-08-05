@@ -569,3 +569,117 @@ func (c *Client) setUserQuotaCheckPermissionImpl(employeeNumber string, enabled 
 
 	return nil
 }
+
+// QueryUsedQuotaValue queries user used quota value with retry mechanism
+// Returns only the used quota value as a float64
+func (c *Client) QueryUsedQuotaValue(userID string) (float64, error) {
+	return utils.WithRetry(context.Background(), func() (float64, error) {
+		return c.queryUsedQuotaValueImpl(userID)
+	})
+}
+
+// queryUsedQuotaValueImpl implements the actual QueryUsedQuotaValue logic
+func (c *Client) queryUsedQuotaValueImpl(userID string) (float64, error) {
+	apiUrl := fmt.Sprintf("%s%s/used?user_id=%s", c.BaseURL, c.AdminPath, userID)
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set admin key header if configured
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if !respData.Success {
+		return 0, &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("AI Gateway error: %s - %s", respData.Code, respData.Message),
+		}
+	}
+
+	// Parse the data field
+	dataMap, ok := respData.Data.(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("invalid response data format")
+	}
+
+	quota, ok := dataMap["quota"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("invalid quota format in response")
+	}
+
+	return quota, nil
+}
+
+// DeltaUsedQuota increases or decreases user used quota with retry mechanism
+func (c *Client) DeltaUsedQuota(userID string, value float64) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.deltaUsedQuotaImpl(userID, value)
+	})
+	return err
+}
+
+// deltaUsedQuotaImpl implements the actual DeltaUsedQuota logic
+func (c *Client) deltaUsedQuotaImpl(userID string, value float64) error {
+	apiUrl := fmt.Sprintf("%s%s/used/delta", c.BaseURL, c.AdminPath)
+
+	data := url.Values{}
+	data.Set("user_id", userID)
+	data.Set("value", strconv.FormatFloat(value, 'f', -1, 64))
+
+	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set admin key header if configured
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Parse the response to check for success
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if !respData.Success {
+		return &utils.HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("AI Gateway error: %s - %s", respData.Code, respData.Message),
+		}
+	}
+
+	return nil
+}

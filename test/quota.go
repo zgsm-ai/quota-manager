@@ -224,8 +224,8 @@ func testMultipleOperationsAccuracy(ctx *TestContext) TestResult {
 	}
 
 	// 4. Consume some quota for user1 and user2
-	ctx.QuotaService.DeltaUsedQuotaInAiGateway(user1.ID, 20)
-	ctx.QuotaService.DeltaUsedQuotaInAiGateway(user2.ID, 10)
+	ctx.Gateway.DeltaUsedQuota(user1.ID, 20)
+	ctx.Gateway.DeltaUsedQuota(user2.ID, 10)
 
 	// 5. Add more quota via strategy for user1
 	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 50, 0, "additional-strategy"); err != nil {
@@ -344,7 +344,7 @@ func testUserQuotaConsumptionOrder(ctx *TestContext) TestResult {
 
 	// Consume 150 quota (should consume from earliest expiring quotas first)
 	// This should consume: 100 from early + 50 from mid, leaving 50 from mid + 100 from late
-	ctx.QuotaService.DeltaUsedQuotaInAiGateway(user.ID, 150)
+	ctx.Gateway.DeltaUsedQuota(user.ID, 150)
 
 	// Get user quota to verify consumption order
 	quotaInfo, err := ctx.QuotaService.GetUserQuota(user.ID)

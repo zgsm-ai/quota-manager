@@ -174,7 +174,7 @@ func testTransferOutInsufficientAvailable(ctx *TestContext) TestResult {
 
 	// Consume 120 quota (should consume all 100 from early + 20 from late)
 	// This leaves 80 available in late-expiry quota
-	ctx.QuotaService.DeltaUsedQuotaInAiGateway(user1.ID, 120)
+	ctx.Gateway.DeltaUsedQuota(user1.ID, 120)
 
 	// Try to transfer 90 quota with early expiry date (should fail - only has 0 available with early expiry)
 	transferOutReq := &services.TransferOutRequest{
