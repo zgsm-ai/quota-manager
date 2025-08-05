@@ -1112,6 +1112,75 @@ func (s *QuotaService) recordUserMonthlyUsedQuota(userID string, yearMonth strin
 	return nil
 }
 
+// SyncQuotasWithAiGateway synchronizes all users' quotas with AiGateway
+func (s *QuotaService) SyncQuotasWithAiGateway() error {
+	logger.Info("Starting quota sync task")
+
+	// Step 1: Get all users with valid quotas from quota table
+	userIDs, err := s.GetUsersWithValidQuota()
+	if err != nil {
+		return fmt.Errorf("failed to get users with valid quota: %w", err)
+	}
+
+	logger.Info("Found users with valid quota", zap.Int("user_count", len(userIDs)))
+
+	// Step 2: Process each user
+	for _, userID := range userIDs {
+		if err := s.syncUserQuotaWithAiGateway(userID); err != nil {
+			logger.Error("Failed to sync user quota",
+				zap.String("user_id", userID),
+				zap.Error(err))
+			// Continue processing other users, don't interrupt the entire flow
+			continue
+		}
+	}
+
+	logger.Info("Quota sync task completed")
+	return nil
+}
+
+// syncUserQuotaWithAiGateway synchronizes a single user's quota with AiGateway
+func (s *QuotaService) syncUserQuotaWithAiGateway(userID string) error {
+	// Step 2.1: Get total quota from AiGateway
+	aigatewayTotalQuota, err := s.aiGatewayClient.QueryQuotaValue(userID)
+	if err != nil {
+		return fmt.Errorf("failed to get quota from AiGateway: %w", err)
+	}
+
+	// Step 2.2: Get total valid quota from quota table
+	var totalValidQuota float64
+	if err := s.db.DB.Model(&models.Quota{}).
+		Where("user_id = ? AND status = ?", userID, models.StatusValid).
+		Select("COALESCE(SUM(amount), 0)").
+		Scan(&totalValidQuota).Error; err != nil {
+		return fmt.Errorf("failed to calculate user valid quota: %w", err)
+	}
+
+	// Step 2.3: If a != b, set the user's quota to b using AiGateway refresh interface
+	if aigatewayTotalQuota != totalValidQuota {
+		logger.Warn("Detected quota inconsistency, will sync",
+			zap.String("user_id", userID),
+			zap.Float64("aigateway_quota", aigatewayTotalQuota),
+			zap.Float64("database_quota", totalValidQuota))
+
+		// Use RefreshQuota for full quota setting
+		if err := s.aiGatewayClient.RefreshQuota(userID, totalValidQuota); err != nil {
+			return fmt.Errorf("failed to refresh AiGateway quota: %w", err)
+		}
+
+		logger.Info("Quota sync completed",
+			zap.String("user_id", userID),
+			zap.Float64("original_quota", aigatewayTotalQuota),
+			zap.Float64("new_quota", totalValidQuota))
+	} else {
+		logger.Info("Quota is consistent, no sync needed",
+			zap.String("user_id", userID),
+			zap.Float64("quota_value", aigatewayTotalQuota))
+	}
+
+	return nil
+}
+
 // recordMonthlyUsedQuota records monthly used quota for all users
 func (s *QuotaService) recordMonthlyUsedQuota(now time.Time) error {
 	logger.Info("Starting to record monthly used quota")

@@ -53,7 +53,7 @@ func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
 }
 
 // RefreshQuota refreshes user quota with retry mechanism
-func (c *Client) RefreshQuota(userID string, quota int) error {
+func (c *Client) RefreshQuota(userID string, quota float64) error {
 	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
 		return struct{}{}, c.refreshQuotaImpl(userID, quota)
 	})
@@ -61,12 +61,12 @@ func (c *Client) RefreshQuota(userID string, quota int) error {
 }
 
 // refreshQuotaImpl implements the actual RefreshQuota logic
-func (c *Client) refreshQuotaImpl(userID string, quota int) error {
+func (c *Client) refreshQuotaImpl(userID string, quota float64) error {
 	apiUrl := fmt.Sprintf("%s%s/refresh", c.BaseURL, c.AdminPath)
 
 	data := url.Values{}
 	data.Set("user_id", userID)
-	data.Set("quota", strconv.Itoa(quota))
+	data.Set("quota", strconv.FormatFloat(quota, 'f', -1, 64))
 
 	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
 	if err != nil {

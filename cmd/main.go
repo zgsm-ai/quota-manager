@@ -159,7 +159,7 @@ func main() {
 	starCheckPermissionHandler := handlers.NewStarCheckPermissionHandler(starCheckPermissionService)
 	quotaCheckPermissionHandler := handlers.NewQuotaCheckPermissionHandler(quotaCheckPermissionService)
 	unifiedPermissionHandler := handlers.NewUnifiedPermissionHandler(unifiedPermissionService)
-	scanHandler := handlers.NewScanHandler(strategyService, unifiedPermissionService, schedulerService)
+	scanHandler := handlers.NewScanHandler(strategyService, unifiedPermissionService, schedulerService, quotaService)
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)
