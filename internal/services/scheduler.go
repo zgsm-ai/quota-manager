@@ -74,9 +74,9 @@ func (s *SchedulerService) Start() error {
 		return err
 	}
 
-	// Add quota expiry task - run at 00:01 on the first day of every month (6 fields with seconds)
+	// Add quota expiry task - run at 00:00 on the first day of every month (6 fields with seconds)
 	// Cron expression: second minute hour day month weekday
-	_, err = s.cron.AddFunc("0 1 0 1 * *", s.expireQuotasTask)
+	_, err = s.cron.AddFunc("0 0 0 1 * *", s.expireQuotasTask)
 	if err != nil {
 		logger.Error("Failed to add quota expiry task", zap.Error(err))
 		return err

@@ -87,6 +87,29 @@ func testExpireQuotasTask_ExpiredQuotaGreaterThanUsedQuota(ctx *TestContext) Tes
 		}
 	}
 
+	// 验证月度配额使用记录
+	lastMonth := time.Now().AddDate(0, -1, 0)
+	yearMonth := lastMonth.Format("2006-01")
+
+	// 定义期望的月度配额使用记录
+	expectedMonthlyQuotaUsage := []MonthlyQuotaUsageExpectation{
+		{
+			UserID:            user.ID,
+			YearMonth:         yearMonth,
+			ExpectedUsedQuota: 120.0, // 从 Mock AiGateway 获取的已使用配额值
+		},
+	}
+
+	// 验证月度配额使用记录是否正确创建
+	if err := verifyMonthlyQuotaUsageRecords(ctx, expectedMonthlyQuotaUsage); err != nil {
+		return TestResult{
+			Passed:   false,
+			Message:  fmt.Sprintf("Monthly quota usage verification failed: %v", err),
+			Duration: time.Since(startTime),
+			TestName: "Mixed Status Quotas Test",
+		}
+	}
+
 	// 步骤8：验证配额过期后的数据一致性
 	// 定义期望的测试结果
 	expectedData := QuotaExpiryExpectation{

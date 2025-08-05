@@ -461,3 +461,18 @@ const (
 	StatusValid   = "VALID"
 	StatusExpired = "EXPIRED"
 )
+
+// MonthlyQuotaUsage 月度配额使用量记录表
+type MonthlyQuotaUsage struct {
+	ID         int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID     string    `gorm:"column:user_id;not null;index" json:"user_id"`
+	YearMonth  string    `gorm:"column:year_month;not null;index" json:"year_month"` // 格式: YYYY-MM
+	UsedQuota  float64   `gorm:"column:used_quota;not null" json:"used_quota"`
+	RecordTime time.Time `gorm:"column:record_time;type:timestamptz(0)" json:"record_time"`
+	CreateTime time.Time `gorm:"column:create_time;type:timestamptz(0);autoCreateTime" json:"create_time"`
+}
+
+// TableName 设置表名
+func (MonthlyQuotaUsage) TableName() string {
+	return "monthly_quota_usage"
+}

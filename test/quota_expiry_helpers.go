@@ -3,15 +3,10 @@ package main
 import (
 	"fmt"
 	"math"
-	"time"
-)
-
-import (
-	"github.com/stretchr/testify/mock"
-)
-
-import (
 	"quota-manager/internal/models"
+	"time"
+
+	"github.com/stretchr/testify/mock"
 )
 
 // 统一过期时间设置函数
@@ -504,6 +499,11 @@ func cleanupUserQuotaData(ctx *TestContext, userID string) error {
 		return err
 	}
 
+	// 删除月度配额使用记录
+	if err := ctx.DB.Where("user_id = ?", userID).Delete(&models.MonthlyQuotaUsage{}).Error; err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -548,5 +548,121 @@ func executeExpireQuotasTask(ctx *TestContext) error {
 	if err := ctx.QuotaService.ExpireQuotas(); err != nil {
 		return fmt.Errorf("expire quotas task failed: %v", err)
 	}
+	return nil
+}
+
+// 月度配额使用记录验证函数
+
+// 验证单个用户的月度配额使用记录
+func verifyMonthlyQuotaUsageRecord(ctx *TestContext, userID string, expectedYearMonth string, expectedUsedQuota float64) error {
+	var monthlyQuotaUsage models.MonthlyQuotaUsage
+	err := ctx.DB.Where("user_id = ? AND year_month = ?", userID, expectedYearMonth).First(&monthlyQuotaUsage).Error
+	if err != nil {
+		return fmt.Errorf("failed to find monthly quota usage record for user %s, year_month %s: %v", userID, expectedYearMonth, err)
+	}
+
+	// 验证已使用配额金额
+	if math.Abs(monthlyQuotaUsage.UsedQuota-expectedUsedQuota) > 0.0001 {
+		return fmt.Errorf("monthly quota usage amount mismatch for user %s: expected %f, got %f", userID, expectedUsedQuota, monthlyQuotaUsage.UsedQuota)
+	}
+
+	// 验证记录时间不为空
+	if monthlyQuotaUsage.RecordTime.IsZero() {
+		return fmt.Errorf("monthly quota usage record time is zero for user %s", userID)
+	}
+
+	// 验证创建时间不为空
+	if monthlyQuotaUsage.CreateTime.IsZero() {
+		return fmt.Errorf("monthly quota usage create time is zero for user %s", userID)
+	}
+
+	return nil
+}
+
+// 验证零配额用户被跳过（没有创建月度配额使用记录）
+func verifyZeroQuotaUserSkipped(ctx *TestContext, userID string, yearMonth string) error {
+	var count int64
+	err := ctx.DB.Model(&models.MonthlyQuotaUsage{}).
+		Where("user_id = ? AND year_month = ?", userID, yearMonth).
+		Count(&count).Error
+	if err != nil {
+		return fmt.Errorf("failed to query monthly quota usage record count for user %s: %v", userID, err)
+	}
+
+	if count > 0 {
+		return fmt.Errorf("expected no monthly quota usage record for zero quota user %s, but found %d records", userID, count)
+	}
+
+	return nil
+}
+
+// 验证多个用户的月度配额使用记录
+func verifyMonthlyQuotaUsageRecords(ctx *TestContext, expectedRecords []MonthlyQuotaUsageExpectation) error {
+	for _, expected := range expectedRecords {
+		if expected.ExpectedUsedQuota == 0 {
+			// 零配额用户，验证被跳过
+			if err := verifyZeroQuotaUserSkipped(ctx, expected.UserID, expected.YearMonth); err != nil {
+				return fmt.Errorf("zero quota user verification failed for user %s: %w", expected.UserID, err)
+			}
+		} else {
+			// 非零配额用户，验证记录存在且正确
+			if err := verifyMonthlyQuotaUsageRecord(ctx, expected.UserID, expected.YearMonth, expected.ExpectedUsedQuota); err != nil {
+				return fmt.Errorf("monthly quota usage record verification failed for user %s: %w", expected.UserID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// 扩展配额过期期望结构体，添加月度配额使用记录期望
+type MonthlyQuotaUsageExpectation struct {
+	UserID            string
+	YearMonth         string
+	ExpectedUsedQuota float64
+}
+
+// 扩展 QuotaExpiryExpectation 结构体，添加月度配额使用记录期望
+type QuotaExpiryExpectationWithMonthly struct {
+	QuotaExpiryExpectation
+	ExpectedMonthlyQuotaUsage []MonthlyQuotaUsageExpectation
+	ExpectedYearMonth         string
+}
+
+// 扩展的配额过期数据一致性验证函数，包含月度配额使用记录验证
+func verifyQuotaExpiryDataConsistencyWithMonthly(ctx *TestContext, userID string, expectedData QuotaExpiryExpectationWithMonthly) error {
+	// 1. 执行原有的配额过期数据一致性验证
+	baseExpectation := expectedData.QuotaExpiryExpectation
+	if err := verifyQuotaExpiryDataConsistency(ctx, userID, baseExpectation); err != nil {
+		return fmt.Errorf("base quota expiry data consistency verification failed: %w", err)
+	}
+
+	// 2. 验证月度配额使用记录
+	if len(expectedData.ExpectedMonthlyQuotaUsage) > 0 {
+		// 如果提供了具体的期望记录，验证这些记录
+		if err := verifyMonthlyQuotaUsageRecords(ctx, expectedData.ExpectedMonthlyQuotaUsage); err != nil {
+			return fmt.Errorf("monthly quota usage records verification failed: %w", err)
+		}
+	} else if expectedData.ExpectedYearMonth != "" {
+		// 如果没有提供具体记录，但提供了年月，验证该用户在该年月是否有记录
+		var count int64
+		err := ctx.DB.Model(&models.MonthlyQuotaUsage{}).
+			Where("user_id = ? AND year_month = ?", userID, expectedData.ExpectedYearMonth).
+			Count(&count).Error
+		if err != nil {
+			return fmt.Errorf("failed to query monthly quota usage record count: %w", err)
+		}
+
+		// 根据用户的有效配额总额判断是否应该有记录
+		if baseExpectation.ValidQuotaAmount > 0 {
+			if count == 0 {
+				return fmt.Errorf("expected monthly quota usage record for user %s with year_month %s, but found none", userID, expectedData.ExpectedYearMonth)
+			}
+		} else {
+			if count > 0 {
+				return fmt.Errorf("expected no monthly quota usage record for user %s with zero quota, but found %d records", userID, count)
+			}
+		}
+	}
+
 	return nil
 }
