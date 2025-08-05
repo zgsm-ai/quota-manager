@@ -6,10 +6,10 @@ import (
 	"quota-manager/internal/config"
 )
 
-// DefaultTimezone 默认时区
+// DefaultTimezone default timezone
 const DefaultTimezone = "Asia/Shanghai"
 
-// GetTimezone 获取配置的时区，如果配置无效则使用默认时区
+// GetTimezone gets the configured timezone, uses default timezone if configuration is invalid
 func GetTimezone(cfg *config.Config) *time.Location {
 	tz := cfg.Timezone
 	if tz == "" {
@@ -18,10 +18,10 @@ func GetTimezone(cfg *config.Config) *time.Location {
 
 	location, err := time.LoadLocation(tz)
 	if err != nil {
-		// 如果加载时区失败，使用默认时区
+		// If loading timezone fails, use default timezone
 		location, err = time.LoadLocation(DefaultTimezone)
 		if err != nil {
-			// 如果默认时区也失败，使用UTC
+			// If default timezone also fails, use UTC
 			return time.UTC
 		}
 	}
@@ -29,12 +29,12 @@ func GetTimezone(cfg *config.Config) *time.Location {
 	return location
 }
 
-// NowInConfigTimezone 获取配置时区的当前时间
+// NowInConfigTimezone gets current time in configured timezone
 func NowInConfigTimezone(cfg *config.Config) time.Time {
 	return time.Now().In(GetTimezone(cfg))
 }
 
-// NowInDefaultTimezone 获取默认时区的当前时间
+// NowInDefaultTimezone gets current time in default timezone
 func NowInDefaultTimezone() time.Time {
 	location, err := time.LoadLocation(DefaultTimezone)
 	if err != nil {
@@ -43,18 +43,18 @@ func NowInDefaultTimezone() time.Time {
 	return time.Now().In(location)
 }
 
-// ParseInConfigTimezone 在配置时区中解析时间字符串
+// ParseInConfigTimezone parses time string in configured timezone
 func ParseInConfigTimezone(cfg *config.Config, layout, value string) (time.Time, error) {
 	location := GetTimezone(cfg)
 	return time.ParseInLocation(layout, value, location)
 }
 
-// FormatInConfigTimezone 在配置时区中格式化时间
+// FormatInConfigTimezone formats time in configured timezone
 func FormatInConfigTimezone(cfg *config.Config, t time.Time, layout string) string {
 	return t.In(GetTimezone(cfg)).Format(layout)
 }
 
-// ToConfigTimezone 将时间转换到配置时区
+// ToConfigTimezone converts time to configured timezone
 func ToConfigTimezone(cfg *config.Config, t time.Time) time.Time {
 	return t.In(GetTimezone(cfg))
 }

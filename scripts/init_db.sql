@@ -263,26 +263,26 @@ CREATE TABLE IF NOT EXISTS effective_quota_check_settings (
 CREATE INDEX IF NOT EXISTS idx_effective_quota_check_settings_employee ON effective_quota_check_settings(employee_number);
 CREATE INDEX IF NOT EXISTS idx_effective_quota_check_settings_setting ON effective_quota_check_settings(setting_id);
 
--- 月度配额使用量记录表
+-- Monthly quota usage record table
 CREATE TABLE IF NOT EXISTS monthly_quota_usage (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255) NOT NULL,
-    year_month VARCHAR(7) NOT NULL,  -- 格式: YYYY-MM
+    year_month VARCHAR(7) NOT NULL,  -- Format: YYYY-MM
     used_quota DECIMAL(10,2) NOT NULL,
     record_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, year_month)
 );
 
--- 创建索引以提高查询性能
+-- Create indexes to improve query performance
 CREATE INDEX IF NOT EXISTS idx_monthly_quota_usage_user_id ON monthly_quota_usage(user_id);
 CREATE INDEX IF NOT EXISTS idx_monthly_quota_usage_year_month ON monthly_quota_usage(year_month);
 CREATE INDEX IF NOT EXISTS idx_monthly_quota_usage_user_month ON monthly_quota_usage(user_id, year_month);
 
--- 添加注释
-COMMENT ON TABLE monthly_quota_usage IS '月度配额使用量记录表';
-COMMENT ON COLUMN monthly_quota_usage.user_id IS '用户ID';
-COMMENT ON COLUMN monthly_quota_usage.year_month IS '年月标识，格式: YYYY-MM';
-COMMENT ON COLUMN monthly_quota_usage.used_quota IS '已使用配额数量';
-COMMENT ON COLUMN monthly_quota_usage.record_time IS '记录时间';
-COMMENT ON COLUMN monthly_quota_usage.create_time IS '创建时间';
+-- Add comments
+COMMENT ON TABLE monthly_quota_usage IS 'Monthly quota usage record table';
+COMMENT ON COLUMN monthly_quota_usage.user_id IS 'User ID';
+COMMENT ON COLUMN monthly_quota_usage.year_month IS 'Year and month identifier, format: YYYY-MM';
+COMMENT ON COLUMN monthly_quota_usage.used_quota IS 'Used quota amount';
+COMMENT ON COLUMN monthly_quota_usage.record_time IS 'Record time';
+COMMENT ON COLUMN monthly_quota_usage.create_time IS 'Create time';

@@ -827,15 +827,15 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strate
 func (s *QuotaService) ExpireQuotas() error {
 	now := utils.NowInConfigTimezone(s.configManager.GetDirect()).Truncate(time.Second)
 
-	// 步骤 1: 记录每月已使用配额（在 Find expired but still valid quotas 之前）
+	// Step 1: Record monthly used quota (before finding expired but still valid quotas)
 	logger.Info("Step 1: Recording monthly used quota before expiry processing")
 	if err := s.recordMonthlyUsedQuota(now); err != nil {
 		logger.Error("Failed to record monthly used quota", zap.Error(err))
-		// 注意：这里不直接返回错误，继续执行过期处理，但记录错误日志
-		// 因为月度配额记录失败不应该影响配额过期的主要功能
+		// Note: Do not return error directly here, continue with expiry processing but log the error
+		// because monthly quota recording failure should not affect the main quota expiry functionality
 	}
 
-	// 步骤 2: Find expired but still valid quotas（原有逻辑）
+	// Step 2: Find expired but still valid quotas (original logic)
 	logger.Info("Step 2: Finding expired but still valid quotas")
 	var expiredQuotas []models.Quota
 	if err := s.db.DB.Where("status = ? AND expiry_date < ?", models.StatusValid, now).Find(&expiredQuotas).Error; err != nil {
@@ -1041,11 +1041,11 @@ func (s *QuotaService) GetUserQuotaAuditRecords(userID string, page, pageSize in
 	return records, total, nil
 }
 
-// GetUsersWithValidQuota 获取存在有效配额的所有用户
+// GetUsersWithValidQuota gets all users with valid quota
 func (s *QuotaService) GetUsersWithValidQuota() ([]string, error) {
 	var userIDs []string
 
-	// 使用 DISTINCT 确保每个用户只出现一次
+	// Use DISTINCT to ensure each user appears only once
 	if err := s.db.DB.Model(&models.Quota{}).
 		Where("status = ?", models.StatusValid).
 		Distinct("user_id").
@@ -1056,9 +1056,9 @@ func (s *QuotaService) GetUsersWithValidQuota() ([]string, error) {
 	return userIDs, nil
 }
 
-// recordUserMonthlyUsedQuota 记录单个用户的月度已使用配额
+// recordUserMonthlyUsedQuota records monthly used quota for a single user
 func (s *QuotaService) recordUserMonthlyUsedQuota(userID string, yearMonth string) error {
-	// 从 aigateway 获取用户已使用配额
+	// Get user's used quota from aigateway
 	usedQuota, err := s.aiGatewayClient.QueryUsedQuotaValue(userID)
 	if err != nil {
 		logger.Warn("Failed to get used quota from aigateway",
@@ -1067,7 +1067,7 @@ func (s *QuotaService) recordUserMonthlyUsedQuota(userID string, yearMonth strin
 		return fmt.Errorf("failed to get used quota for user %s: %w", userID, err)
 	}
 
-	// 如果已使用配额为0或不存在，则不记录
+	// Do not record if used quota is 0 or does not exist
 	if usedQuota <= 0 {
 		logger.Info("Skip recording zero or negative used quota",
 			zap.String("user_id", userID),
@@ -1075,7 +1075,7 @@ func (s *QuotaService) recordUserMonthlyUsedQuota(userID string, yearMonth strin
 		return nil
 	}
 
-	// 创建记录
+	// Create record
 	record := &models.MonthlyQuotaUsage{
 		UserID:     userID,
 		YearMonth:  yearMonth,
@@ -1083,9 +1083,9 @@ func (s *QuotaService) recordUserMonthlyUsedQuota(userID string, yearMonth strin
 		RecordTime: utils.NowInConfigTimezone(s.configManager.GetDirect()),
 	}
 
-	// 使用 ON CONFLICT 处理重复记录
+	// Use ON CONFLICT to handle duplicate records
 	if err := s.db.DB.Create(record).Error; err != nil {
-		// 如果是唯一约束冲突，更新现有记录
+		// If it's a unique constraint conflict, update the existing record
 		if strings.Contains(err.Error(), "duplicate key") {
 			if err := s.db.DB.Model(&models.MonthlyQuotaUsage{}).
 				Where("user_id = ? AND year_month = ?", userID, yearMonth).
@@ -1112,15 +1112,15 @@ func (s *QuotaService) recordUserMonthlyUsedQuota(userID string, yearMonth strin
 	return nil
 }
 
-// recordMonthlyUsedQuota 记录所有用户的月度已使用配额
+// recordMonthlyUsedQuota records monthly used quota for all users
 func (s *QuotaService) recordMonthlyUsedQuota(now time.Time) error {
 	logger.Info("Starting to record monthly used quota")
 
-	// 获取上个月年月，格式为 YYYY-MM
+	// Get last month's year-month in YYYY-MM format
 	lastMonth := now.AddDate(0, -1, 0)
 	yearMonth := lastMonth.Format("2006-01")
 
-	// 获取存在有效配额的所有用户
+	// Get all users with valid quota
 	userIDs, err := s.GetUsersWithValidQuota()
 	if err != nil {
 		return fmt.Errorf("failed to get users with valid quota: %w", err)
@@ -1128,14 +1128,14 @@ func (s *QuotaService) recordMonthlyUsedQuota(now time.Time) error {
 
 	logger.Info("Found users with valid quota", zap.Int("count", len(userIDs)))
 
-	// 批量处理用户
+	// Process users in batch
 	for _, userID := range userIDs {
 		err := s.recordUserMonthlyUsedQuota(userID, yearMonth)
 		if err != nil {
 			logger.Error("Failed to record monthly used quota for user",
 				zap.String("user_id", userID),
 				zap.Error(err))
-			// 继续处理其他用户，不中断整个流程
+			// Continue processing other users without interrupting the entire process
 		}
 	}
 

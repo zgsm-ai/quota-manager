@@ -14,15 +14,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// 固定重试参数
+// Fixed retry parameters
 const (
-	MaxRetries        = 3                      // 最大重试次数
-	InitialDelay      = 100 * time.Millisecond // 初始延迟
-	BackoffMultiplier = 2.0                    // 退避倍数
-	MaxDelay          = 5 * time.Second        // 最大延迟
+	MaxRetries        = 3                      // Maximum retry attempts
+	InitialDelay      = 100 * time.Millisecond // Initial delay
+	BackoffMultiplier = 2.0                    // Backoff multiplier
+	MaxDelay          = 5 * time.Second        // Maximum delay
 )
 
-// HTTPError 包装 HTTP 状态码错误
+// HTTPError wraps HTTP status code errors
 type HTTPError struct {
 	StatusCode int
 	Message    string
@@ -32,28 +32,28 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("HTTP error %d: %s", e.StatusCode, e.Message)
 }
 
-// RetryableError 判断错误是否可重试
+// RetryableError determines if an error is retryable
 func RetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// 网络错误通常可重试
+	// Network errors are usually retryable
 	if netErr, ok := err.(net.Error); ok {
 		if netErr.Timeout() {
 			return true
 		}
-		// 其他网络错误
+		// Other network errors
 		return true
 	}
 
-	// 检查是否为 HTTP 错误
+	// Check if it's an HTTP error
 	if httpErr, ok := err.(*HTTPError); ok {
-		// 5xx 服务器错误可重试
+		// 5xx server errors are retryable
 		if httpErr.StatusCode >= 500 && httpErr.StatusCode < 600 {
 			return true
 		}
-		// 429 Too Many Requests 可重试
+		// 429 Too Many Requests is retryable
 		if httpErr.StatusCode == http.StatusTooManyRequests {
 			return true
 		}
@@ -62,17 +62,17 @@ func RetryableError(err error) bool {
 	return false
 }
 
-// WithRetry 为函数添加重试机制
+// WithRetry adds retry mechanism to function
 func WithRetry[T any](ctx context.Context, operation func() (T, error)) (T, error) {
 	var zero T
 	var lastErr error
 
 	for attempt := 0; attempt <= MaxRetries; attempt++ {
 		if attempt > 0 {
-			// 计算退避时间
+			// Calculate backoff time
 			delay := calculateBackoff(attempt, InitialDelay, BackoffMultiplier, MaxDelay)
 
-			// 添加抖动
+			// Add jitter
 			jitter := time.Duration(rand.Int63n(int64(delay / 4)))
 			delay += jitter
 
@@ -99,7 +99,7 @@ func WithRetry[T any](ctx context.Context, operation func() (T, error)) (T, erro
 
 		lastErr = err
 
-		// 检查错误是否可重试
+		// Check if error is retryable
 		if !RetryableError(err) {
 			logger.Logger.Warn("Non-retryable error occurred",
 				zap.Error(err))
@@ -120,7 +120,7 @@ func WithRetry[T any](ctx context.Context, operation func() (T, error)) (T, erro
 	return zero, lastErr
 }
 
-// calculateBackoff 计算退避时间
+// calculateBackoff calculates backoff time
 func calculateBackoff(attempt int, initialDelay time.Duration, multiplier float64, maxDelay time.Duration) time.Duration {
 	delay := float64(initialDelay) * math.Pow(multiplier, float64(attempt-1))
 

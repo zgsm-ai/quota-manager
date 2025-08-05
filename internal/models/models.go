@@ -462,7 +462,7 @@ const (
 	StatusExpired = "EXPIRED"
 )
 
-// MonthlyQuotaUsage 月度配额使用量记录表
+// MonthlyQuotaUsage monthly quota usage record table
 type MonthlyQuotaUsage struct {
 	ID         int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID     string    `gorm:"column:user_id;not null;index" json:"user_id"`
@@ -472,7 +472,7 @@ type MonthlyQuotaUsage struct {
 	CreateTime time.Time `gorm:"column:create_time;type:timestamptz(0);autoCreateTime" json:"create_time"`
 }
 
-// TableName 设置表名
+// TableName sets the table name
 func (MonthlyQuotaUsage) TableName() string {
 	return "monthly_quota_usage"
 }
