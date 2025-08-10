@@ -133,7 +133,7 @@ func setupTestEnvironment() (*TestContext, error) {
 	}
 
 	// Auto migrate - ensure all tables exist in test environment
-	if err := db.DB.AutoMigrate(&models.QuotaStrategy{}, &models.QuotaExecute{}, &models.Quota{}, &models.QuotaAudit{}, &models.VoucherRedemption{}); err != nil {
+	if err := db.DB.AutoMigrate(&models.QuotaStrategy{}, &models.QuotaExecute{}, &models.Quota{}, &models.QuotaAudit{}, &models.VoucherRedemption{}, &models.MonthlyQuotaUsage{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate main tables: %w", err)
 	}
 

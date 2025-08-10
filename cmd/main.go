@@ -159,6 +159,9 @@ func main() {
 	starCheckPermissionHandler := handlers.NewStarCheckPermissionHandler(starCheckPermissionService)
 	quotaCheckPermissionHandler := handlers.NewQuotaCheckPermissionHandler(quotaCheckPermissionService)
 	unifiedPermissionHandler := handlers.NewUnifiedPermissionHandler(unifiedPermissionService)
+	// AiGateway passthrough admin
+	aigatewayAdminService := services.NewAiGatewayAdminService(gateway)
+	aigatewayAdminHandler := handlers.NewAiGatewayAdminHandler(aigatewayAdminService)
 	scanHandler := handlers.NewScanHandler(strategyService, unifiedPermissionService, schedulerService, quotaService)
 
 	// Set Gin mode
@@ -247,6 +250,29 @@ func main() {
 
 			// Unified scan interface
 			v1.POST("/scan", scanHandler.TriggerScan)
+
+			// AiGateway passthrough admin APIs
+			aigw := v1.Group("/aigateway")
+			{
+				// total quota
+				aigw.GET("/quota", aigatewayAdminHandler.QueryQuota)
+				aigw.POST("/quota/refresh", aigatewayAdminHandler.RefreshQuota)
+				aigw.POST("/quota/delta", aigatewayAdminHandler.DeltaQuota)
+				// used quota
+				aigw.GET("/quota-used", aigatewayAdminHandler.QueryUsedQuota)
+				aigw.POST("/quota-used/refresh", aigatewayAdminHandler.RefreshUsedQuota)
+				aigw.POST("/quota-used/delta", aigatewayAdminHandler.DeltaUsedQuota)
+				// star projects
+				aigw.GET("/star/projects", aigatewayAdminHandler.QueryStarProjects)
+				aigw.POST("/star/projects", aigatewayAdminHandler.SetStarProjects)
+				// toggles
+				aigw.GET("/permission/star-check", aigatewayAdminHandler.QueryStarCheck)
+				aigw.POST("/permission/star-check", aigatewayAdminHandler.SetStarCheck)
+				aigw.GET("/permission/quota-check", aigatewayAdminHandler.QueryQuotaCheck)
+				aigw.POST("/permission/quota-check", aigatewayAdminHandler.SetQuotaCheck)
+				// models
+				aigw.POST("/permission/models", aigatewayAdminHandler.SetUserModels)
+			}
 		}
 	}
 

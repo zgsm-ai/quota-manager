@@ -40,6 +40,18 @@ type StarProjectsResponse struct {
 	StarredProjects string `json:"starred_projects"` // Comma-separated list
 }
 
+// StarCheckPermissionResponse represents star-check toggle query response
+type StarCheckPermissionResponse struct {
+	EmployeeNumber string `json:"employee_number"`
+	Enabled        bool   `json:"enabled"`
+}
+
+// QuotaCheckPermissionResponse represents quota-check toggle query response
+type QuotaCheckPermissionResponse struct {
+	EmployeeNumber string `json:"employee_number"`
+	Enabled        bool   `json:"enabled"`
+}
+
 func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
 	return &Client{
 		BaseURL:    baseURL,
@@ -682,4 +694,148 @@ func (c *Client) deltaUsedQuotaImpl(userID string, value float64) error {
 	}
 
 	return nil
+}
+
+// RefreshUsedQuota refreshes user's used quota (sets an absolute value) with retry mechanism
+func (c *Client) RefreshUsedQuota(userID string, quota float64) error {
+	_, err := utils.WithRetry(context.Background(), func() (struct{}, error) {
+		return struct{}{}, c.refreshUsedQuotaImpl(userID, quota)
+	})
+	return err
+}
+
+// refreshUsedQuotaImpl implements the actual RefreshUsedQuota logic
+func (c *Client) refreshUsedQuotaImpl(userID string, quota float64) error {
+	apiUrl := fmt.Sprintf("%s%s/used/refresh", c.BaseURL, c.AdminPath)
+
+	data := url.Values{}
+	data.Set("user_id", userID)
+	data.Set("quota", strconv.FormatFloat(quota, 'f', -1, 64))
+
+	req, err := http.NewRequest("POST", apiUrl, strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var respData ResponseData
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if !respData.Success {
+		return &utils.HTTPError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("AI Gateway error: %s - %s", respData.Code, respData.Message)}
+	}
+	return nil
+}
+
+// QueryStarCheckPermission queries whether star-check is enabled for a specific employee with retry mechanism
+func (c *Client) QueryStarCheckPermission(employeeNumber string) (*StarCheckPermissionResponse, error) {
+	return utils.WithRetry(context.Background(), func() (*StarCheckPermissionResponse, error) {
+		return c.queryStarCheckPermissionImpl(employeeNumber)
+	})
+}
+
+func (c *Client) queryStarCheckPermissionImpl(employeeNumber string) (*StarCheckPermissionResponse, error) {
+	apiUrl := fmt.Sprintf("%s/check-star?employee_number=%s", c.BaseURL, url.QueryEscape(employeeNumber))
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var rd ResponseData
+	if err := json.Unmarshal(body, &rd); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if !rd.Success {
+		return nil, &utils.HTTPError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("AI Gateway error: %s - %s", rd.Code, rd.Message)}
+	}
+
+	// Parse data.enabled
+	dataBytes, err := json.Marshal(rd.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(dataBytes, &m); err != nil {
+		return nil, fmt.Errorf("failed to parse data: %w", err)
+	}
+	enabled, _ := m["enabled"].(bool)
+	return &StarCheckPermissionResponse{EmployeeNumber: employeeNumber, Enabled: enabled}, nil
+}
+
+// QueryQuotaCheckPermission queries whether quota-check is enabled for a specific employee with retry mechanism
+func (c *Client) QueryQuotaCheckPermission(employeeNumber string) (*QuotaCheckPermissionResponse, error) {
+	return utils.WithRetry(context.Background(), func() (*QuotaCheckPermissionResponse, error) {
+		return c.queryQuotaCheckPermissionImpl(employeeNumber)
+	})
+}
+
+func (c *Client) queryQuotaCheckPermissionImpl(employeeNumber string) (*QuotaCheckPermissionResponse, error) {
+	apiUrl := fmt.Sprintf("%s/check-quota?employee_number=%s", c.BaseURL, url.QueryEscape(employeeNumber))
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var rd ResponseData
+	if err := json.Unmarshal(body, &rd); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if !rd.Success {
+		return nil, &utils.HTTPError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("AI Gateway error: %s - %s", rd.Code, rd.Message)}
+	}
+
+	dataBytes, err := json.Marshal(rd.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(dataBytes, &m); err != nil {
+		return nil, fmt.Errorf("failed to parse data: %w", err)
+	}
+	enabled, _ := m["enabled"].(bool)
+	return &QuotaCheckPermissionResponse{EmployeeNumber: employeeNumber, Enabled: enabled}, nil
 }

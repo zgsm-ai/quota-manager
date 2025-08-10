@@ -22,8 +22,8 @@ func NewQuotaCheckPermissionHandler(quotaCheckPermissionService *services.QuotaC
 
 // SetUserQuotaCheckRequest represents user quota check request
 type SetUserQuotaCheckRequest struct {
-	EmployeeNumber string `json:"employee_number" validate:"required,employee_number"`
-	Enabled        *bool  `json:"enabled" validate:"required"`
+	UserId  string `json:"user_id" validate:"required,uuid"`
+	Enabled *bool  `json:"enabled" validate:"required"`
 }
 
 // SetDepartmentQuotaCheckRequest represents department quota check request
@@ -40,7 +40,7 @@ func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 		return
 	}
 
-	if err := h.quotaCheckPermissionService.SetUserQuotaCheckSetting(req.EmployeeNumber, *req.Enabled); err != nil {
+	if err := h.quotaCheckPermissionService.SetUserQuotaCheckSetting(req.UserId, *req.Enabled); err != nil {
 		// Check if it's a ServiceError
 		if serviceErr, ok := err.(*services.ServiceError); ok {
 			switch serviceErr.Code {
@@ -82,8 +82,8 @@ func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 		"message": "User quota check setting set successfully",
 		"success": true,
 		"data": gin.H{
-			"employee_number": req.EmployeeNumber,
-			"enabled":         *req.Enabled,
+			"user_id": req.UserId,
+			"enabled": *req.Enabled,
 		},
 	})
 }

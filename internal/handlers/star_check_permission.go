@@ -22,8 +22,8 @@ func NewStarCheckPermissionHandler(starCheckPermissionService *services.StarChec
 
 // SetUserStarCheckRequest represents user star check request
 type SetUserStarCheckRequest struct {
-	EmployeeNumber string `json:"employee_number" validate:"required,employee_number"`
-	Enabled        *bool  `json:"enabled" validate:"required"`
+	UserId  string `json:"user_id" validate:"required,uuid"`
+	Enabled *bool  `json:"enabled" validate:"required"`
 }
 
 // SetDepartmentStarCheckRequest represents department star check request
@@ -40,7 +40,7 @@ func (h *StarCheckPermissionHandler) SetUserStarCheckSetting(c *gin.Context) {
 		return
 	}
 
-	if err := h.starCheckPermissionService.SetUserStarCheckSetting(req.EmployeeNumber, *req.Enabled); err != nil {
+	if err := h.starCheckPermissionService.SetUserStarCheckSetting(req.UserId, *req.Enabled); err != nil {
 		if err.Error() == "star check setting already exists with same value" {
 			c.JSON(http.StatusOK, gin.H{
 				"code":    "star_check_permission.setting_exists",
@@ -91,8 +91,8 @@ func (h *StarCheckPermissionHandler) SetUserStarCheckSetting(c *gin.Context) {
 		"message": "User star check setting set successfully",
 		"success": true,
 		"data": gin.H{
-			"employee_number": req.EmployeeNumber,
-			"enabled":         *req.Enabled,
+			"user_id": req.UserId,
+			"enabled": *req.Enabled,
 		},
 	})
 }

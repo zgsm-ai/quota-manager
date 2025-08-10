@@ -31,8 +31,8 @@ func testPermissionValidation(ctx *TestContext) TestResult {
 func testSetUserWhitelistValidation() bool {
 	// Test valid request
 	validReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "EMP12345",
-		Models:         []string{"gpt-4", "claude-3-opus"},
+		UserId: "123e4567-e89b-12d3-a456-426614174000",
+		Models: []string{"gpt-4", "claude-3-opus"},
 	}
 	if err := validation.ValidateStruct(&validReq); err != nil {
 		fmt.Printf("Valid SetUserModelWhitelistRequest should pass validation: %v\n", err)
@@ -41,18 +41,18 @@ func testSetUserWhitelistValidation() bool {
 
 	// Test valid request with empty models (delete permissions)
 	emptyModelsReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "EMP123",
-		Models:         []string{},
+		UserId: "123e4567-e89b-12d3-a456-426614174000",
+		Models: []string{},
 	}
 	if err := validation.ValidateStruct(&emptyModelsReq); err != nil {
 		fmt.Printf("SetUserModelWhitelistRequest with empty models should pass validation: %v\n", err)
 		return false
 	}
 
-	// Test invalid employee number - too short
+	// Test invalid user_id - invalid uuid
 	shortEmpReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "E",
-		Models:         []string{"gpt-4"},
+		UserId: "invalid-uuid",
+		Models: []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&shortEmpReq); err == nil {
 		fmt.Printf("SetUserModelWhitelistRequest with short employee number should fail validation\n")
@@ -69,10 +69,10 @@ func testSetUserWhitelistValidation() bool {
 	// 	return false
 	// }
 
-	// Test invalid employee number - special characters
+	// Another invalid user_id case
 	specialCharReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "EMP-123@",
-		Models:         []string{"gpt-4"},
+		UserId: "not-a-uuid",
+		Models: []string{"gpt-4"},
 	}
 	if err := validation.ValidateStruct(&specialCharReq); err == nil {
 		fmt.Printf("SetUserModelWhitelistRequest with special characters in employee number should fail validation\n")
@@ -81,7 +81,7 @@ func testSetUserWhitelistValidation() bool {
 
 	// Test too many models
 	tooManyModelsReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "EMP123",
+		UserId: "123e4567-e89b-12d3-a456-426614174000",
 		Models: []string{
 			"model1", "model2", "model3", "model4", "model5",
 			"model6", "model7", "model8", "model9", "model10", "model11", // 11 models
@@ -92,7 +92,7 @@ func testSetUserWhitelistValidation() bool {
 		return false
 	}
 
-	// Test missing required field - employee_number
+	// Test missing required field - user_id
 	missingEmpReq := handlers.SetUserModelWhitelistRequest{
 		Models: []string{"gpt-4"},
 	}
@@ -103,7 +103,7 @@ func testSetUserWhitelistValidation() bool {
 
 	// Test missing required field - models
 	missingModelsReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "EMP123",
+		UserId: "123e4567-e89b-12d3-a456-426614174000",
 		// Models field is not set, should fail validation
 	}
 	if err := validation.ValidateStruct(&missingModelsReq); err == nil {
@@ -280,9 +280,9 @@ func testGetEffectivePermissionsValidation() bool {
 
 // testPermissionCustomValidators tests custom validators for permission management
 func testPermissionCustomValidators(ctx *TestContext) TestResult {
-	// Test employee number validator
+	// Test user_id (UUID) validator via SetUserModelWhitelistRequest
 	if !testEmployeeNumberValidator() {
-		return TestResult{Passed: false, Message: "Employee number validator test failed"}
+		return TestResult{Passed: false, Message: "User ID (UUID) validator test failed"}
 	}
 
 	// Test department name validator
@@ -293,47 +293,40 @@ func testPermissionCustomValidators(ctx *TestContext) TestResult {
 	return TestResult{Passed: true, Message: "Permission custom validators test succeeded"}
 }
 
-// testEmployeeNumberValidator tests the employee_number custom validator
+// testEmployeeNumberValidator now tests the user_id uuid validator on SetUserModelWhitelistRequest
 func testEmployeeNumberValidator() bool {
-	// Test valid employee numbers
-	validEmployeeNumbers := []string{
-		"EMP123",
-		"emp456",
-		"ABC123DEF",
-		"12345",
-		"ab",                   // minimum length
-		"12345678901234567890", // maximum length (20 chars)
+	// Test valid UUIDs
+	validUUIDs := []string{
+		"123e4567-e89b-12d3-a456-426614174000",
+		"550e8400-e29b-41d4-a716-446655440000",
 	}
 
-	for _, empNum := range validEmployeeNumbers {
+	for _, id := range validUUIDs {
 		req := handlers.SetUserModelWhitelistRequest{
-			EmployeeNumber: empNum,
-			Models:         []string{},
+			UserId: id,
+			Models: []string{},
 		}
 		if err := validation.ValidateStruct(&req); err != nil {
-			fmt.Printf("Valid employee number '%s' should pass validation: %v\n", empNum, err)
+			fmt.Printf("Valid user_id '%s' should pass validation: %v\n", id, err)
 			return false
 		}
 	}
 
-	// Test invalid employee numbers
-	invalidEmployeeNumbers := []string{
-		"E", // too short
-		// "123456789012345678901", // too long (21 chars)
-		// "EMP-123", // contains hyphen
-		"EMP@123", // contains @
-		"EMP 123", // contains space
-		// "EMP_123", // contains underscore
+	// Test invalid UUIDs
+	invalidUUIDs := []string{
 		"", // empty
+		"invalid-uuid",
+		"12345",
+		"g123e4567-e89b-12d3-a456-426614174000", // bad char
 	}
 
-	for _, empNum := range invalidEmployeeNumbers {
+	for _, id := range invalidUUIDs {
 		req := handlers.SetUserModelWhitelistRequest{
-			EmployeeNumber: empNum,
-			Models:         []string{},
+			UserId: id,
+			Models: []string{},
 		}
 		if err := validation.ValidateStruct(&req); err == nil {
-			fmt.Printf("Invalid employee number '%s' should fail validation\n", empNum)
+			fmt.Printf("Invalid user_id '%s' should fail validation\n", id)
 			return false
 		}
 	}
@@ -407,18 +400,18 @@ func testDepartmentNameValidator() bool {
 
 // testPermissionValidationErrorMessages tests validation error messages
 func testPermissionValidationErrorMessages(ctx *TestContext) TestResult {
-	// Test employee number error message
+	// Test user_id error message (uuid)
 	invalidEmpReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "E", // too short
-		Models:         []string{},
+		UserId: "not-a-uuid",
+		Models: []string{},
 	}
 	if err := validation.ValidateStruct(&invalidEmpReq); err != nil {
 		errorMsg := err.Error()
-		if !containsKeywords(errorMsg, []string{"employee_number", "2-20 characters", "alphanumeric"}) {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Employee number error message should contain field name and requirements: %s", errorMsg)}
+		if !containsKeywords(errorMsg, []string{"user_id", "UUID"}) {
+			return TestResult{Passed: false, Message: fmt.Sprintf("user_id error message should mention UUID: %s", errorMsg)}
 		}
 	} else {
-		return TestResult{Passed: false, Message: "Invalid employee number should produce validation error"}
+		return TestResult{Passed: false, Message: "Invalid user_id should produce validation error"}
 	}
 
 	// Test department name error message
@@ -437,7 +430,7 @@ func testPermissionValidationErrorMessages(ctx *TestContext) TestResult {
 
 	// Test too many models error message
 	tooManyModelsReq := handlers.SetUserModelWhitelistRequest{
-		EmployeeNumber: "EMP123",
+		UserId: "123e4567-e89b-12d3-a456-426614174000",
 		Models: []string{
 			"model1", "model2", "model3", "model4", "model5",
 			"model6", "model7", "model8", "model9", "model10", "model11", // 11 models

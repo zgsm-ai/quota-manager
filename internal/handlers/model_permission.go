@@ -22,8 +22,8 @@ func NewModelPermissionHandler(permissionService *services.PermissionService) *M
 
 // SetUserModelWhitelistRequest represents user model whitelist request
 type SetUserModelWhitelistRequest struct {
-	EmployeeNumber string   `json:"employee_number" validate:"required,employee_number"`
-	Models         []string `json:"models" validate:"required,max=10"`
+	UserId string   `json:"user_id" validate:"required,uuid"`
+	Models []string `json:"models" validate:"required,max=10"`
 }
 
 // SetDepartmentModelWhitelistRequest represents department model whitelist request
@@ -40,7 +40,7 @@ func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 		return
 	}
 
-	if err := h.permissionService.SetUserWhitelist(req.EmployeeNumber, req.Models); err != nil {
+	if err := h.permissionService.SetUserWhitelist(req.UserId, req.Models); err != nil {
 		if err.Error() == "whitelist already exists with same models" {
 			c.JSON(http.StatusOK, gin.H{
 				"code":    "model_permission.whitelist_exists",
@@ -91,8 +91,8 @@ func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 		"message": "User model whitelist set successfully",
 		"success": true,
 		"data": gin.H{
-			"employee_number": req.EmployeeNumber,
-			"models":          req.Models,
+			"user_id": req.UserId,
+			"models":  req.Models,
 		},
 	})
 }
