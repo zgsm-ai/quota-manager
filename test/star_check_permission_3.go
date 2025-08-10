@@ -443,13 +443,10 @@ func testNonExistentUserAndDepartmentStarCheck(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: "Expected error when setting star check for non-existent department"}
 	}
 
-	// Test 3: Get star check setting for non-existent department (should return default)
-	deptEnabled, err := starCheckPermissionService.GetDepartmentStarCheckSetting("NonExistent_Department")
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get star check setting for non-existent department: %v", err)}
-	}
-	if deptEnabled {
-		return TestResult{Passed: false, Message: "Expected default disabled setting for non-existent department"}
+	// Test 3: Get star check setting for non-existent department (should return error)
+	_, err = starCheckPermissionService.GetDepartmentStarCheckSetting("NonExistent_Department")
+	if err == nil {
+		return TestResult{Passed: false, Message: "Expected error when getting star check setting for non-existent department"}
 	}
 
 	// Test 4: Update star check permissions for non-existent user

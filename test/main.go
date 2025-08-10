@@ -167,6 +167,12 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Periodic Strategy Concurrent Modifications Test", testPeriodicStrategyConcurrentModifications},
 		{"Periodic Strategy Edge Cases Test", testPeriodicStrategyEdgeCases},
 
+		// Periodic Strategy MaxExecPerUser Tests
+		{"Periodic MaxExecPerUser = 1", testPeriodicStrategyMaxExecLimitOne},
+		{"Periodic MaxExecPerUser = 2", testPeriodicStrategyMaxExecLimitTwo},
+		{"Periodic MaxExecPerUser Update Up/Down", testPeriodicStrategyMaxExecUpdateUpDown},
+		{"Periodic MaxExecPerUser End-to-End", testPeriodicStrategyMaxExecEndToEnd},
+
 		// API layer tests
 		{"API Health Check", testAPIHealthCheck},
 		{"API Create Strategy", testAPICreateStrategy},

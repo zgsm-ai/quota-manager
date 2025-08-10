@@ -14,6 +14,7 @@ import (
 
 	"database/sql"
 	"errors"
+
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -397,7 +398,28 @@ func (s *StrategyService) ExecStrategy(strategy *models.QuotaStrategy, users []m
 				continue
 			}
 		}
-		// Periodic strategies are now handled directly by cron, no batch checking needed
+		// For periodic strategy with per-user max execution limit
+		if strategy.Type == "periodic" && strategy.MaxExecPerUser > 0 {
+			var count int64
+			if err := s.db.Model(&models.QuotaExecute{}).
+				Where("strategy_id = ? AND user_id = ? AND status = ?",
+					strategy.ID, user.ID, "completed").
+				Count(&count).Error; err != nil {
+				logger.Error("Failed to count periodic executions",
+					zap.Int("strategy_id", strategy.ID),
+					zap.String("user", user.ID),
+					zap.Error(err))
+				// conservative: skip on error to avoid over-grant; or we could continue
+				continue
+			}
+			if count >= int64(strategy.MaxExecPerUser) {
+				logger.Info("Skip user due to max_exec_per_user reached",
+					zap.String("user", user.ID),
+					zap.Int("strategy_id", strategy.ID),
+					zap.Int("max_exec_per_user", strategy.MaxExecPerUser))
+				continue
+			}
+		}
 
 		// Check condition
 		ctx := &condition.EvaluationContext{

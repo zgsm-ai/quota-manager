@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS quota_strategy (
     model VARCHAR(255),
     periodic_expr VARCHAR(255),
     condition TEXT,
+    max_exec_per_user INTEGER NOT NULL DEFAULT 0,
     status BOOLEAN DEFAULT true NOT NULL,  -- Status field: true=enabled, false=disabled
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP
@@ -84,6 +85,7 @@ CREATE TABLE IF NOT EXISTS quota_execute (
 CREATE INDEX IF NOT EXISTS idx_quota_execute_strategy_id ON quota_execute(strategy_id);
 CREATE INDEX IF NOT EXISTS idx_quota_execute_user_id ON quota_execute(user_id);
 CREATE INDEX IF NOT EXISTS idx_quota_execute_batch_number ON quota_execute(batch_number);
+CREATE INDEX IF NOT EXISTS idx_quota_execute_sid_uid_status ON quota_execute(strategy_id, user_id, status);
 
 -- Add index for strategy status field to improve query performance
 CREATE INDEX IF NOT EXISTS idx_quota_strategy_status ON quota_strategy(status);

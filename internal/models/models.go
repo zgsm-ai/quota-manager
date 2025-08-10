@@ -64,17 +64,18 @@ func ParseUserInfoFromToken(accessToken string) (*AuthUser, error) {
 
 // QuotaStrategy strategy table structure
 type QuotaStrategy struct {
-	ID           int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name         string    `gorm:"uniqueIndex;not null" json:"name" validate:"required,min=1,max=100"`
-	Title        string    `gorm:"not null" json:"title" validate:"required,min=1,max=200"`
-	Type         string    `gorm:"not null" json:"type" validate:"required,oneof=single periodic"` // periodic/single
-	Amount       float64   `gorm:"not null" json:"amount"`
-	Model        string    `json:"model" validate:"omitempty,min=1,max=100"`
-	PeriodicExpr string    `gorm:"column:periodic_expr" json:"periodic_expr" validate:"omitempty,cron"`
-	Condition    string    `json:"condition" validate:"omitempty"`
-	Status       bool      `gorm:"not null;default:true" json:"status"` // true=enabled, false=disabled
-	CreateTime   time.Time `gorm:"autoCreateTime" json:"create_time"`
-	UpdateTime   time.Time `gorm:"autoUpdateTime" json:"update_time"`
+	ID             int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name           string    `gorm:"uniqueIndex;not null" json:"name" validate:"required,min=1,max=100"`
+	Title          string    `gorm:"not null" json:"title" validate:"required,min=1,max=200"`
+	Type           string    `gorm:"not null" json:"type" validate:"required,oneof=single periodic"` // periodic/single
+	Amount         float64   `gorm:"not null" json:"amount"`
+	Model          string    `json:"model" validate:"omitempty,min=1,max=100"`
+	PeriodicExpr   string    `gorm:"column:periodic_expr" json:"periodic_expr" validate:"omitempty,cron"`
+	Condition      string    `json:"condition" validate:"omitempty"`
+	MaxExecPerUser int       `gorm:"column:max_exec_per_user;default:0" json:"max_exec_per_user" validate:"gte=0"`
+	Status         bool      `gorm:"not null;default:true" json:"status"` // true=enabled, false=disabled
+	CreateTime     time.Time `gorm:"autoCreateTime" json:"create_time"`
+	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`
 }
 
 // QuotaExecute execution status table

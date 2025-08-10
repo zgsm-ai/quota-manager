@@ -44,6 +44,10 @@ func (h *StrategyHandler) CreateStrategy(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid periodic expression: "+err.Error()))
 			return
 		}
+		if strategy.MaxExecPerUser < 0 {
+			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "max_exec_per_user must be >= 0"))
+			return
+		}
 	}
 
 	// condition expression
@@ -122,14 +126,15 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 	}
 
 	type UpdateStrategyRequest struct {
-		Name         *string  `json:"name" validate:"omitempty,min=1,max=100"`
-		Title        *string  `json:"title" validate:"omitempty,min=1,max=200"`
-		Type         *string  `json:"type" validate:"omitempty,oneof=single periodic"`
-		Amount       *float64 `json:"amount" validate:"omitempty"`
-		PeriodicExpr *string  `json:"periodic_expr" validate:"omitempty,cron"`
-		Model        *string  `json:"model" validate:"omitempty,min=1,max=100"`
-		Condition    *string  `json:"condition" validate:"omitempty"`
-		Status       *bool    `json:"status"`
+		Name           *string  `json:"name" validate:"omitempty,min=1,max=100"`
+		Title          *string  `json:"title" validate:"omitempty,min=1,max=200"`
+		Type           *string  `json:"type" validate:"omitempty,oneof=single periodic"`
+		Amount         *float64 `json:"amount" validate:"omitempty"`
+		PeriodicExpr   *string  `json:"periodic_expr" validate:"omitempty,cron"`
+		Model          *string  `json:"model" validate:"omitempty,min=1,max=100"`
+		Condition      *string  `json:"condition" validate:"omitempty"`
+		Status         *bool    `json:"status"`
+		MaxExecPerUser *int     `json:"max_exec_per_user" validate:"omitempty,gte=0"`
 	}
 
 	var req UpdateStrategyRequest
@@ -148,6 +153,10 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "Invalid periodic expression: "+err.Error()))
 			return
 		}
+	}
+	if req.MaxExecPerUser != nil && *req.MaxExecPerUser < 0 {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "max_exec_per_user must be >= 0"))
+		return
 	}
 
 	// Special business logic: validate condition expression if present
@@ -184,6 +193,9 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 	}
 	if req.Status != nil {
 		updates["status"] = *req.Status
+	}
+	if req.MaxExecPerUser != nil {
+		updates["max_exec_per_user"] = *req.MaxExecPerUser
 	}
 
 	if err := h.service.UpdateStrategy(id, updates); err != nil {
