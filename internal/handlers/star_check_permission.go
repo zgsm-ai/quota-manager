@@ -32,6 +32,16 @@ type SetDepartmentStarCheckRequest struct {
 	Enabled        *bool  `json:"enabled" validate:"required"`
 }
 
+// GetUserStarCheckQuery represents query parameters for getting user star check setting
+type GetUserStarCheckQuery struct {
+	UserId string `form:"user_id" validate:"required,uuid"`
+}
+
+// GetDepartmentStarCheckQuery represents query parameters for getting department star check setting
+type GetDepartmentStarCheckQuery struct {
+	DepartmentName string `form:"department_name" validate:"required,department_name"`
+}
+
 // SetUserStarCheckSetting sets star check setting for a user
 func (h *StarCheckPermissionHandler) SetUserStarCheckSetting(c *gin.Context) {
 	var req SetUserStarCheckRequest
@@ -158,6 +168,98 @@ func (h *StarCheckPermissionHandler) SetDepartmentStarCheckSetting(c *gin.Contex
 		"data": gin.H{
 			"department_name": req.DepartmentName,
 			"enabled":         *req.Enabled,
+		},
+	})
+}
+
+// GetUserStarCheckSetting gets star check setting for a user
+func (h *StarCheckPermissionHandler) GetUserStarCheckSetting(c *gin.Context) {
+	var q GetUserStarCheckQuery
+	if err := validation.ValidateQuery(c, &q); err != nil {
+		return
+	}
+
+	enabled, err := h.starCheckPermissionService.GetUserStarCheckSetting(q.UserId)
+	if err != nil {
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorUserNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "star_check_permission.user_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "star_check_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "star_check_permission.get_user_setting_failed",
+			"message": "Failed to get user star check setting: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "star_check_permission.success",
+		"message": "User star check setting fetched successfully",
+		"success": true,
+		"data": gin.H{
+			"user_id": q.UserId,
+			"enabled": enabled,
+		},
+	})
+}
+
+// GetDepartmentStarCheckSetting gets star check setting for a department
+func (h *StarCheckPermissionHandler) GetDepartmentStarCheckSetting(c *gin.Context) {
+	var q GetDepartmentStarCheckQuery
+	if err := validation.ValidateQuery(c, &q); err != nil {
+		return
+	}
+
+	enabled, err := h.starCheckPermissionService.GetDepartmentStarCheckSetting(q.DepartmentName)
+	if err != nil {
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorDeptNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "star_check_permission.department_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "star_check_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "star_check_permission.get_department_setting_failed",
+			"message": "Failed to get department star check setting: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "star_check_permission.success",
+		"message": "Department star check setting fetched successfully",
+		"success": true,
+		"data": gin.H{
+			"department_name": q.DepartmentName,
+			"enabled":         enabled,
 		},
 	})
 }

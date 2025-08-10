@@ -32,6 +32,16 @@ type SetDepartmentModelWhitelistRequest struct {
 	Models         []string `json:"models" validate:"required,max=10"`
 }
 
+// GetUserModelWhitelistQuery represents query parameters for getting user model whitelist
+type GetUserModelWhitelistQuery struct {
+	UserId string `form:"user_id" validate:"required,uuid"`
+}
+
+// GetDepartmentModelWhitelistQuery represents query parameters for getting department model whitelist
+type GetDepartmentModelWhitelistQuery struct {
+	DepartmentName string `form:"department_name" validate:"required,department_name"`
+}
+
 // SetUserWhitelist sets model whitelist for a user
 func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 	var req SetUserModelWhitelistRequest
@@ -158,6 +168,98 @@ func (h *ModelPermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 		"data": gin.H{
 			"department_name": req.DepartmentName,
 			"models":          req.Models,
+		},
+	})
+}
+
+// GetUserWhitelist gets model whitelist for a user
+func (h *ModelPermissionHandler) GetUserWhitelist(c *gin.Context) {
+	var q GetUserModelWhitelistQuery
+	if err := validation.ValidateQuery(c, &q); err != nil {
+		return
+	}
+
+	modelsList, err := h.permissionService.GetUserWhitelist(q.UserId)
+	if err != nil {
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorUserNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "model_permission.user_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "model_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "model_permission.get_user_whitelist_failed",
+			"message": "Failed to get user model whitelist: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "model_permission.success",
+		"message": "User model whitelist fetched successfully",
+		"success": true,
+		"data": gin.H{
+			"user_id": q.UserId,
+			"models":  modelsList,
+		},
+	})
+}
+
+// GetDepartmentWhitelist gets model whitelist for a department
+func (h *ModelPermissionHandler) GetDepartmentWhitelist(c *gin.Context) {
+	var q GetDepartmentModelWhitelistQuery
+	if err := validation.ValidateQuery(c, &q); err != nil {
+		return
+	}
+
+	modelsList, err := h.permissionService.GetDepartmentWhitelist(q.DepartmentName)
+	if err != nil {
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorDeptNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "model_permission.department_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "model_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "model_permission.get_department_whitelist_failed",
+			"message": "Failed to get department model whitelist: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "model_permission.success",
+		"message": "Department model whitelist fetched successfully",
+		"success": true,
+		"data": gin.H{
+			"department_name": q.DepartmentName,
+			"models":          modelsList,
 		},
 	})
 }

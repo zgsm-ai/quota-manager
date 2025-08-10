@@ -175,6 +175,67 @@ func (s *PermissionService) SetDepartmentWhitelist(departmentName string, modelL
 	return nil
 }
 
+// GetUserWhitelist returns the explicit whitelist configured for a user.
+// When employee_sync is enabled, the input is treated as user_id and mapped to employee_number.
+// If the user does not exist (under employee_sync), returns ErrorUserNotFound.
+// If no explicit whitelist is configured, returns an empty slice and nil error.
+func (s *PermissionService) GetUserWhitelist(identifier string) ([]string, error) {
+	// Resolve identifier to employee number when needed
+	if resolved, err := s.resolveEmployeeNumber(identifier); err != nil {
+		return []string{}, err
+	} else {
+		identifier = resolved
+	}
+
+	// Check if user exists when employee_sync is enabled
+	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+		var employee models.EmployeeDepartment
+		err := s.db.DB.Where("employee_number = ?", identifier).First(&employee).Error
+		if err != nil {
+			return []string{}, NewUserNotFoundError(identifier)
+		}
+	}
+
+	// Query explicit user whitelist
+	var whitelist models.ModelWhitelist
+	err := s.db.DB.Where("target_type = ? AND target_identifier = ?",
+		models.TargetTypeUser, identifier).First(&whitelist).Error
+	if err != nil {
+		// Not configured -> return empty
+		return []string{}, nil
+	}
+
+	return whitelist.GetAllowedModelsAsSlice(), nil
+}
+
+// GetDepartmentWhitelist returns the explicit whitelist configured for a department.
+// If the department does not exist, returns ErrorDeptNotFound.
+// If no explicit whitelist is configured, returns an empty slice and nil error.
+func (s *PermissionService) GetDepartmentWhitelist(departmentName string) ([]string, error) {
+	// Validate department exists - check if any employee belongs to this department
+	var employeeCount int64
+	if err := s.db.DB.Model(&models.EmployeeDepartment{}).
+		Where("dept_full_level_names LIKE ?", "%"+departmentName+"%").
+		Count(&employeeCount).Error; err != nil {
+		return []string{}, NewDatabaseError("validate department existence", err)
+	}
+
+	if employeeCount == 0 {
+		return []string{}, NewDepartmentNotFoundError(departmentName)
+	}
+
+	// Query explicit department whitelist
+	var whitelist models.ModelWhitelist
+	err := s.db.DB.Where("target_type = ? AND target_identifier = ?",
+		models.TargetTypeDepartment, departmentName).First(&whitelist).Error
+	if err != nil {
+		// Not configured -> return empty
+		return []string{}, nil
+	}
+
+	return whitelist.GetAllowedModelsAsSlice(), nil
+}
+
 // GetUserEffectivePermissions gets effective permissions for a user
 func (s *PermissionService) GetUserEffectivePermissions(employeeNumber string) ([]string, error) {
 	// Get effective permissions directly, no need to check if employee exists

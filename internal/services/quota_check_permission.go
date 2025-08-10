@@ -187,6 +187,18 @@ func (s *QuotaCheckPermissionService) GetUserEffectiveQuotaCheckSetting(employee
 
 // GetDepartmentQuotaCheckSetting gets quota check setting for a department
 func (s *QuotaCheckPermissionService) GetDepartmentQuotaCheckSetting(departmentName string) (bool, error) {
+	// Validate department exists - check if any employee belongs to this department
+	var employeeCount int64
+	if err := s.db.DB.Model(&models.EmployeeDepartment{}).
+		Where("dept_full_level_names LIKE ?", "%"+departmentName+"%").
+		Count(&employeeCount).Error; err != nil {
+		return false, NewDatabaseError("validate department existence", err)
+	}
+
+	if employeeCount == 0 {
+		return false, NewDepartmentNotFoundError(departmentName)
+	}
+
 	var setting models.QuotaCheckSetting
 	err := s.db.DB.Where("target_type = ? AND target_identifier = ?",
 		models.TargetTypeDepartment, departmentName).First(&setting).Error
@@ -194,6 +206,37 @@ func (s *QuotaCheckPermissionService) GetDepartmentQuotaCheckSetting(departmentN
 		return false, nil // Return default (disabled) if no setting found
 	}
 
+	return setting.Enabled, nil
+}
+
+// GetUserQuotaCheckSetting returns the explicit quota check setting for a user (not effective value).
+// When employee_sync is enabled, the input is treated as user_id and mapped to employee_number.
+// If user not found (under employee_sync), returns ErrorUserNotFound.
+// If not configured, returns false, nil.
+func (s *QuotaCheckPermissionService) GetUserQuotaCheckSetting(identifier string) (bool, error) {
+	// Resolve identifier to employee number when needed
+	if resolved, err := s.resolveEmployeeNumber(identifier); err != nil {
+		return false, err
+	} else {
+		identifier = resolved
+	}
+
+	// Check if user exists when employee_sync is enabled
+	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+		var employee models.EmployeeDepartment
+		err := s.db.DB.Where("employee_number = ?", identifier).First(&employee).Error
+		if err != nil {
+			return false, NewUserNotFoundError(identifier)
+		}
+	}
+
+	// Query explicit user setting
+	var setting models.QuotaCheckSetting
+	err := s.db.DB.Where("target_type = ? AND target_identifier = ?",
+		models.TargetTypeUser, identifier).First(&setting).Error
+	if err != nil {
+		return false, nil
+	}
 	return setting.Enabled, nil
 }
 

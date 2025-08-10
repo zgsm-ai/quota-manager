@@ -32,6 +32,16 @@ type SetDepartmentQuotaCheckRequest struct {
 	Enabled        *bool  `json:"enabled" validate:"required"`
 }
 
+// GetUserQuotaCheckQuery represents query parameters for getting user quota check setting
+type GetUserQuotaCheckQuery struct {
+	UserId string `form:"user_id" validate:"required,uuid"`
+}
+
+// GetDepartmentQuotaCheckQuery represents query parameters for getting department quota check setting
+type GetDepartmentQuotaCheckQuery struct {
+	DepartmentName string `form:"department_name" validate:"required,department_name"`
+}
+
 // SetUserQuotaCheckSetting sets quota check setting for a user
 func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 	var req SetUserQuotaCheckRequest
@@ -140,6 +150,98 @@ func (h *QuotaCheckPermissionHandler) SetDepartmentQuotaCheckSetting(c *gin.Cont
 		"data": gin.H{
 			"department_name": req.DepartmentName,
 			"enabled":         *req.Enabled,
+		},
+	})
+}
+
+// GetUserQuotaCheckSetting gets quota check setting for a user
+func (h *QuotaCheckPermissionHandler) GetUserQuotaCheckSetting(c *gin.Context) {
+	var q GetUserQuotaCheckQuery
+	if err := validation.ValidateQuery(c, &q); err != nil {
+		return
+	}
+
+	enabled, err := h.quotaCheckPermissionService.GetUserQuotaCheckSetting(q.UserId)
+	if err != nil {
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorUserNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "quota_check_permission.user_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "quota_check_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "quota_check_permission.get_user_setting_failed",
+			"message": "Failed to get user quota check setting: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "quota_check_permission.success",
+		"message": "User quota check setting fetched successfully",
+		"success": true,
+		"data": gin.H{
+			"user_id": q.UserId,
+			"enabled": enabled,
+		},
+	})
+}
+
+// GetDepartmentQuotaCheckSetting gets quota check setting for a department
+func (h *QuotaCheckPermissionHandler) GetDepartmentQuotaCheckSetting(c *gin.Context) {
+	var q GetDepartmentQuotaCheckQuery
+	if err := validation.ValidateQuery(c, &q); err != nil {
+		return
+	}
+
+	enabled, err := h.quotaCheckPermissionService.GetDepartmentQuotaCheckSetting(q.DepartmentName)
+	if err != nil {
+		if serviceErr, ok := err.(*services.ServiceError); ok {
+			switch serviceErr.Code {
+			case services.ErrorDeptNotFound:
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":    "quota_check_permission.department_not_found",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			case services.ErrorDatabaseError:
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    "quota_check_permission.database_error",
+					"message": serviceErr.Message,
+					"success": false,
+				})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "quota_check_permission.get_department_setting_failed",
+			"message": "Failed to get department quota check setting: " + err.Error(),
+			"success": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    "quota_check_permission.success",
+		"message": "Department quota check setting fetched successfully",
+		"success": true,
+		"data": gin.H{
+			"department_name": q.DepartmentName,
+			"enabled":         enabled,
 		},
 	})
 }

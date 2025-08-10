@@ -229,6 +229,8 @@ func main() {
 			{
 				modelPermissions.POST("/user", modelPermissionHandler.SetUserWhitelist)
 				modelPermissions.POST("/department", modelPermissionHandler.SetDepartmentWhitelist)
+				modelPermissions.GET("/user", modelPermissionHandler.GetUserWhitelist)
+				modelPermissions.GET("/department", modelPermissionHandler.GetDepartmentWhitelist)
 			}
 
 			// Star check permissions management
@@ -236,6 +238,8 @@ func main() {
 			{
 				starCheckPermissions.POST("/user", starCheckPermissionHandler.SetUserStarCheckSetting)
 				starCheckPermissions.POST("/department", starCheckPermissionHandler.SetDepartmentStarCheckSetting)
+				starCheckPermissions.GET("/user", starCheckPermissionHandler.GetUserStarCheckSetting)
+				starCheckPermissions.GET("/department", starCheckPermissionHandler.GetDepartmentStarCheckSetting)
 			}
 
 			// Quota check permissions management
@@ -243,6 +247,8 @@ func main() {
 			{
 				quotaCheckPermissions.POST("/user", quotaCheckPermissionHandler.SetUserQuotaCheckSetting)
 				quotaCheckPermissions.POST("/department", quotaCheckPermissionHandler.SetDepartmentQuotaCheckSetting)
+				quotaCheckPermissions.GET("/user", quotaCheckPermissionHandler.GetUserQuotaCheckSetting)
+				quotaCheckPermissions.GET("/department", quotaCheckPermissionHandler.GetDepartmentQuotaCheckSetting)
 			}
 
 			// Unified query and sync interfaces
