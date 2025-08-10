@@ -277,6 +277,20 @@ func (h *AiGatewayAdminHandler) SetUserModels(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewSuccessResponse(nil, "ok"))
 }
 
+func (h *AiGatewayAdminHandler) GetUserModels(c *gin.Context) {
+	emp := c.Query("employee_number")
+	if emp == "" {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, "employee_number is required"))
+		return
+	}
+	models, err := h.svc.QueryUserModels(emp)
+	if err != nil {
+		h.writeGatewayError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.NewSuccessResponse(gin.H{"employee_number": emp, "models": models}, "ok"))
+}
+
 // -------- helpers --------
 func (h *AiGatewayAdminHandler) writeGatewayError(c *gin.Context, err error) {
 	// If it's HTTPError, use its status

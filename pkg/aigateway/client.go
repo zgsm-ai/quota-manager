@@ -52,6 +52,12 @@ type QuotaCheckPermissionResponse struct {
 	Enabled        bool   `json:"enabled"`
 }
 
+// ModelPermissionQueryResponse represents model whitelist query response
+type ModelPermissionQueryResponse struct {
+	EmployeeNumber string   `json:"employee_number"`
+	Models         []string `json:"models"`
+}
+
 func NewClient(baseURL, adminPath, authHeader, authValue string) *Client {
 	return &Client{
 		BaseURL:    baseURL,
@@ -838,4 +844,55 @@ func (c *Client) queryQuotaCheckPermissionImpl(employeeNumber string) (*QuotaChe
 	}
 	enabled, _ := m["enabled"].(bool)
 	return &QuotaCheckPermissionResponse{EmployeeNumber: employeeNumber, Enabled: enabled}, nil
+}
+
+// QueryUserPermission queries user's model whitelist with retry mechanism
+func (c *Client) QueryUserPermission(employeeNumber string) (*ModelPermissionQueryResponse, error) {
+	return utils.WithRetry(context.Background(), func() (*ModelPermissionQueryResponse, error) {
+		return c.queryUserPermissionImpl(employeeNumber)
+	})
+}
+
+func (c *Client) queryUserPermissionImpl(employeeNumber string) (*ModelPermissionQueryResponse, error) {
+	apiUrl := fmt.Sprintf("%s/model-permission?employee_number=%s", c.BaseURL, url.QueryEscape(employeeNumber))
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	if c.AuthHeader != "" && c.AuthValue != "" {
+		req.Header.Set(c.AuthHeader, c.AuthValue)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var rd ResponseData
+	if err := json.Unmarshal(body, &rd); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if !rd.Success {
+		return nil, &utils.HTTPError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("AI Gateway error: %s - %s", rd.Code, rd.Message)}
+	}
+
+	dataBytes, err := json.Marshal(rd.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	}
+	var out ModelPermissionQueryResponse
+	if err := json.Unmarshal(dataBytes, &out); err != nil {
+		return nil, fmt.Errorf("failed to parse data: %w", err)
+	}
+	if out.Models == nil {
+		out.Models = []string{}
+	}
+	return &out, nil
 }

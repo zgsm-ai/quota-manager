@@ -278,6 +278,7 @@ func main() {
 				aigw.POST("/permission/quota-check", aigatewayAdminHandler.SetQuotaCheck)
 				// models
 				aigw.POST("/permission/models", aigatewayAdminHandler.SetUserModels)
+				aigw.GET("/permission/models", aigatewayAdminHandler.GetUserModels)
 			}
 		}
 	}

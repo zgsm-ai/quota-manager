@@ -86,3 +86,14 @@ func (s *AiGatewayAdminService) SetUserModels(employeeNumber string, models []st
 	}
 	return s.client.SetUserPermission(employeeNumber, models)
 }
+
+func (s *AiGatewayAdminService) QueryUserModels(employeeNumber string) ([]string, error) {
+	if employeeNumber == "" {
+		return nil, fmt.Errorf("employee_number cannot be empty")
+	}
+	resp, err := s.client.QueryUserPermission(employeeNumber)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Models, nil
+}
