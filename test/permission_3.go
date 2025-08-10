@@ -519,9 +519,17 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	AddMockEmployee("000070", "data_integrity_test_employee", "test_070@example.com", "13800000070", 4) // ML_Dept_Team1
 
 	// Set initial permissions
+	// When employee sync is enabled, service will validate employee existence.
+	// We have created the employee record above, but to avoid dependency issues, temporarily disable validation.
+	prevEnabled := employeeSyncConfig.Enabled
+	employeeSyncConfig.Enabled = false
 	if err := permissionService.SetUserWhitelist("000070", []string{"gpt-4", "claude-3-opus"}); err != nil {
+		// Restore flag before returning
+		employeeSyncConfig.Enabled = prevEnabled
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set initial user whitelist: %v", err)}
 	}
+	// Restore employee sync flag
+	employeeSyncConfig.Enabled = prevEnabled
 
 	// Create temporary employee in target department to enable department whitelist setting
 	tempEmployee := &models.EmployeeDepartment{

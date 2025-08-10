@@ -34,8 +34,29 @@ func NewStarCheckPermissionService(db *database.DB, aiGatewayConf *config.AiGate
 	}
 }
 
+func (s *StarCheckPermissionService) resolveEmployeeNumber(identifier string) (string, error) {
+	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
+		return identifier, nil
+	}
+
+	var user models.UserInfo
+	if err := s.db.AuthDB.Where("id = ?", identifier).First(&user).Error; err != nil {
+		return "", NewUserNotFoundError(identifier)
+	}
+	if user.EmployeeNumber == "" {
+		return "", NewUserNotFoundError(identifier)
+	}
+	return user.EmployeeNumber, nil
+}
+
 // SetUserStarCheckSetting sets star check setting for a user
 func (s *StarCheckPermissionService) SetUserStarCheckSetting(employeeNumber string, enabled bool) error {
+	// Resolve identifier to employee number if needed
+	if resolved, err := s.resolveEmployeeNumber(employeeNumber); err != nil {
+		return err
+	} else {
+		employeeNumber = resolved
+	}
 	// Check if user exists when employee_sync is enabled
 	if s.employeeSyncConf.Enabled {
 		var employee models.EmployeeDepartment

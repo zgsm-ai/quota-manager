@@ -34,8 +34,33 @@ func NewPermissionService(db *database.DB, aiGatewayConf *config.AiGatewayConfig
 	}
 }
 
+// resolveEmployeeNumber resolves the input identifier to an employee number based on configuration.
+// When employee sync is enabled via configManager, the input is treated as user_id and mapped via auth_users.
+// Otherwise, the input is treated directly as an employee_number for backward compatibility.
+func (s *PermissionService) resolveEmployeeNumber(identifier string) (string, error) {
+	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
+		return identifier, nil
+	}
+
+	// employee sync enabled: identifier is user_id -> map to employee_number via auth_users
+	var user models.UserInfo
+	if err := s.db.AuthDB.Where("id = ?", identifier).First(&user).Error; err != nil {
+		return "", NewUserNotFoundError(identifier)
+	}
+	if user.EmployeeNumber == "" {
+		return "", NewUserNotFoundError(identifier)
+	}
+	return user.EmployeeNumber, nil
+}
+
 // SetUserWhitelist sets whitelist for a user
 func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []string) error {
+	// Resolve identifier to employee number when needed
+	if resolved, err := s.resolveEmployeeNumber(employeeNumber); err != nil {
+		return err
+	} else {
+		employeeNumber = resolved
+	}
 	// Check if user exists when employee_sync is enabled
 	if s.employeeSyncConf.Enabled {
 		var employee models.EmployeeDepartment

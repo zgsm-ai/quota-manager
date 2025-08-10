@@ -204,6 +204,8 @@ func setupTestEnvironment() (*TestContext, error) {
 	strategyService := services.NewStrategyService(db, gateway, quotaService, defaultEmployeeSyncConfig)
 	quotaQuerier := condition.NewAiGatewayQuotaQuerier(gateway)
 
+	// Initialize permission-related services and set config manager for mapping logic in tests if needed
+	// Note: Many tests call services directly; mapping is only active when EmployeeSync.Enabled is true via configManager
 	return &TestContext{
 		DB:              db,
 		StrategyService: strategyService,
