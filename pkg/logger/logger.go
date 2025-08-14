@@ -17,17 +17,10 @@ func Init() error {
 }
 
 func InitWithLevel(level string) error {
-	// Ensure logs directory exists
-	logsDir := "logs"
-	if err := os.MkdirAll(logsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create logs directory: %v", err)
-	}
+	return InitWithOptions(level, false)
+}
 
-	// Generate log file name (including date)
-	now := time.Now()
-	logFileName := fmt.Sprintf("quota-manager-%s.log", now.Format("2006-01-02"))
-	logFilePath := filepath.Join(logsDir, logFileName)
-
+func InitWithOptions(level string, stdoutOnly bool) error {
 	// Convert string level to zap level
 	var zapLevel zap.AtomicLevel
 	switch level {
@@ -43,37 +36,55 @@ func InitWithLevel(level string) error {
 		zapLevel = zap.NewAtomicLevelAt(zap.InfoLevel)
 	}
 
-	config := zap.Config{
+	encoderCfg := zapcore.EncoderConfig{
+		TimeKey:        "timestamp",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		MessageKey:     "message",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+		EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05"),
+		EncodeDuration: zapcore.SecondsDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	cfg := zap.Config{
 		Level:       zapLevel,
 		Development: false,
 		Sampling: &zap.SamplingConfig{
 			Initial:    100,
 			Thereafter: 100,
 		},
-		Encoding: "console", // Use console format for better readability
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "timestamp",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "message",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder, // Colorized level encoding
-			EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05"),
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-		OutputPaths:      []string{"stdout", logFilePath}, // Output to console and file simultaneously
-		ErrorOutputPaths: []string{"stderr", logFilePath},
+		Encoding:      "console",
+		EncoderConfig: encoderCfg,
+	}
+
+	if stdoutOnly {
+		cfg.OutputPaths = []string{"stdout"}
+		cfg.ErrorOutputPaths = []string{"stderr"}
+	} else {
+		// Ensure logs directory exists
+		logsDir := "logs"
+		if err := os.MkdirAll(logsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create logs directory: %v", err)
+		}
+
+		// Generate log file name (including date)
+		now := time.Now()
+		logFileName := fmt.Sprintf("quota-manager-%s.log", now.Format("2006-01-02"))
+		logFilePath := filepath.Join(logsDir, logFileName)
+
+		cfg.OutputPaths = []string{"stdout", logFilePath}
+		cfg.ErrorOutputPaths = []string{"stderr", logFilePath}
 	}
 
 	var err error
-	Logger, err = config.Build()
+	Logger, err = cfg.Build()
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 

@@ -51,7 +51,8 @@ type VoucherConfig struct {
 }
 
 type LogConfig struct {
-	Level string `mapstructure:"level"`
+	Level      string `mapstructure:"level"`
+	StdoutOnly bool   `mapstructure:"stdout_only"`
 }
 
 type EmployeeSyncConfig struct {

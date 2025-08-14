@@ -37,6 +37,7 @@ voucher:
 
 log:
   level: "warn"
+  stdout_only: true
 
 employee_sync:
   enabled: false

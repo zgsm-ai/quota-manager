@@ -101,7 +101,7 @@ func main() {
 	if logLevel == "" {
 		logLevel = "warn" // Default level if not configured
 	}
-	if err := logger.InitWithLevel(logLevel); err != nil {
+	if err := logger.InitWithOptions(logLevel, cfg.Log.StdoutOnly); err != nil {
 		fmt.Printf("Failed to initialize logger with level %s: %v\n", logLevel, err)
 		os.Exit(1)
 	}
