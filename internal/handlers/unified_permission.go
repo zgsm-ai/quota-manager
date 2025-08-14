@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"quota-manager/internal/response"
 	"quota-manager/internal/services"
 	"quota-manager/internal/validation"
 
@@ -44,7 +45,7 @@ func (h *UnifiedPermissionHandler) GetEffectivePermissions(c *gin.Context) {
 		h.handleQuotaCheckPermissions(c, req)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
-			"code":    "unified_permission.invalid_type",
+			"code":    response.UnifiedPermissionInvalidTypeCode,
 			"message": "Invalid permission type",
 			"success": false,
 		})
@@ -56,7 +57,7 @@ func (h *UnifiedPermissionHandler) handleModelPermissions(c *gin.Context, req Ge
 	modelsList, err := h.unifiedPermissionService.GetModelEffectivePermissions(req.TargetType, req.TargetIdentifier)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "model_permission.get_permissions_failed",
+			"code":    response.ModelPermissionGetPermissionsFailedCode,
 			"message": "Failed to get model permissions: " + err.Error(),
 			"success": false,
 		})
@@ -64,7 +65,7 @@ func (h *UnifiedPermissionHandler) handleModelPermissions(c *gin.Context, req Ge
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "model_permission.success",
+		"code":    response.SuccessCode,
 		"message": "Model permissions retrieved successfully",
 		"success": true,
 		"data": gin.H{
@@ -81,7 +82,7 @@ func (h *UnifiedPermissionHandler) handleStarCheckPermissions(c *gin.Context, re
 	enabled, err := h.unifiedPermissionService.GetStarCheckEffectivePermissions(req.TargetType, req.TargetIdentifier)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "star_check_permission.get_permissions_failed",
+			"code":    response.StarCheckPermissionGetPermissionsFailedCode,
 			"message": "Failed to get star check permissions: " + err.Error(),
 			"success": false,
 		})
@@ -89,7 +90,7 @@ func (h *UnifiedPermissionHandler) handleStarCheckPermissions(c *gin.Context, re
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "star_check_permission.success",
+		"code":    response.SuccessCode,
 		"message": "Star check permissions retrieved successfully",
 		"success": true,
 		"data": gin.H{
@@ -106,7 +107,7 @@ func (h *UnifiedPermissionHandler) handleQuotaCheckPermissions(c *gin.Context, r
 	enabled, err := h.unifiedPermissionService.GetQuotaCheckEffectivePermissions(req.TargetType, req.TargetIdentifier)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "quota_check_permission.get_permissions_failed",
+			"code":    response.QuotaCheckPermissionGetPermissionsFailedCode,
 			"message": "Failed to get quota check permissions: " + err.Error(),
 			"success": false,
 		})
@@ -114,7 +115,7 @@ func (h *UnifiedPermissionHandler) handleQuotaCheckPermissions(c *gin.Context, r
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "quota_check_permission.success",
+		"code":    response.SuccessCode,
 		"message": "Quota check permissions retrieved successfully",
 		"success": true,
 		"data": gin.H{
@@ -130,7 +131,7 @@ func (h *UnifiedPermissionHandler) handleQuotaCheckPermissions(c *gin.Context, r
 func (h *UnifiedPermissionHandler) TriggerEmployeeSync(c *gin.Context) {
 	if err := h.unifiedPermissionService.TriggerEmployeeSync(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "employee_sync.failed",
+			"code":    response.EmployeeSyncFailedCode,
 			"message": "Failed to sync employees: " + err.Error(),
 			"success": false,
 		})
@@ -138,7 +139,7 @@ func (h *UnifiedPermissionHandler) TriggerEmployeeSync(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "employee_sync.success",
+		"code":    response.SuccessCode,
 		"message": "Employee sync triggered successfully",
 		"success": true,
 	})

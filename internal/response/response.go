@@ -36,9 +36,9 @@ const (
 	SuccessCode = "quota-manager.success"
 
 	// Client error codes
-	BadRequestCode    = "quota-manager.bad_request"
-	UnauthorizedCode  = "quota-manager.unauthorized"
-	NotFoundCode      = "quota-manager.not_found"
+	BadRequestCode   = "quota-manager.bad_request"
+	UnauthorizedCode = "quota-manager.unauthorized"
+	NotFoundCode     = "quota-manager.not_found"
 
 	// Server error codes
 	InternalErrorCode = "quota-manager.internal_error"
@@ -58,4 +58,41 @@ const (
 	StrategyDeleteFailedCode = "quota-manager.strategy_delete_failed"
 	DatabaseErrorCode        = "quota-manager.database_error"
 	AiGatewayErrorCode       = "quota-manager.aigateway_error"
+
+	// The following codes are used for internal only
+
+	// Model permission codes
+	ModelPermissionWhitelistExistsCode              = "quota-manager.whitelist_exists"
+	ModelPermissionUserNotFoundCode                 = "quota-manager.user_not_found"
+	ModelPermissionDepartmentNotFoundCode           = "quota-manager.department_not_found"
+	ModelPermissionDatabaseErrorCode                = "quota-manager.database_error"
+	ModelPermissionSetUserWhitelistFailedCode       = "quota-manager.set_user_whitelist_failed"
+	ModelPermissionSetDepartmentWhitelistFailedCode = "quota-manager.set_department_whitelist_failed"
+	ModelPermissionGetUserWhitelistFailedCode       = "quota-manager.get_user_whitelist_failed"
+	ModelPermissionGetDepartmentWhitelistFailedCode = "quota-manager.get_department_whitelist_failed"
+	ModelPermissionGetPermissionsFailedCode         = "quota-manager.get_permissions_failed"
+
+	// Star check permission codes
+	StarCheckPermissionSettingExistsCode              = "quota-manager.setting_exists"
+	StarCheckPermissionUserNotFoundCode               = "quota-manager.user_not_found"
+	StarCheckPermissionDepartmentNotFoundCode         = "quota-manager.department_not_found"
+	StarCheckPermissionDatabaseErrorCode              = "quota-manager.database_error"
+	StarCheckPermissionSetUserSettingFailedCode       = "quota-manager.set_user_setting_failed"
+	StarCheckPermissionSetDepartmentSettingFailedCode = "quota-manager.set_department_setting_failed"
+	StarCheckPermissionGetUserSettingFailedCode       = "quota-manager.get_user_setting_failed"
+	StarCheckPermissionGetDepartmentSettingFailedCode = "quota-manager.get_department_setting_failed"
+	StarCheckPermissionGetPermissionsFailedCode       = "quota-manager.get_permissions_failed"
+
+	// Quota check permission codes
+	QuotaCheckPermissionUserNotFoundCode               = "quota-manager.user_not_found"
+	QuotaCheckPermissionDepartmentNotFoundCode         = "quota-manager.department_not_found"
+	QuotaCheckPermissionDatabaseErrorCode              = "quota-manager.database_error"
+	QuotaCheckPermissionSetUserSettingFailedCode       = "quota-manager.set_user_setting_failed"
+	QuotaCheckPermissionSetDepartmentSettingFailedCode = "quota-manager.set_department_setting_failed"
+	QuotaCheckPermissionGetUserSettingFailedCode       = "quota-manager.get_user_setting_failed"
+	QuotaCheckPermissionGetDepartmentSettingFailedCode = "quota-manager.get_department_setting_failed"
+	QuotaCheckPermissionGetPermissionsFailedCode       = "quota-manager.get_permissions_failed"
+
+	UnifiedPermissionInvalidTypeCode = "quota-manager.invalid_permission_type"
+	EmployeeSyncFailedCode           = "quota-manager.employee_sync_failed"
 )

@@ -45,7 +45,7 @@ func (h *ScanHandler) TriggerScan(c *gin.Context) {
 		c.JSON(http.StatusOK, response.NewSuccessResponse(nil, "Strategy scan triggered successfully"))
 	case "employee-sync":
 		if err := h.unifiedPermissionService.TriggerEmployeeSync(); err != nil {
-			c.JSON(http.StatusInternalServerError, response.NewErrorResponse("employee_sync.failed", "Failed to sync employees: "+err.Error()))
+			c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.EmployeeSyncFailedCode, "Failed to sync employees: "+err.Error()))
 			return
 		}
 		c.JSON(http.StatusOK, response.NewSuccessResponse(nil, "Employee sync triggered successfully"))

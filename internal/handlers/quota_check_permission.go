@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"quota-manager/internal/response"
 	"quota-manager/internal/services"
 	"quota-manager/internal/validation"
 
@@ -56,21 +57,21 @@ func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 			switch serviceErr.Code {
 			case services.ErrorUserNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "quota_check_permission.user_not_found",
+					"code":    response.QuotaCheckPermissionUserNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDeptNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "quota_check_permission.department_not_found",
+					"code":    response.QuotaCheckPermissionDepartmentNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "quota_check_permission.database_error",
+					"code":    response.QuotaCheckPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -80,7 +81,7 @@ func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 
 		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "quota_check_permission.set_user_setting_failed",
+			"code":    response.QuotaCheckPermissionSetUserSettingFailedCode,
 			"message": "Failed to set user quota check setting: " + err.Error(),
 			"success": false,
 		})
@@ -88,7 +89,7 @@ func (h *QuotaCheckPermissionHandler) SetUserQuotaCheckSetting(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "quota_check_permission.set_user_setting_success",
+		"code":    response.SuccessCode,
 		"message": "User quota check setting set successfully",
 		"success": true,
 		"data": gin.H{
@@ -112,21 +113,21 @@ func (h *QuotaCheckPermissionHandler) SetDepartmentQuotaCheckSetting(c *gin.Cont
 			switch serviceErr.Code {
 			case services.ErrorUserNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "quota_check_permission.user_not_found",
+					"code":    response.QuotaCheckPermissionUserNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDeptNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "quota_check_permission.department_not_found",
+					"code":    response.QuotaCheckPermissionDepartmentNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "quota_check_permission.database_error",
+					"code":    response.QuotaCheckPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -136,7 +137,7 @@ func (h *QuotaCheckPermissionHandler) SetDepartmentQuotaCheckSetting(c *gin.Cont
 
 		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "quota_check_permission.set_department_setting_failed",
+			"code":    response.QuotaCheckPermissionSetDepartmentSettingFailedCode,
 			"message": "Failed to set department quota check setting: " + err.Error(),
 			"success": false,
 		})
@@ -144,7 +145,7 @@ func (h *QuotaCheckPermissionHandler) SetDepartmentQuotaCheckSetting(c *gin.Cont
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "quota_check_permission.set_department_setting_success",
+		"code":    response.SuccessCode,
 		"message": "Department quota check setting set successfully",
 		"success": true,
 		"data": gin.H{
@@ -167,14 +168,14 @@ func (h *QuotaCheckPermissionHandler) GetUserQuotaCheckSetting(c *gin.Context) {
 			switch serviceErr.Code {
 			case services.ErrorUserNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "quota_check_permission.user_not_found",
+					"code":    response.QuotaCheckPermissionUserNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "quota_check_permission.database_error",
+					"code":    response.QuotaCheckPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -182,7 +183,7 @@ func (h *QuotaCheckPermissionHandler) GetUserQuotaCheckSetting(c *gin.Context) {
 			}
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "quota_check_permission.get_user_setting_failed",
+			"code":    response.QuotaCheckPermissionGetUserSettingFailedCode,
 			"message": "Failed to get user quota check setting: " + err.Error(),
 			"success": false,
 		})
@@ -190,7 +191,7 @@ func (h *QuotaCheckPermissionHandler) GetUserQuotaCheckSetting(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "quota_check_permission.success",
+		"code":    response.SuccessCode,
 		"message": "User quota check setting fetched successfully",
 		"success": true,
 		"data": gin.H{
@@ -213,14 +214,14 @@ func (h *QuotaCheckPermissionHandler) GetDepartmentQuotaCheckSetting(c *gin.Cont
 			switch serviceErr.Code {
 			case services.ErrorDeptNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "quota_check_permission.department_not_found",
+					"code":    response.QuotaCheckPermissionDepartmentNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "quota_check_permission.database_error",
+					"code":    response.QuotaCheckPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -228,7 +229,7 @@ func (h *QuotaCheckPermissionHandler) GetDepartmentQuotaCheckSetting(c *gin.Cont
 			}
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "quota_check_permission.get_department_setting_failed",
+			"code":    response.QuotaCheckPermissionGetDepartmentSettingFailedCode,
 			"message": "Failed to get department quota check setting: " + err.Error(),
 			"success": false,
 		})
@@ -236,7 +237,7 @@ func (h *QuotaCheckPermissionHandler) GetDepartmentQuotaCheckSetting(c *gin.Cont
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "quota_check_permission.success",
+		"code":    response.SuccessCode,
 		"message": "Department quota check setting fetched successfully",
 		"success": true,
 		"data": gin.H{

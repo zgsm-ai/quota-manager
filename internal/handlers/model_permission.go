@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"quota-manager/internal/response"
 	"quota-manager/internal/services"
 	"quota-manager/internal/validation"
 
@@ -53,7 +54,7 @@ func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 	if err := h.permissionService.SetUserWhitelist(req.UserId, req.Models); err != nil {
 		if err.Error() == "whitelist already exists with same models" {
 			c.JSON(http.StatusOK, gin.H{
-				"code":    "model_permission.whitelist_exists",
+				"code":    response.ModelPermissionWhitelistExistsCode,
 				"message": "Model whitelist already exists, no update needed",
 				"success": true,
 			})
@@ -65,21 +66,21 @@ func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 			switch serviceErr.Code {
 			case services.ErrorUserNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "model_permission.user_not_found",
+					"code":    response.ModelPermissionUserNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDeptNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "model_permission.department_not_found",
+					"code":    response.ModelPermissionDepartmentNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "model_permission.database_error",
+					"code":    response.ModelPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -89,7 +90,7 @@ func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 
 		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "model_permission.set_user_whitelist_failed",
+			"code":    response.ModelPermissionSetUserWhitelistFailedCode,
 			"message": "Failed to set user model whitelist: " + err.Error(),
 			"success": false,
 		})
@@ -97,7 +98,7 @@ func (h *ModelPermissionHandler) SetUserWhitelist(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "model_permission.success",
+		"code":    response.SuccessCode,
 		"message": "User model whitelist set successfully",
 		"success": true,
 		"data": gin.H{
@@ -118,7 +119,7 @@ func (h *ModelPermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 	if err := h.permissionService.SetDepartmentWhitelist(req.DepartmentName, req.Models); err != nil {
 		if err.Error() == "whitelist already exists with same models" {
 			c.JSON(http.StatusOK, gin.H{
-				"code":    "model_permission.whitelist_exists",
+				"code":    response.ModelPermissionWhitelistExistsCode,
 				"message": "Model whitelist already exists, no update needed",
 				"success": true,
 			})
@@ -130,21 +131,21 @@ func (h *ModelPermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 			switch serviceErr.Code {
 			case services.ErrorUserNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "model_permission.user_not_found",
+					"code":    response.ModelPermissionUserNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDeptNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "model_permission.department_not_found",
+					"code":    response.ModelPermissionDepartmentNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "model_permission.database_error",
+					"code":    response.ModelPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -154,7 +155,7 @@ func (h *ModelPermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 
 		// Default case for other errors
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "model_permission.set_department_whitelist_failed",
+			"code":    response.ModelPermissionSetDepartmentWhitelistFailedCode,
 			"message": "Failed to set department model whitelist: " + err.Error(),
 			"success": false,
 		})
@@ -162,7 +163,7 @@ func (h *ModelPermissionHandler) SetDepartmentWhitelist(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "model_permission.success",
+		"code":    response.SuccessCode,
 		"message": "Department model whitelist set successfully",
 		"success": true,
 		"data": gin.H{
@@ -185,14 +186,14 @@ func (h *ModelPermissionHandler) GetUserWhitelist(c *gin.Context) {
 			switch serviceErr.Code {
 			case services.ErrorUserNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "model_permission.user_not_found",
+					"code":    response.ModelPermissionUserNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "model_permission.database_error",
+					"code":    response.ModelPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -200,7 +201,7 @@ func (h *ModelPermissionHandler) GetUserWhitelist(c *gin.Context) {
 			}
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "model_permission.get_user_whitelist_failed",
+			"code":    response.ModelPermissionGetUserWhitelistFailedCode,
 			"message": "Failed to get user model whitelist: " + err.Error(),
 			"success": false,
 		})
@@ -208,7 +209,7 @@ func (h *ModelPermissionHandler) GetUserWhitelist(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "model_permission.success",
+		"code":    response.SuccessCode,
 		"message": "User model whitelist fetched successfully",
 		"success": true,
 		"data": gin.H{
@@ -231,14 +232,14 @@ func (h *ModelPermissionHandler) GetDepartmentWhitelist(c *gin.Context) {
 			switch serviceErr.Code {
 			case services.ErrorDeptNotFound:
 				c.JSON(http.StatusBadRequest, gin.H{
-					"code":    "model_permission.department_not_found",
+					"code":    response.ModelPermissionDepartmentNotFoundCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
 				return
 			case services.ErrorDatabaseError:
 				c.JSON(http.StatusInternalServerError, gin.H{
-					"code":    "model_permission.database_error",
+					"code":    response.ModelPermissionDatabaseErrorCode,
 					"message": serviceErr.Message,
 					"success": false,
 				})
@@ -246,7 +247,7 @@ func (h *ModelPermissionHandler) GetDepartmentWhitelist(c *gin.Context) {
 			}
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    "model_permission.get_department_whitelist_failed",
+			"code":    response.ModelPermissionGetDepartmentWhitelistFailedCode,
 			"message": "Failed to get department model whitelist: " + err.Error(),
 			"success": false,
 		})
@@ -254,7 +255,7 @@ func (h *ModelPermissionHandler) GetDepartmentWhitelist(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":    "model_permission.success",
+		"code":    response.SuccessCode,
 		"message": "Department model whitelist fetched successfully",
 		"success": true,
 		"data": gin.H{
