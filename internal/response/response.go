@@ -38,28 +38,27 @@ const (
 	// Client error codes
 	BadRequestCode   = "quota-manager.bad_request"
 	UnauthorizedCode = "quota-manager.unauthorized"
-	NotFoundCode     = "quota-manager.not_found"
 
 	// Server error codes
 	InternalErrorCode = "quota-manager.internal_error"
 
 	// Business logic error codes
-	InvalidStrategyIDCode    = "quota-manager.invalid_strategy_id"
-	StrategyNotFoundCode     = "quota-manager.strategy_not_found"
-	InsufficientQuotaCode    = "quota-manager.insufficient_quota"
-	VoucherInvalidCode       = "quota-manager.voucher_invalid"
-	VoucherExpiredCode       = "quota-manager.voucher_expired"
-	VoucherRedeemedCode      = "quota-manager.voucher_already_redeemed"
-	UserNotFoundCode         = "quota-manager.user_not_found"
-	TokenInvalidCode         = "quota-manager.token_invalid"
-	QuotaTransferFailedCode  = "quota-manager.quota_transfer_failed"
+	InvalidStrategyIDCode   = "quota-manager.invalid_strategy_id"
+	StrategyNotFoundCode    = "quota-manager.strategy_not_found"
+	InsufficientQuotaCode   = "quota-manager.insufficient_quota"
+	VoucherInvalidCode      = "quota-manager.voucher_invalid"
+	VoucherExpiredCode      = "quota-manager.voucher_expired"
+	VoucherRedeemedCode     = "quota-manager.voucher_already_redeemed"
+	TokenInvalidCode        = "quota-manager.token_invalid"
+	QuotaTransferFailedCode = "quota-manager.quota_transfer_failed"
+	DatabaseErrorCode       = "quota-manager.database_error"
+	AiGatewayErrorCode      = "quota-manager.aigateway_error"
+
+	// The following codes are used for internal only
+
 	StrategyCreateFailedCode = "quota-manager.strategy_create_failed"
 	StrategyUpdateFailedCode = "quota-manager.strategy_update_failed"
 	StrategyDeleteFailedCode = "quota-manager.strategy_delete_failed"
-	DatabaseErrorCode        = "quota-manager.database_error"
-	AiGatewayErrorCode       = "quota-manager.aigateway_error"
-
-	// The following codes are used for internal only
 
 	// Model permission codes
 	ModelPermissionWhitelistExistsCode              = "quota-manager.whitelist_exists"

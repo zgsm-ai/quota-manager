@@ -784,7 +784,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `quota-manager.bad_request`: 错误请求 - 无效的请求参数
 - `quota-manager.unauthorized`: 未授权 - 认证失败
 - `quota-manager.token_invalid`: 令牌无效 - 无效或缺少 JWT 令牌
-- `quota-manager.not_found`: 未找到 - 资源不存在
 - `quota-manager.strategy_not_found`: 策略未找到 - 指定 ID 的策略不存在
 - `quota-manager.invalid_strategy_id`: 策略 ID 无效 - 策略 ID 格式无效
 - `quota-manager.insufficient_quota`: 配额不足 - 用户配额不够
@@ -793,7 +792,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - `quota-manager.voucher_already_redeemed`: 兑换码已使用 - 兑换码已被使用
 - `quota-manager.quota_transfer_failed`: 配额转账失败 - 配额转账失败
 - `quota-manager.strategy_create_failed`: 策略创建失败 - 策略创建失败
-- `quota-manager.user_not_found`: 用户未找到 - 指定的用户不存在
 - `quota-manager.strategy_update_failed`: 策略更新失败 - 策略更新失败
 - `quota-manager.strategy_delete_failed`: 策略删除失败 - 策略删除失败
 - `quota-manager.database_error`: 数据库错误 - 数据库操作失败

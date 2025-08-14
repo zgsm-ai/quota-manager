@@ -819,7 +819,6 @@ All error responses follow the same format:
 - `quota-manager.bad_request`: Bad Request - Invalid request parameters
 - `quota-manager.unauthorized`: Unauthorized - Authentication failed
 - `quota-manager.token_invalid`: Token Invalid - Invalid or missing JWT token
-- `quota-manager.not_found`: Not Found - Resource not found
 - `quota-manager.strategy_not_found`: Strategy Not Found - Strategy with specified ID not found
 - `quota-manager.invalid_strategy_id`: Invalid Strategy ID - Strategy ID format is invalid
 - `quota-manager.insufficient_quota`: Insufficient Quota - User does not have enough quota
@@ -833,7 +832,6 @@ All error responses follow the same format:
 - `quota-manager.database_error`: Database Error - Database operation failed
 - `quota-manager.aigateway_error`: AiGateway Error - AiGateway service error
 - `quota-manager.internal_error`: Internal Server Error - Unexpected server error
-- `quota-manager.user_not_found`: User not found - The specified user does not exist
 
 ## Condition Expressions
 
