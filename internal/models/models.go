@@ -418,6 +418,7 @@ const (
 	OperationRecharge    = "RECHARGE"
 	OperationTransferIn  = "TRANSFER_IN"
 	OperationTransferOut = "TRANSFER_OUT"
+	OperationDeduct      = "DEDUCT"
 )
 
 // Status constants for quota audit detail items

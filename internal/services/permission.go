@@ -61,14 +61,6 @@ func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []
 	} else {
 		employeeNumber = resolved
 	}
-	// Check if user exists when employee_sync is enabled
-	if s.employeeSyncConf.Enabled {
-		var employee models.EmployeeDepartment
-		err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error
-		if err != nil {
-			return NewUserNotFoundError(employeeNumber)
-		}
-	}
 
 	// Check if whitelist already exists
 	var whitelist models.ModelWhitelist
@@ -187,15 +179,6 @@ func (s *PermissionService) GetUserWhitelist(identifier string) ([]string, error
 		identifier = resolved
 	}
 
-	// Check if user exists when employee_sync is enabled
-	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
-		var employee models.EmployeeDepartment
-		err := s.db.DB.Where("employee_number = ?", identifier).First(&employee).Error
-		if err != nil {
-			return []string{}, NewUserNotFoundError(identifier)
-		}
-	}
-
 	// Query explicit user whitelist
 	var whitelist models.ModelWhitelist
 	err := s.db.DB.Where("target_type = ? AND target_identifier = ?",
@@ -238,6 +221,13 @@ func (s *PermissionService) GetDepartmentWhitelist(departmentName string) ([]str
 
 // GetUserEffectivePermissions gets effective permissions for a user
 func (s *PermissionService) GetUserEffectivePermissions(employeeNumber string) ([]string, error) {
+	// Resolve identifier to employee number when needed
+	if resolved, err := s.resolveEmployeeNumber(employeeNumber); err != nil {
+		return []string{}, err
+	} else {
+		employeeNumber = resolved
+	}
+
 	// Get effective permissions directly, no need to check if employee exists
 	var effectivePermission models.EffectivePermission
 	err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectivePermission).Error

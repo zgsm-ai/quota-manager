@@ -1213,3 +1213,163 @@ func (s *QuotaService) recordMonthlyUsedQuota(now time.Time) error {
 
 	return nil
 }
+
+// DeductQuota deducts quota from a user's account
+func (s *QuotaService) DeductQuota(userID string, amount float64, reason, referenceID, model string) error {
+	// Validate amount
+	if amount <= 0 {
+		return fmt.Errorf("amount must be positive")
+	}
+
+	// Get used quota from AiGateway
+	usedQuota, err := s.aiGatewayClient.QueryUsedQuotaValue(userID)
+	if err != nil {
+		return fmt.Errorf("failed to get used quota: %w", err)
+	}
+
+	// Start database transaction
+	tx := s.db.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Get all valid quotas for the user, ordered by expiry date
+	var quotas []models.Quota
+	if err := tx.Where("user_id = ? AND status = ?", userID, models.StatusValid).
+		Order("expiry_date ASC").Find(&quotas).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to get quota list: %w", err)
+	}
+
+	// Calculate total available quota
+	totalDatabaseQuota := 0.0
+	for _, quota := range quotas {
+		totalDatabaseQuota += quota.Amount
+	}
+
+	availableQuota := totalDatabaseQuota - usedQuota
+	if availableQuota < amount {
+		tx.Rollback()
+		return fmt.Errorf("insufficient quota: available %g, needed %g", availableQuota, amount)
+	}
+
+	// Deduct the amount from quotas, starting from earliest expiry date
+	remainingDeduct := amount
+	updatedQuotas := make([]*models.Quota, 0)
+	deletedQuotaIDs := make([]int, 0)
+
+	for _, quota := range quotas {
+		if remainingDeduct <= 0 {
+			break
+		}
+
+		// Calculate how much to deduct from this quota
+		deductFromThis := min(remainingDeduct, quota.Amount)
+		quota.Amount -= deductFromThis
+		remainingDeduct -= deductFromThis
+
+		if quota.Amount > 0 {
+			// Update the quota record
+			updatedQuotas = append(updatedQuotas, &quota)
+		} else {
+			// Mark for deletion if amount becomes zero or negative
+			deletedQuotaIDs = append(deletedQuotaIDs, quota.ID)
+		}
+	}
+
+	// Update quota records
+	for _, quota := range updatedQuotas {
+		if err := tx.Model(&models.Quota{}).Where("id = ?", quota.ID).
+			Update("amount", quota.Amount).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to update quota: %w", err)
+		}
+	}
+
+	// Delete zero amount quotas
+	if len(deletedQuotaIDs) > 0 {
+		if err := tx.Where("id IN ?", deletedQuotaIDs).Delete(&models.Quota{}).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to delete zero quota records: %w", err)
+		}
+	}
+
+	// Find earliest expiry date for audit record
+	var earliestExpiryDate time.Time
+	if len(quotas) > 0 {
+		earliestExpiryDate = quotas[0].ExpiryDate
+		for _, quota := range quotas {
+			if quota.ExpiryDate.Before(earliestExpiryDate) {
+				earliestExpiryDate = quota.ExpiryDate
+			}
+		}
+	} else {
+		earliestExpiryDate = time.Now().AddDate(0, 0, 30) // Default to 30 days if no quotas
+	}
+
+	// Record audit log
+	auditRecord := &models.QuotaAudit{
+		UserID:     userID,
+		Amount:     -amount, // Negative amount for deduction
+		Operation:  models.OperationDeduct,
+		ExpiryDate: earliestExpiryDate,
+	}
+
+	// Add reason, referenceID, and model to audit record if provided
+	if reason != "" {
+		auditRecord.StrategyName = reason // Use StrategyName field to store reason
+	}
+	if referenceID != "" {
+		// Store referenceID in RelatedUser field
+		auditRecord.RelatedUser = referenceID
+	}
+
+	// Prepare audit details
+	auditDetails := &models.QuotaAuditDetails{
+		Operation: models.OperationDeduct,
+		Summary: models.QuotaAuditSummary{
+			TotalAmount:        amount,
+			TotalItems:         1,
+			SuccessfulItems:    1,
+			EarliestExpiryDate: earliestExpiryDate.Format(time.RFC3339),
+		},
+		Items: []models.QuotaAuditDetailItem{
+			{
+				Amount:     amount,
+				ExpiryDate: earliestExpiryDate.Format(time.RFC3339),
+				Status:     models.AuditStatusSuccess,
+			},
+		},
+	}
+	if err := auditRecord.MarshalDetails(auditDetails); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to marshal audit details: %w", err)
+	}
+	if err := tx.Create(auditRecord).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to create audit record: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Update AiGateway quota
+	if err := s.aiGatewayClient.DeltaQuota(userID, -amount); err != nil {
+		// Log the error but don't fail the operation since database is already updated
+		logger.Error("Failed to update AiGateway quota after deduction", zap.Error(err), zap.String("user_id", userID))
+	}
+
+	return nil
+}
+
+// min returns the minimum of two float64 values
+func min(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}

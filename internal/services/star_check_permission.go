@@ -57,14 +57,6 @@ func (s *StarCheckPermissionService) SetUserStarCheckSetting(employeeNumber stri
 	} else {
 		employeeNumber = resolved
 	}
-	// Check if user exists when employee_sync is enabled
-	if s.employeeSyncConf.Enabled {
-		var employee models.EmployeeDepartment
-		err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error
-		if err != nil {
-			return NewUserNotFoundError(employeeNumber)
-		}
-	}
 
 	// Check if setting already exists
 	var setting models.StarCheckSetting
@@ -175,6 +167,13 @@ func (s *StarCheckPermissionService) SetDepartmentStarCheckSetting(departmentNam
 
 // GetUserEffectiveStarCheckSetting gets effective star check setting for a user
 func (s *StarCheckPermissionService) GetUserEffectiveStarCheckSetting(employeeNumber string) (bool, error) {
+	// Resolve identifier to employee number when needed
+	if resolved, err := s.resolveEmployeeNumber(employeeNumber); err != nil {
+		return false, err
+	} else {
+		employeeNumber = resolved
+	}
+
 	// Get effective setting directly, no need to check if employee exists
 	var effectiveSetting models.EffectiveStarCheckSetting
 	err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectiveSetting).Error
@@ -219,15 +218,6 @@ func (s *StarCheckPermissionService) GetUserStarCheckSetting(identifier string) 
 		return false, err
 	} else {
 		identifier = resolved
-	}
-
-	// Check if user exists when employee_sync is enabled
-	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
-		var employee models.EmployeeDepartment
-		err := s.db.DB.Where("employee_number = ?", identifier).First(&employee).Error
-		if err != nil {
-			return false, NewUserNotFoundError(identifier)
-		}
 	}
 
 	// Query explicit user setting
