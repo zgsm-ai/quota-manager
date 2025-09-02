@@ -35,16 +35,26 @@ func NewQuotaCheckPermissionService(db *database.DB, aiGatewayConf *config.AiGat
 }
 
 func (s *QuotaCheckPermissionService) resolveEmployeeNumber(identifier string) (string, error) {
+	// When employee_sync is disabled, identifier is employee_number. Validate existence.
 	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
+		var emp models.EmployeeDepartment
+		if err := s.db.DB.Where("employee_number = ?", identifier).First(&emp).Error; err != nil {
+			return "", NewUserNotFoundError(identifier)
+		}
 		return identifier, nil
 	}
 
+	// When employee_sync is enabled, identifier is user_id. Map and validate mapped employee exists.
 	var user models.UserInfo
 	if err := s.db.AuthDB.Where("id = ?", identifier).First(&user).Error; err != nil {
 		return "", NewUserNotFoundError(identifier)
 	}
 	if user.EmployeeNumber == "" {
 		return "", NewUserNotFoundError(identifier)
+	}
+	var emp models.EmployeeDepartment
+	if err := s.db.DB.Where("employee_number = ?", user.EmployeeNumber).First(&emp).Error; err != nil {
+		return "", NewUserNotFoundError(user.EmployeeNumber)
 	}
 	return user.EmployeeNumber, nil
 }

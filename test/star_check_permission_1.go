@@ -5,6 +5,9 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/models"
 	"quota-manager/internal/services"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 // testUserStarCheckSettingManagement tests user star check setting management
@@ -370,6 +373,22 @@ func testStarCheckEmployeeSync(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
+	// Also create corresponding auth user in authdb for employee sync resolution
+	authUser := &models.UserInfo{
+		ID:             uuid.NewString(),
+		CreatedAt:      time.Now().Add(-time.Hour),
+		UpdatedAt:      time.Now(),
+		AccessTime:     time.Now(),
+		Name:           employee.Username,
+		EmployeeNumber: "205001",
+		GithubID:       fmt.Sprintf("test_%s_%d", "205001", time.Now().UnixNano()),
+		GithubName:     employee.Username,
+		Devices:        "{}",
+	}
+	if err := ctx.DB.AuthDB.Create(authUser).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user: %v", err)}
+	}
+
 	// Set department-level star check setting
 	if err := starCheckPermissionService.SetDepartmentStarCheckSetting("R&D_Center", false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set department star check setting: %v", err)}
@@ -381,7 +400,7 @@ func testStarCheckEmployeeSync(ctx *TestContext) TestResult {
 	}
 
 	// Verify initial state (should be disabled due to R&D_Center setting)
-	initialEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("205001")
+	initialEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(authUser.ID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get initial star check setting: %v", err)}
 	}
@@ -425,7 +444,7 @@ func testStarCheckEmployeeSync(ctx *TestContext) TestResult {
 	}
 
 	// Verify star check setting changed (should be enabled now due to Operations_Center setting)
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("205001")
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(authUser.ID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get updated star check setting: %v", err)}
 	}

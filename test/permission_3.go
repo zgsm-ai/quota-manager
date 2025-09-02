@@ -5,6 +5,9 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/models"
 	"quota-manager/internal/services"
+	"time"
+
+	"github.com/google/uuid"
 
 	"gorm.io/gorm"
 )
@@ -442,16 +445,12 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no user whitelist records for removed user, got %d", userWhitelistCount)}
 	}
 
-	// 4. Verify service returns empty permissions when getting permissions for deleted user
+	// 4. Verify service returns error when getting permissions for deleted user
 	deletedUserModels, err := permissionService.GetUserEffectivePermissions("000060")
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no error when getting permissions for deleted user, but got: %v", err)}
+	if err == nil {
+		return TestResult{Passed: false, Message: "Expected error when getting permissions for deleted user, but got none"}
 	}
-
-	// Verify empty permissions are returned since effective permissions were deleted
-	if len(deletedUserModels) != 0 {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected empty permissions for deleted user, got %d models: %v", len(deletedUserModels), deletedUserModels)}
-	}
+	_ = deletedUserModels
 
 	// 5. Verify database integrity: ensure other employee data is not affected
 	// Check if department whitelist record still exists
@@ -650,7 +649,23 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	}
 
 	// 4. Verify effective permissions from service match database
-	effectiveModels, err := permissionService.GetUserEffectivePermissions("000070")
+	// Under employee_sync enabled, service expects user_id; create auth user and query by ID
+	authUser := &models.UserInfo{
+		ID:             uuid.NewString(),
+		CreatedAt:      time.Now().Add(-time.Hour),
+		UpdatedAt:      time.Now(),
+		AccessTime:     time.Now(),
+		Name:           "data_integrity_test_employee_updated",
+		EmployeeNumber: "000070",
+		GithubID:       fmt.Sprintf("test_%s_%d", "000070", time.Now().UnixNano()),
+		GithubName:     "data_integrity_test_employee_updated",
+		Devices:        "{}",
+	}
+	if err := ctx.DB.AuthDB.Create(authUser).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for data integrity test: %v", err)}
+	}
+
+	effectiveModels, err := permissionService.GetUserEffectivePermissions(authUser.ID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions after update via service: %v", err)}
 	}

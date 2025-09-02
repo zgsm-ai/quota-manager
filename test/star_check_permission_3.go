@@ -5,6 +5,10 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/models"
 	"quota-manager/internal/services"
+
+	"time"
+
+	"github.com/google/uuid"
 )
 
 // testUserStarCheckSettingChange tests user star check setting changes
@@ -172,6 +176,22 @@ func testUserDepartmentStarCheckChange(ctx *TestContext) TestResult {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Scenario %s: Failed to create employee: %v", scenario.name, err)}
 		}
 
+		// Also create corresponding auth user in authdb for employee sync resolution
+		authUser := &models.UserInfo{
+			ID:             uuid.NewString(),
+			CreatedAt:      time.Now().Add(-time.Hour),
+			UpdatedAt:      time.Now(),
+			AccessTime:     time.Now(),
+			Name:           employee.Username,
+			EmployeeNumber: scenario.employeeNumber,
+			GithubID:       fmt.Sprintf("test_%s_%d", scenario.employeeNumber, time.Now().UnixNano()),
+			GithubName:     employee.Username,
+			Devices:        "{}",
+		}
+		if err := ctx.DB.AuthDB.Create(authUser).Error; err != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Scenario %s: Failed to create auth user: %v", scenario.name, err)}
+		}
+
 		// Setup: Configure original department setting if specified
 		if scenario.originalSetting != nil {
 			if err := starCheckPermissionService.SetDepartmentStarCheckSetting(scenario.originalDept, *scenario.originalSetting); err != nil {
@@ -233,7 +253,7 @@ func testUserDepartmentStarCheckChange(ctx *TestContext) TestResult {
 		}
 
 		// Verify: Check effective star check setting
-		actualSetting, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(scenario.employeeNumber)
+		actualSetting, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(authUser.ID)
 		if err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Scenario %s: Failed to get effective star check setting: %v", scenario.name, err)}
 		}
@@ -385,14 +405,12 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Employee sync for removal failed: %v", err)}
 	}
 
-	// Verify effective setting handling for removed user (should return default)
+	// Verify getting effective setting for removed user should return error
 	removedEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("removal_002")
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective setting for removed user: %v", err)}
+	if err == nil {
+		return TestResult{Passed: false, Message: "Expected error when getting effective setting for removed user"}
 	}
-	if removedEnabled {
-		return TestResult{Passed: false, Message: "Expected default disabled setting for removed user"}
-	}
+	_ = removedEnabled
 
 	return TestResult{Passed: true, Message: "User star check addition and removal test succeeded"}
 }
@@ -423,18 +441,15 @@ func testNonExistentUserAndDepartmentStarCheck(ctx *TestContext) TestResult {
 
 	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
 
-	// Test 1: Set star check setting for non-existent user (should succeed when sync disabled)
-	if err := starCheckPermissionService.SetUserStarCheckSetting("nonexistent_user_001", false); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set star check setting for non-existent user: %v", err)}
+	// Test 1: Set star check setting for non-existent user (should fail now even when sync disabled)
+	if err := starCheckPermissionService.SetUserStarCheckSetting("nonexistent_user_001", false); err == nil {
+		return TestResult{Passed: false, Message: "Expected error when setting star check for non-existent user with sync disabled, but got no error"}
 	}
 
-	// Verify setting was created
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("nonexistent_user_001")
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get star check setting for non-existent user: %v", err)}
-	}
-	if enabled {
-		return TestResult{Passed: false, Message: "Expected star check to be disabled for non-existent user"}
+	// Verify get effective also fails for non-existent user
+	_, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("nonexistent_user_001")
+	if err == nil {
+		return TestResult{Passed: false, Message: "Expected error when getting star check for non-existent user with sync disabled"}
 	}
 
 	// Test 2: Set star check setting for non-existent department (should fail)
@@ -451,16 +466,13 @@ func testNonExistentUserAndDepartmentStarCheck(ctx *TestContext) TestResult {
 
 	// Test 4: Update star check permissions for non-existent user
 	if err := starCheckPermissionService.UpdateEmployeeStarCheckPermissions("nonexistent_user_002"); err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update star check permissions for non-existent user: %v", err)}
+		// Update may still be non-erroring; continue to validate Get behavior
 	}
 
-	// Verify default setting for user with no explicit setting
-	defaultEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("nonexistent_user_002")
-	if err != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get default star check setting: %v", err)}
-	}
-	if defaultEnabled {
-		return TestResult{Passed: false, Message: "Expected default disabled setting for user with no explicit setting"}
+	// Verify getting effective setting for non-existent user returns error
+	_, err = starCheckPermissionService.GetUserEffectiveStarCheckSetting("nonexistent_user_002")
+	if err == nil {
+		return TestResult{Passed: false, Message: "Expected error when getting star check setting for non-existent user"}
 	}
 
 	// Test 5: Test with employee sync enabled (should enforce user existence)

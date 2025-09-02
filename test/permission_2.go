@@ -478,8 +478,8 @@ func testNonExistentUserAndDepartment(ctx *TestContext) TestResult {
 		{
 			name:            "Employee sync disabled",
 			employeeEnabled: false,
-			expectUserError: false,
-			description:     "When employee_sync.enabled is false, setting whitelist for non-existent user should succeed",
+			expectUserError: true,
+			description:     "When employee_sync.enabled is false, setting whitelist for non-existent user should fail",
 		},
 		{
 			name:            "Employee sync enabled",
@@ -626,46 +626,17 @@ func testNonExistentUserScenario(ctx *TestContext, employeeSyncEnabled bool, exp
 
 	// Test 3: Get permissions for non-existent user
 	models3, err3 := permissionService.GetUserEffectivePermissions("999999")
-	if err3 != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected success when getting permissions for non-existent user, but got error: %v", err3)}
+	if err3 == nil {
+		return TestResult{Passed: false, Message: "Expected error when getting permissions for non-existent user, but got none"}
 	}
-
-	// Verify the returned models based on whether user whitelist was created
-	if expectUserError {
-		// When employee_sync is enabled and whitelist creation failed, should return empty permissions
-		if len(models3) != 0 {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected empty permissions for non-existent user when employee_sync enabled, got %v", models3)}
-		}
-	} else {
-		// When employee_sync is disabled and whitelist was created, should return the models
-		if len(models3) != 2 || models3[0] != "gpt-4" || models3[1] != "claude-3-opus" {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected models [gpt-4, claude-3-opus] for non-existent user when employee_sync disabled, got %v", models3)}
-		}
-	}
+	_ = models3
 
 	// Test 4: Verify aigateway calls based on whether user whitelist was created
 	permissionCalls := mockStore.GetPermissionCalls()
 
-	if expectUserError {
-		// When employee_sync is enabled and whitelist creation failed, should have no aigateway calls
-		if len(permissionCalls) != 0 {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 aigateway calls when employee_sync enabled and user creation failed, got %d calls", len(permissionCalls))}
-		}
-	} else {
-		// When employee_sync is disabled and whitelist was created, should have 1 aigateway call
-		if len(permissionCalls) != 1 {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 aigateway call when employee_sync disabled and user whitelist created, got %d calls", len(permissionCalls))}
-		}
-
-		// Verify the aigateway call was for the correct user and models
-		call := permissionCalls[0]
-		if call.EmployeeNumber != "999999" {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected aigateway call for employee 999999, got %s", call.EmployeeNumber)}
-		}
-
-		if len(call.Models) != 2 || call.Models[0] != "gpt-4" || call.Models[1] != "claude-3-opus" {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected aigateway call with models [gpt-4, claude-3-opus], got %v", call.Models)}
-		}
+	// In both modes, there should be no aigateway calls for non-existent user
+	if len(permissionCalls) != 0 {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 aigateway calls for non-existent user, got %d calls", len(permissionCalls))}
 	}
 
 	// Test 5: Verify database consistency - check that this test didn't create new orphaned records
@@ -689,9 +660,5 @@ func testNonExistentUserScenario(ctx *TestContext, employeeSyncEnabled bool, exp
 	}
 
 	// Return appropriate success message based on scenario
-	if expectUserError {
-		return TestResult{Passed: true, Message: "Employee sync enabled scenario - correctly rejected non-existent user whitelist creation and verified all related behaviors"}
-	} else {
-		return TestResult{Passed: true, Message: "Employee sync disabled scenario - successfully created whitelist for non-existent user and verified all related behaviors"}
-	}
+	return TestResult{Passed: true, Message: "Both scenarios correctly rejected non-existent user whitelist creation and related behaviors"}
 }

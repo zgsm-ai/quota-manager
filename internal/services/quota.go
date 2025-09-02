@@ -919,11 +919,12 @@ func (s *QuotaService) ExpireQuotas() error {
 
 		// Create audit record for quota expiry
 		auditRecord := &models.QuotaAudit{
-			UserID:     userID,
-			Amount:     -expiredAmount, // Negative amount for expiry
-			Operation:  "EXPIRE",
-			ExpiryDate: now, // Use current time as expiry time
-			CreateTime: utils.NowInConfigTimezone(s.configManager.GetDirect()),
+			UserID:       userID,
+			Amount:       -expiredAmount, // Negative amount for expiry
+			Operation:    "EXPIRE",
+			StrategyName: "Credit 到期失效",
+			ExpiryDate:   now, // Use current time as expiry time
+			CreateTime:   utils.NowInConfigTimezone(s.configManager.GetDirect()),
 		}
 		if err := tx.Create(auditRecord).Error; err != nil {
 			tx.Rollback()

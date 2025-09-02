@@ -5,6 +5,9 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/models"
 	"quota-manager/internal/services"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 // testDepartmentQuotaCheckSettingChange tests department quota check setting changes
@@ -212,6 +215,22 @@ func testUserDepartmentQuotaCheckChange(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Initial employee sync failed: %v", err)}
 	}
 
+	// Create corresponding auth user for mapping (employee_sync enabled)
+	authUser := &models.UserInfo{
+		ID:             uuid.NewString(),
+		CreatedAt:      time.Now().Add(-time.Hour),
+		UpdatedAt:      time.Now(),
+		AccessTime:     time.Now(),
+		Name:           "dept_change_test_employee",
+		EmployeeNumber: "370001",
+		GithubID:       fmt.Sprintf("test_%s_%d", "370001", time.Now().UnixNano()),
+		GithubName:     "dept_change_test_employee",
+		Devices:        "{}",
+	}
+	if err := ctx.DB.AuthDB.Create(authUser).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user: %v", err)}
+	}
+
 	// Set quota check setting for both departments
 	if err := quotaCheckPermissionService.SetDepartmentQuotaCheckSetting("Tech_Group", false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set Tech_Group quota check setting: %v", err)}
@@ -224,7 +243,6 @@ func testUserDepartmentQuotaCheckChange(ctx *TestContext) TestResult {
 	if err := employeeSyncService.SyncEmployees(); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to sync UX_Dept employee: %v", err)}
 	}
-
 	if err := quotaCheckPermissionService.SetDepartmentQuotaCheckSetting("UX_Dept", true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set UX_Dept quota check setting: %v", err)}
 	}
@@ -241,7 +259,7 @@ func testUserDepartmentQuotaCheckChange(ctx *TestContext) TestResult {
 	}
 
 	// Verify quota check permission was updated due to department change
-	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting("370001")
+	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting(authUser.ID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective quota check setting after department change: %v", err)}
 	}
@@ -337,8 +355,24 @@ func testUserQuotaCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Employee sync for addition failed: %v", err)}
 	}
 
+	// Create corresponding auth user for new employee
+	authUser := &models.UserInfo{
+		ID:             uuid.NewString(),
+		CreatedAt:      time.Now().Add(-time.Hour),
+		UpdatedAt:      time.Now(),
+		AccessTime:     time.Now(),
+		Name:           "new_qa_employee",
+		EmployeeNumber: "addition_001",
+		GithubID:       fmt.Sprintf("test_%s_%d", "addition_001", time.Now().UnixNano()),
+		GithubName:     "new_qa_employee",
+		Devices:        "{}",
+	}
+	if err := ctx.DB.AuthDB.Create(authUser).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for addition: %v", err)}
+	}
+
 	// Verify new employee inherits department quota check setting
-	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting("addition_001")
+	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting(authUser.ID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective quota check setting for new employee: %v", err)}
 	}
@@ -472,29 +506,21 @@ func testNonExistentUserQuotaCheckScenario(ctx *TestContext, employeeEnabled, ex
 			return TestResult{Passed: false, Message: fmt.Sprintf("Expected no quota check settings for non-existent user when employee_sync enabled, got %d", nonExistentUserSettingCount)}
 		}
 	} else {
-		// When employee_sync is disabled, expect success
-		if err1 != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected no error when setting quota check for non-existent user with employee_sync disabled, but got error: %v", err1)}
+		// When employee_sync is disabled, now also expect failure for non-existent user
+		if err1 == nil {
+			return TestResult{Passed: false, Message: "Expected error when setting quota check for non-existent user with employee_sync disabled, but got no error"}
 		}
-
-		// Verify quota check setting was created for non-existent user
+		expectedUserErrorMsg := "user not found: employee number '999999' does not exist"
+		if err1.Error() != expectedUserErrorMsg {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected error message '%s' for non-existent user, got '%s'", expectedUserErrorMsg, err1.Error())}
+		}
+		// Verify no quota check records were created
 		var nonExistentUserSettingCount int64
 		if err := ctx.DB.DB.Model(&models.QuotaCheckSetting{}).Where("target_type = ? AND target_identifier = ?", "user", "999999").Count(&nonExistentUserSettingCount).Error; err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to count quota check settings for non-existent user: %v", err)}
 		}
-
-		if nonExistentUserSettingCount != 1 {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 quota check setting for non-existent user when employee_sync disabled, got %d", nonExistentUserSettingCount)}
-		}
-
-		// Verify effective quota check setting can be retrieved (should be the set value)
-		enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting("999999")
-		if err != nil {
-			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective quota check setting for non-existent user: %v", err)}
-		}
-
-		if !enabled {
-			return TestResult{Passed: false, Message: "Expected effective quota check setting to be enabled for non-existent user"}
+		if nonExistentUserSettingCount > 0 {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected no quota check settings for non-existent user when employee_sync disabled, got %d", nonExistentUserSettingCount)}
 		}
 	}
 
@@ -520,14 +546,27 @@ func testNonExistentUserQuotaCheckScenario(ctx *TestContext, employeeEnabled, ex
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected no quota check settings for non-existent department, got %d", nonExistentDeptSettingCount)}
 	}
 
-	// Test 3: Get quota check for non-existent user - should return default (false)
+	// Test 3: Get quota check for non-existent user
 	enabled3, err3 := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting("999998")
-	if err3 != nil {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get quota check setting for non-existent user: %v", err3)}
-	}
-
-	if enabled3 {
-		return TestResult{Passed: false, Message: "Expected default quota check setting (false) for non-existent user"}
+	if expectUserError {
+		// When employee_sync is enabled, expect failure
+		if err3 == nil {
+			return TestResult{Passed: false, Message: "Expected error when getting quota check for non-existent user with employee_sync enabled, but got no error"}
+		}
+		expectedUserErrorMsg := "user not found: employee number '999998' does not exist"
+		if err3.Error() != expectedUserErrorMsg {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected error message '%s' for non-existent user, got '%s'", expectedUserErrorMsg, err3.Error())}
+		}
+	} else {
+		// When employee_sync is disabled, also expect user-not-found error
+		if err3 == nil {
+			return TestResult{Passed: false, Message: "Expected error when getting quota check for non-existent user with employee_sync disabled, but got no error"}
+		}
+		expectedUserErrorMsg := "user not found: employee number '999998' does not exist"
+		if err3.Error() != expectedUserErrorMsg {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Expected error message '%s' for non-existent user, got '%s'", expectedUserErrorMsg, err3.Error())}
+		}
+		_ = enabled3
 	}
 
 	return TestResult{Passed: true, Message: "Non-existent user and department quota check scenario test succeeded"}
@@ -675,6 +714,22 @@ func testQuotaCheckEmployeeSync(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Employee sync failed: %v", err)}
 	}
 
+	// Create corresponding auth user for mapping
+	authUser := &models.UserInfo{
+		ID:             uuid.NewString(),
+		CreatedAt:      time.Now().Add(-time.Hour),
+		UpdatedAt:      time.Now(),
+		AccessTime:     time.Now(),
+		Name:           "sync_test_employee",
+		EmployeeNumber: "400001",
+		GithubID:       fmt.Sprintf("test_%s_%d", "400001", time.Now().UnixNano()),
+		GithubName:     "sync_test_employee",
+		Devices:        "{}",
+	}
+	if err := ctx.DB.AuthDB.Create(authUser).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user: %v", err)}
+	}
+
 	// Clear quota check calls before setting department quota check setting
 	mockStore.ClearQuotaCheckCalls()
 
@@ -685,7 +740,7 @@ func testQuotaCheckEmployeeSync(ctx *TestContext) TestResult {
 	}
 
 	// Verify employee was synced and inherited quota check setting
-	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting("400001")
+	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting(authUser.ID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective quota check setting: %v", err)}
 	}
