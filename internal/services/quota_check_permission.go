@@ -37,10 +37,6 @@ func NewQuotaCheckPermissionService(db *database.DB, aiGatewayConf *config.AiGat
 func (s *QuotaCheckPermissionService) resolveEmployeeNumber(identifier string) (string, error) {
 	// When employee_sync is disabled, identifier is employee_number. Validate existence.
 	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
-		var emp models.EmployeeDepartment
-		if err := s.db.DB.Where("employee_number = ?", identifier).First(&emp).Error; err != nil {
-			return "", NewUserNotFoundError(identifier)
-		}
 		return identifier, nil
 	}
 
@@ -66,6 +62,12 @@ func (s *QuotaCheckPermissionService) SetUserQuotaCheckSetting(employeeNumber st
 		return err
 	} else {
 		employeeNumber = resolved
+	}
+
+	// Validate employee exists to prevent creating settings for non-existent users
+	var employee models.EmployeeDepartment
+	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
+		return NewUserNotFoundError(employeeNumber)
 	}
 
 	// Check if setting already exists
@@ -184,11 +186,16 @@ func (s *QuotaCheckPermissionService) GetUserEffectiveQuotaCheckSetting(employee
 		employeeNumber = resolved
 	}
 
-	// Get effective setting directly, no need to check if employee exists
+	// Validate employee exists first
+	var emp models.EmployeeDepartment
+	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; err != nil {
+		return false, NewUserNotFoundError(employeeNumber)
+	}
+
+	// Query effective setting; default to disabled if none
 	var effectiveSetting models.EffectiveQuotaCheckSetting
-	err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectiveSetting).Error
-	if err != nil {
-		return false, nil // Return default (disabled) if no setting found
+	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectiveSetting).Error; err != nil {
+		return false, nil
 	}
 
 	return effectiveSetting.Enabled, nil

@@ -40,10 +40,6 @@ func NewPermissionService(db *database.DB, aiGatewayConf *config.AiGatewayConfig
 func (s *PermissionService) resolveEmployeeNumber(identifier string) (string, error) {
 	// When employee_sync is disabled, identifier is employee_number. Validate existence.
 	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
-		var emp models.EmployeeDepartment
-		if err := s.db.DB.Where("employee_number = ?", identifier).First(&emp).Error; err != nil {
-			return "", NewUserNotFoundError(identifier)
-		}
 		return identifier, nil
 	}
 
@@ -70,6 +66,13 @@ func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []
 		return err
 	} else {
 		employeeNumber = resolved
+	}
+
+	// Validate employee exists. When employee sync is enabled, resolveEmployeeNumber
+	// already validated. This extra check keeps behavior consistent when disabled.
+	var employee models.EmployeeDepartment
+	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
+		return NewUserNotFoundError(employeeNumber)
 	}
 
 	// Check if whitelist already exists
@@ -238,11 +241,17 @@ func (s *PermissionService) GetUserEffectivePermissions(employeeNumber string) (
 		employeeNumber = resolved
 	}
 
-	// Get effective permissions directly, no need to check if employee exists
+	// Query effective permissions; if none, determine whether user exists
 	var effectivePermission models.EffectivePermission
 	err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectivePermission).Error
 	if err != nil {
-		return []string{}, nil // Return empty slice if no permissions found
+		// No effective permission found, check if the employee exists
+		var emp models.EmployeeDepartment
+		if errEmp := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; errEmp != nil {
+			return []string{}, NewUserNotFoundError(employeeNumber)
+		}
+		// Employee exists but has no effective permissions
+		return []string{}, nil
 	}
 
 	return effectivePermission.GetEffectiveModelsAsSlice(), nil

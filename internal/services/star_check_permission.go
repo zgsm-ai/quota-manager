@@ -37,10 +37,6 @@ func NewStarCheckPermissionService(db *database.DB, aiGatewayConf *config.AiGate
 func (s *StarCheckPermissionService) resolveEmployeeNumber(identifier string) (string, error) {
 	// When employee_sync is disabled, identifier is employee_number. Validate existence.
 	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
-		var emp models.EmployeeDepartment
-		if err := s.db.DB.Where("employee_number = ?", identifier).First(&emp).Error; err != nil {
-			return "", NewUserNotFoundError(identifier)
-		}
 		return identifier, nil
 	}
 
@@ -66,6 +62,12 @@ func (s *StarCheckPermissionService) SetUserStarCheckSetting(employeeNumber stri
 		return err
 	} else {
 		employeeNumber = resolved
+	}
+
+	// Validate employee exists to prevent creating settings for non-existent users
+	var employee models.EmployeeDepartment
+	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
+		return NewUserNotFoundError(employeeNumber)
 	}
 
 	// Check if setting already exists
@@ -184,11 +186,16 @@ func (s *StarCheckPermissionService) GetUserEffectiveStarCheckSetting(employeeNu
 		employeeNumber = resolved
 	}
 
-	// Get effective setting directly, no need to check if employee exists
+	// Always validate employee existence first to avoid orphan effective records masking errors
+	var emp models.EmployeeDepartment
+	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; err != nil {
+		return false, NewUserNotFoundError(employeeNumber)
+	}
+
+	// Query effective setting (may not exist even if employee exists)
 	var effectiveSetting models.EffectiveStarCheckSetting
-	err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectiveSetting).Error
-	if err != nil {
-		return false, nil // Return default (disabled) if no setting found
+	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectiveSetting).Error; err != nil {
+		return false, nil
 	}
 
 	return effectiveSetting.Enabled, nil
