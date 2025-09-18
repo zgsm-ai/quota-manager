@@ -23,7 +23,7 @@ func testUserStarCheckSettingChange(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -42,8 +42,13 @@ func testUserStarCheckSettingChange(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
+	// Create auth mapping and use UUID for user-level operations
+	uid, errUID := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID)}
+	}
 	// Initially set user star check setting to disabled
-	if err := starCheckPermissionService.SetUserStarCheckSetting("260040", false); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting(uid, false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set initial user star check setting: %v", err)}
 	}
 
@@ -51,7 +56,7 @@ func testUserStarCheckSettingChange(ctx *TestContext) TestResult {
 	mockStore.ClearStarCheckCalls()
 
 	// Change user star check setting to enabled
-	if err := starCheckPermissionService.SetUserStarCheckSetting("260040", true); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting(uid, true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update user star check setting: %v", err)}
 	}
 
@@ -70,7 +75,7 @@ func testUserStarCheckSettingChange(ctx *TestContext) TestResult {
 	}
 
 	// Verify effective setting
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("260040")
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective star check setting: %v", err)}
 	}
@@ -301,7 +306,7 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -323,8 +328,13 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 	// Clear calls before setting
 	mockStore.ClearStarCheckCalls()
 
+	// Create auth mapping and set using UUID
+	addUID, errUID := createAuthUserForEmployee(ctx, employee1.EmployeeNumber, employee1.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee1.EmployeeNumber, errUID)}
+	}
 	// Set user star check setting to enabled (different from default false)
-	if err := starCheckPermissionService.SetUserStarCheckSetting("addition_001", true); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting(addUID, true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set star check setting for new user: %v", err)}
 	}
 
@@ -347,7 +357,7 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 	}
 
 	// Clear the user setting by setting it to the same as department (simulating removal)
-	if err := starCheckPermissionService.SetUserStarCheckSetting("addition_001", false); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting(addUID, false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set identical star check setting: %v", err)}
 	}
 
@@ -383,13 +393,17 @@ func testUserStarCheckAdditionAndRemoval(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to sync new employee: %v", err)}
 	}
 
-	// Set user star check setting
-	if err := starCheckPermissionService.SetUserStarCheckSetting("removal_002", true); err != nil {
+	// Set user star check setting using UUID
+	remUID, errUID := createAuthUserForEmployee(ctx, "removal_002", "user_to_remove")
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for removal_002: %v", errUID)}
+	}
+	if err := starCheckPermissionService.SetUserStarCheckSetting(remUID, true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set star check setting for user to remove: %v", err)}
 	}
 
 	// Verify user has effective setting
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("removal_002")
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(remUID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective setting for user to remove: %v", err)}
 	}
@@ -512,7 +526,7 @@ func testStarCheckEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -531,13 +545,18 @@ func testStarCheckEmployeeDataIntegrity(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
+	// Create auth mapping and set using UUID
+	uid, errUID := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID)}
+	}
 	// Set user star check setting
-	if err := starCheckPermissionService.SetUserStarCheckSetting("integrity_001", false); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting(uid, false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user star check setting: %v", err)}
 	}
 
 	// Verify effective setting matches
-	effectiveEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("integrity_001")
+	effectiveEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective star check setting: %v", err)}
 	}
@@ -573,7 +592,7 @@ func testStarCheckEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	}
 
 	// User setting should still take precedence
-	effectiveEnabled, err = starCheckPermissionService.GetUserEffectiveStarCheckSetting("integrity_001")
+	effectiveEnabled, err = starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective setting after department change: %v", err)}
 	}
@@ -598,7 +617,12 @@ func testStarCheckEmployeeDataIntegrity(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update employee2 star check permissions: %v", err)}
 	}
 
-	departmentEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("integrity_002")
+	// Create auth mapping for employee2 and query by user_id under EmployeeSync=true
+	uid2, errUID2 := createAuthUserForEmployee(ctx, employee2.EmployeeNumber, employee2.Username)
+	if errUID2 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee2.EmployeeNumber, errUID2)}
+	}
+	departmentEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid2)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get department inherited setting: %v", err)}
 	}

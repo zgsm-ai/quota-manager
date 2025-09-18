@@ -37,6 +37,10 @@ func NewStarCheckPermissionService(db *database.DB, aiGatewayConf *config.AiGate
 func (s *StarCheckPermissionService) resolveEmployeeNumber(identifier string) (string, error) {
 	// When employee_sync is disabled, identifier is employee_number. Validate existence.
 	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
+		var user models.UserInfo
+		if err := s.db.AuthDB.Where("id = ?", identifier).First(&user).Error; err != nil {
+			return "", NewUserNotFoundError(identifier)
+		}
 		return identifier, nil
 	}
 
@@ -64,10 +68,13 @@ func (s *StarCheckPermissionService) SetUserStarCheckSetting(employeeNumber stri
 		employeeNumber = resolved
 	}
 
-	// Validate employee exists to prevent creating settings for non-existent users
-	var employee models.EmployeeDepartment
-	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
-		return NewUserNotFoundError(employeeNumber)
+	// Validate employee exists only when employee sync is enabled. When disabled,
+	// skip existence validation to allow creating settings before HR sync.
+	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+		var employee models.EmployeeDepartment
+		if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
+			return NewUserNotFoundError(employeeNumber)
+		}
 	}
 
 	// Check if setting already exists
@@ -186,10 +193,13 @@ func (s *StarCheckPermissionService) GetUserEffectiveStarCheckSetting(employeeNu
 		employeeNumber = resolved
 	}
 
-	// Always validate employee existence first to avoid orphan effective records masking errors
-	var emp models.EmployeeDepartment
-	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; err != nil {
-		return false, NewUserNotFoundError(employeeNumber)
+	// Validate employee exists only when employee sync is enabled. When disabled,
+	// skip existence validation and return default if no effective record.
+	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+		var emp models.EmployeeDepartment
+		if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; err != nil {
+			return false, NewUserNotFoundError(employeeNumber)
+		}
 	}
 
 	// Query effective setting (may not exist even if employee exists)

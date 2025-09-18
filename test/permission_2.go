@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+
 	"quota-manager/internal/config"
 	"quota-manager/internal/models"
 	"quota-manager/internal/services"
-	"time"
 )
 
 // testDepartmentWhitelistChange tests department whitelist changes
@@ -19,16 +22,16 @@ func testDepartmentWhitelistChange(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	// Default employee sync config for compatibility
-	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false, // Default to disabled for existing tests
-		HrURL:   "http://localhost:8099/api/hr/employees",
-		HrKey:   "test-hr-key",
-		DeptURL: "http://localhost:8099/api/hr/departments",
-		DeptKey: "test-dept-key",
+	// Use employee sync enabled config
+	employeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: true,
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 
 	// Create test employees
 	employees := []models.EmployeeDepartment{
@@ -49,6 +52,17 @@ func testDepartmentWhitelistChange(ctx *TestContext) TestResult {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 		}
 	}
+
+	// Create auth users for employee-level queries under EmployeeSync=true
+	uid30, err30 := createAuthUserForEmployee(ctx, "000030", employees[0].Username)
+	if err30 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for 000030: %v", err30)}
+	}
+	uid31, err31 := createAuthUserForEmployee(ctx, "000031", employees[1].Username)
+	if err31 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for 000031: %v", err31)}
+	}
+	empToUUID := map[string]string{"000030": uid30, "000031": uid31}
 
 	// Initially set department whitelist with 2 models
 	initialModels := []string{"gpt-3.5-turbo", "deepseek-v3"}
@@ -142,8 +156,8 @@ func testDepartmentWhitelistChange(ctx *TestContext) TestResult {
 
 	// 5. Verify consistency between aigateway calls and database data
 	for _, call := range permissionCalls {
-		// Get employee's database effective permissions
-		effectiveModels, err := permissionService.GetUserEffectivePermissions(call.EmployeeNumber)
+		// Get employee's effective permissions via service (use UUID when EmployeeSync=true)
+		effectiveModels, err := permissionService.GetUserEffectivePermissions(empToUUID[call.EmployeeNumber])
 		if err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions for employee %s: %v", call.EmployeeNumber, err)}
 		}
@@ -199,9 +213,15 @@ func testUserWhitelistChange(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
-	// Initially set user whitelist with 2 models
+	// Create auth user and use UUID for user-level operations (EmployeeSync=false)
+	uid := uuid.NewString()
+	if err := ctx.DB.AuthDB.Create(&models.UserInfo{ID: uid, Name: employee.Username, EmployeeNumber: "000040", GithubID: fmt.Sprintf("test_%s_%d", "000040", time.Now().UnixNano()), GithubName: employee.Username, Devices: "{}"}).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for 000040: %v", err)}
+	}
+
+	// Initially set user whitelist with 2 models (use UUID)
 	initialModels := []string{"gpt-4", "claude-3-opus"}
-	if err := permissionService.SetUserWhitelist("000040", initialModels); err != nil {
+	if err := permissionService.SetUserWhitelist(uid, initialModels); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set initial user whitelist: %v", err)}
 	}
 
@@ -209,9 +229,9 @@ func testUserWhitelistChange(ctx *TestContext) TestResult {
 	mockStore.ClearPermissionCalls()
 	time.Sleep(100 * time.Millisecond)
 
-	// Update user whitelist to 3 models
+	// Update user whitelist to 3 models (use UUID)
 	updatedModels := []string{"gpt-4", "claude-3-opus", "gemini-pro"}
-	if err := permissionService.SetUserWhitelist("000040", updatedModels); err != nil {
+	if err := permissionService.SetUserWhitelist(uid, updatedModels); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update user whitelist: %v", err)}
 	}
 
@@ -222,8 +242,8 @@ func testUserWhitelistChange(ctx *TestContext) TestResult {
 	}
 
 	call := permissionCalls[0]
-	if call.EmployeeNumber != "000040" {
-		return TestResult{Passed: false, Message: fmt.Sprintf("Expected employee number 000040, got %s", call.EmployeeNumber)}
+	if call.EmployeeNumber != uid {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Expected employee number %s, got %s", uid, call.EmployeeNumber)}
 	}
 
 	if call.Operation != "set" {
@@ -244,7 +264,7 @@ func testUserWhitelistChange(ctx *TestContext) TestResult {
 
 	// 2. Verify user whitelist record in database
 	var dbUserWhitelist models.ModelWhitelist
-	if err := ctx.DB.DB.Where("target_type = ? AND target_identifier = ?", "user", "000040").First(&dbUserWhitelist).Error; err != nil {
+	if err := ctx.DB.DB.Where("target_type = ? AND target_identifier = ?", "user", uid).First(&dbUserWhitelist).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to query user whitelist from database: %v", err)}
 	}
 
@@ -265,7 +285,7 @@ func testUserWhitelistChange(ctx *TestContext) TestResult {
 
 	// 3. Verify effective permission record in database
 	var dbEffectiveRecord models.EffectivePermission
-	if err := ctx.DB.DB.Where("employee_number = ?", "000040").First(&dbEffectiveRecord).Error; err != nil {
+	if err := ctx.DB.DB.Where("employee_number = ?", uid).First(&dbEffectiveRecord).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to query effective permissions from database: %v", err)}
 	}
 
@@ -285,7 +305,7 @@ func testUserWhitelistChange(ctx *TestContext) TestResult {
 	}
 
 	// 4. Verify effective permissions from service match database
-	effectiveModels, err := permissionService.GetUserEffectivePermissions("000040")
+	effectiveModels, err := permissionService.GetUserEffectivePermissions(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions via service: %v", err)}
 	}
@@ -329,18 +349,7 @@ func testUserDepartmentChange(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	// Default employee sync config for compatibility
-	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false, // Default to disabled for existing tests
-		HrURL:   "http://localhost:8099/api/hr/employees",
-		HrKey:   "test-hr-key",
-		DeptURL: "http://localhost:8099/api/hr/departments",
-		DeptKey: "test-dept-key",
-	}
-
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
-
-	// Create employee sync service
+	// Use employee sync enabled config for both permission service and sync service
 	employeeSyncConfig := &config.EmployeeSyncConfig{
 		Enabled: true,
 		HrURL:   ctx.MockServer.URL + "/api/test/employees",
@@ -348,6 +357,10 @@ func testUserDepartmentChange(ctx *TestContext) TestResult {
 		DeptURL: ctx.MockServer.URL + "/api/test/departments",
 		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
+
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+
+	// Create employee sync service
 	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, config.NewManager(&config.Config{EmployeeSync: *employeeSyncConfig}), permissionService, starCheckPermissionService, quotaCheckPermissionService)

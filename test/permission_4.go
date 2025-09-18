@@ -23,22 +23,16 @@ func testDepartmentWhitelistDistribution(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	// Default employee sync config for compatibility
-
-	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-
-		Enabled: false, // Default to disabled for existing tests
-
-		HrURL: "http://localhost:8099/api/hr/employees",
-
-		HrKey: "test-hr-key",
-
-		DeptURL: "http://localhost:8099/api/hr/departments",
-
-		DeptKey: "test-dept-key",
+	// Employee sync enabled config (UUID input -> employee number mapping)
+	employeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: true,
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 
 	// Create test employees in same department
 	employees := []models.EmployeeDepartment{
@@ -217,22 +211,16 @@ func testPermissionHierarchyWithLevels(ctx *TestContext, levelDiff int) TestResu
 		AuthValue:  "test-key",
 	}
 
-	// Default employee sync config for compatibility
-
-	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-
-		Enabled: false, // Default to disabled for existing tests
-
-		HrURL: "http://localhost:8099/api/hr/employees",
-
-		HrKey: "test-hr-key",
-
-		DeptURL: "http://localhost:8099/api/hr/departments",
-
-		DeptKey: "test-dept-key",
+	// Employee sync enabled config; calls will use UUID (auth_users.id)
+	employeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: true,
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 
 	// Create hierarchical department structure based on level difference
 	var parentDept, childDept string
@@ -267,6 +255,12 @@ func testPermissionHierarchyWithLevels(ctx *TestContext, levelDiff int) TestResu
 	}
 	if err := ctx.DB.DB.Create(employee).Error; err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
+	}
+
+	// Create auth user mapping and use UUID for user-level queries
+	uid, errCreate := createAuthUserForEmployee(ctx, employeeNumber, employee.Username)
+	if errCreate != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employeeNumber, errCreate)}
 	}
 
 	// Clear previous permission calls
@@ -383,7 +377,7 @@ func testPermissionHierarchyWithLevels(ctx *TestContext, levelDiff int) TestResu
 
 	// 7. Verify permission priority logic (most critical verification)
 	// Ensure employee gets child department permissions not parent department permissions
-	effectiveModels, err := permissionService.GetUserEffectivePermissions(employeeNumber)
+	effectiveModels, err := permissionService.GetUserEffectivePermissions(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions: %v", err)}
 	}
@@ -459,14 +453,18 @@ func testUserOverridesDepartment(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set department whitelist: %v", err)}
 	}
 
-	// Set user whitelist (should override department)
+	// Set user whitelist (should override department) using UUID mapping
 	userModels := []string{"gpt-4", "claude-3-opus", "gemini-pro"}
-	if err := permissionService.SetUserWhitelist("000020", userModels); err != nil {
+	uid, errCreate := createAuthUserForEmployee(ctx, "000020", employee.Username)
+	if errCreate != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user: %v", errCreate)}
+	}
+	if err := permissionService.SetUserWhitelist(uid, userModels); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user whitelist: %v", err)}
 	}
 
-	// Verify employee has user permissions (higher priority)
-	effectiveModels, err := permissionService.GetUserEffectivePermissions("000020")
+	// Verify employee has user permissions (higher priority) using UUID
+	effectiveModels, err := permissionService.GetUserEffectivePermissions(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions: %v", err)}
 	}
