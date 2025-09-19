@@ -6,6 +6,7 @@ import (
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
 	"quota-manager/internal/models"
+	"quota-manager/internal/utils"
 	"quota-manager/pkg/aigateway"
 	"quota-manager/pkg/logger"
 	"strings"
@@ -484,6 +485,22 @@ func (s *StrategyService) hasExecuted(strategyID int, userID string) bool {
 	return count > 0
 }
 
+// getInvitationStrategyType returns the invitation strategy type prefix
+// Returns: "inviter", "invitee", or "" (empty string for non-invitation strategies)
+func (s *StrategyService) getInvitationStrategyType(strategy *models.QuotaStrategy) string {
+	strategyNameLower := strings.ToLower(strategy.Name)
+
+	if strings.HasPrefix(strategyNameLower, "inviter-") {
+		return "inviter"
+	}
+
+	if strings.HasPrefix(strategyNameLower, "invitee-") {
+		return "invitee"
+	}
+
+	return ""
+}
+
 // executeRecharge executes recharge
 func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *models.UserInfo, batchNumber string) error {
 	// Strategy should already be validated as enabled before reaching here
@@ -491,12 +508,9 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 		return fmt.Errorf("strategy is disabled")
 	}
 
-	// Calculate expiry date (end of this/next month)
-	now := time.Now().Truncate(time.Second)
-	var expiryDate time.Time
-
-	// Always set to end of current month
-	expiryDate = time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
+	// Calculate expiry date using strategy's ExpiryDays or default to end of current month
+	now := utils.NowInConfigTimezone(s.quotaService.GetConfigManager().GetDirect()).Truncate(time.Second)
+	expiryDate := utils.CalculateExpiryDate(now, strategy.ExpiryDays)
 
 	// 1. Record execution status as processing
 	execute := &models.QuotaExecute{
@@ -511,21 +525,41 @@ func (s *StrategyService) executeRecharge(strategy *models.QuotaStrategy, user *
 		return fmt.Errorf("failed to create execute record: %w", err)
 	}
 
-	// 2. Add quota using QuotaService
-	err := s.quotaService.AddQuotaForStrategy(user.ID, strategy.Amount, strategy.ID, strategy.Name)
+	// 2. Determine quota recipient
+	var recipientUserID string // Quota recipient user ID
+	var relatedUserID string   // Related user for invitation strategies audit trail
+
+	switch s.getInvitationStrategyType(strategy) {
+	case "inviter":
+		// Inviter reward strategy: quota goes to inviter, related user is invitee (trigger user)
+		recipientUserID = user.InviterID
+		relatedUserID = user.ID
+	case "invitee":
+		// Invitee reward strategy: quota goes to invitee, related user is inviter
+		recipientUserID = user.ID
+		relatedUserID = user.InviterID
+	default:
+		// Regular strategy: quota goes to user themselves, no related user
+		recipientUserID = user.ID
+	}
+
+	// 3. Add quota using QuotaService
+	// err := s.quotaService.AddQuotaForStrategy(recipientUserID, strategy.Amount, strategy.ID, strategy.Name)
+	err := s.quotaService.AddQuotaForStrategy(recipientUserID, strategy.Amount, strategy.ID, strategy.Name, &relatedUserID)
 	if err != nil {
 		// Update execution status to failed
 		s.db.Model(execute).Update("status", "failed")
 		return fmt.Errorf("failed to recharge quota: %w", err)
 	}
 
-	// 3. Update execution status to completed
+	// 4. Update execution status to completed
 	if err := s.db.Model(execute).Update("status", "completed").Error; err != nil {
 		logger.Error("Failed to update execute status", zap.Error(err))
 	}
 
 	logger.Info("Recharge completed",
 		zap.String("user", user.ID),
+		zap.String("recipient_user", recipientUserID),
 		zap.String("strategy", strategy.Name),
 		zap.Float64("amount", strategy.Amount),
 		zap.String("model", strategy.Model),

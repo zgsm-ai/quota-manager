@@ -73,6 +73,7 @@ type QuotaStrategy struct {
 	PeriodicExpr   string    `gorm:"column:periodic_expr" json:"periodic_expr" validate:"omitempty,cron"`
 	Condition      string    `json:"condition" validate:"omitempty"`
 	MaxExecPerUser int       `gorm:"column:max_exec_per_user;default:0" json:"max_exec_per_user" validate:"gte=0"`
+	ExpiryDays     *int      `gorm:"column:expiry_days" json:"expiry_days" validate:"omitempty,gte=1"`
 	Status         bool      `gorm:"not null;default:true" json:"status"` // true=enabled, false=disabled
 	CreateTime     time.Time `gorm:"autoCreateTime" json:"create_time"`
 	UpdateTime     time.Time `gorm:"autoUpdateTime" json:"update_time"`
@@ -110,6 +111,8 @@ type UserInfo struct {
 	EmployeeNumber   string    `gorm:"column:employee_number;size:100" json:"employee_number"`
 	GithubStar       string    `gorm:"column:github_star;type:text" json:"github_star"`
 	Devices          string    `gorm:"type:jsonb" json:"devices"`
+	InviteCode       string    `gorm:"size:10" json:"invite_code"`
+	InviterID        string    `gorm:"size:100" json:"inviter_id"`
 }
 
 // Quota user quota table with expiry time
