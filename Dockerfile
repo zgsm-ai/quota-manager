@@ -18,7 +18,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o quota-manager cmd/main.go
 
 # Run stage
-FROM alpine:latest
+FROM alpine:latest AS runtime
 
 RUN apk --no-cache add ca-certificates tzdata
 
