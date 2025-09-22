@@ -67,4 +67,4 @@ jobs:
           target: runtime
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_REPOSITORY }}/oidc-auth:${{ steps.version.outputs.version }},${{ secrets.DOCKERHUB_REPOSITORY }}/oidc-auth:latest
+          tags: ${{ secrets.DOCKERHUB_REPOSITORY }}/quota-manager:${{ steps.version.outputs.version }},${{ secrets.DOCKERHUB_REPOSITORY }}/quota-manager:latest
