@@ -40,6 +40,10 @@ func NewPermissionService(db *database.DB, aiGatewayConf *config.AiGatewayConfig
 func (s *PermissionService) resolveEmployeeNumber(identifier string) (string, error) {
 	// When employee_sync is disabled, identifier is employee_number. Validate existence.
 	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
+		var user models.UserInfo
+		if err := s.db.AuthDB.Where("id = ?", identifier).First(&user).Error; err != nil {
+			return "", NewUserNotFoundError(identifier)
+		}
 		return identifier, nil
 	}
 
@@ -68,11 +72,14 @@ func (s *PermissionService) SetUserWhitelist(employeeNumber string, modelList []
 		employeeNumber = resolved
 	}
 
-	// Validate employee exists. When employee sync is enabled, resolveEmployeeNumber
-	// already validated. This extra check keeps behavior consistent when disabled.
-	var employee models.EmployeeDepartment
-	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
-		return NewUserNotFoundError(employeeNumber)
+	// Validate employee exists only when employee sync is enabled.
+	// When employee_sync is disabled, skip existence validation to allow
+	// setting whitelist for not-yet-synced users.
+	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+		var employee models.EmployeeDepartment
+		if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
+			return NewUserNotFoundError(employeeNumber)
+		}
 	}
 
 	// Check if whitelist already exists
@@ -245,12 +252,15 @@ func (s *PermissionService) GetUserEffectivePermissions(employeeNumber string) (
 	var effectivePermission models.EffectivePermission
 	err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&effectivePermission).Error
 	if err != nil {
-		// No effective permission found, check if the employee exists
-		var emp models.EmployeeDepartment
-		if errEmp := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; errEmp != nil {
-			return []string{}, NewUserNotFoundError(employeeNumber)
+		// No effective permission found; only validate employee existence when
+		// employee sync is enabled. When disabled, skip the check and return empty.
+		if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+			var emp models.EmployeeDepartment
+			if errEmp := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; errEmp != nil {
+				return []string{}, NewUserNotFoundError(employeeNumber)
+			}
 		}
-		// Employee exists but has no effective permissions
+		// Employee either exists or validation skipped; return empty effective permissions
 		return []string{}, nil
 	}
 

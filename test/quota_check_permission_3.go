@@ -22,7 +22,7 @@ func testDepartmentQuotaCheckSettingChange(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -87,9 +87,21 @@ func testDepartmentQuotaCheckSettingChange(ctx *TestContext) TestResult {
 		}
 	}
 
-	// Verify effective settings for all employees
+	// Create auth mappings for employees and verify effective settings via UUID
 	for _, empNum := range expectedEmployees {
-		enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting(empNum)
+		// find username from created slice
+		var username string
+		for _, e := range employees {
+			if e.EmployeeNumber == empNum {
+				username = e.Username
+				break
+			}
+		}
+		uid, errUID := createAuthUserForEmployee(ctx, empNum, username)
+		if errUID != nil {
+			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", empNum, errUID)}
+		}
+		enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting(uid)
 		if err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective quota check setting for %s: %v", empNum, err)}
 		}
@@ -113,7 +125,7 @@ func testUserQuotaCheckSettingChange(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -132,8 +144,12 @@ func testUserQuotaCheckSettingChange(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
-	// Initially set user quota check setting to disabled
-	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting("360040", false); err != nil {
+	// Create auth mapping and initially set user quota check setting to disabled via UUID
+	uid, errUID := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID)}
+	}
+	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting(uid, false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set initial user quota check setting: %v", err)}
 	}
 
@@ -141,7 +157,7 @@ func testUserQuotaCheckSettingChange(ctx *TestContext) TestResult {
 	mockStore.ClearQuotaCheckCalls()
 
 	// Change user quota check setting to enabled
-	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting("360040", true); err != nil {
+	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting(uid, true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update user quota check setting: %v", err)}
 	}
 
@@ -161,7 +177,7 @@ func testUserQuotaCheckSettingChange(ctx *TestContext) TestResult {
 	}
 
 	// Verify effective setting in database
-	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting("360040")
+	enabled, err := quotaCheckPermissionService.GetUserEffectiveQuotaCheckSetting(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective quota check setting: %v", err)}
 	}
@@ -589,7 +605,7 @@ func testQuotaCheckEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -608,8 +624,12 @@ func testQuotaCheckEmployeeDataIntegrity(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
-	// Test 1: Set user quota check setting and verify database integrity
-	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting("390001", true); err != nil {
+	// Create auth mapping and Test 1: Set user quota check setting and verify database integrity
+	uid, errUID := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID)}
+	}
+	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting(uid, true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user quota check setting: %v", err)}
 	}
 
@@ -634,7 +654,7 @@ func testQuotaCheckEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	}
 
 	// Test 2: Update setting and verify consistency
-	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting("390001", false); err != nil {
+	if err := quotaCheckPermissionService.SetUserQuotaCheckSetting(uid, false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to update user quota check setting: %v", err)}
 	}
 

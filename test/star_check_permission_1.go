@@ -23,7 +23,7 @@ func testUserStarCheckSettingManagement(ctx *TestContext) TestResult {
 
 	// Default employee sync config for compatibility
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false, // Default to disabled for existing tests
+		Enabled: true, // Enable employee sync; user-level ops will use UUID
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -53,13 +53,23 @@ func testUserStarCheckSettingManagement(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create other employee: %v", err)}
 	}
 
-	// Test: Set user star check to enabled
-	if err := starCheckPermissionService.SetUserStarCheckSetting("200001", true); err != nil {
+	// Create auth mappings and use UUID for user-level operations
+	uidTarget, errUID1 := createAuthUserForEmployee(ctx, targetEmployee.EmployeeNumber, targetEmployee.Username)
+	if errUID1 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", targetEmployee.EmployeeNumber, errUID1)}
+	}
+	uidOther, errUID2 := createAuthUserForEmployee(ctx, otherEmployee.EmployeeNumber, otherEmployee.Username)
+	if errUID2 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", otherEmployee.EmployeeNumber, errUID2)}
+	}
+
+	// Test: Set user star check to enabled (use UUID)
+	if err := starCheckPermissionService.SetUserStarCheckSetting(uidTarget, true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user star check setting: %v", err)}
 	}
 
 	// Verify the target employee has correct setting
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("200001")
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uidTarget)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get target employee star check setting: %v", err)}
 	}
@@ -69,7 +79,7 @@ func testUserStarCheckSettingManagement(ctx *TestContext) TestResult {
 	}
 
 	// Verify the other employee is NOT affected (should have default disabled)
-	otherEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("200002")
+	otherEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uidOther)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get other employee star check setting: %v", err)}
 	}
@@ -94,7 +104,7 @@ func testDepartmentStarCheckSettingManagement(ctx *TestContext) TestResult {
 
 	// Default employee sync config for compatibility
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -124,6 +134,16 @@ func testDepartmentStarCheckSettingManagement(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create other department employee: %v", err)}
 	}
 
+	// Create auth mappings for both employees and use UUID in queries
+	uidTarget, errUID1 := createAuthUserForEmployee(ctx, targetEmployee.EmployeeNumber, targetEmployee.Username)
+	if errUID1 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", targetEmployee.EmployeeNumber, errUID1)}
+	}
+	uidOther, errUID2 := createAuthUserForEmployee(ctx, otherDeptEmployee.EmployeeNumber, otherDeptEmployee.Username)
+	if errUID2 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", otherDeptEmployee.EmployeeNumber, errUID2)}
+	}
+
 	// Test: Set department star check for "R&D_Center" to disabled
 	if err := starCheckPermissionService.SetDepartmentStarCheckSetting("R&D_Center", false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set department star check setting: %v", err)}
@@ -135,7 +155,7 @@ func testDepartmentStarCheckSettingManagement(ctx *TestContext) TestResult {
 	}
 
 	// Verify the target employee (in R&D_Center) has disabled star check
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("201001")
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uidTarget)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get target employee star check setting: %v", err)}
 	}
@@ -145,7 +165,7 @@ func testDepartmentStarCheckSettingManagement(ctx *TestContext) TestResult {
 	}
 
 	// Verify the other department employee is NOT affected
-	otherEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("201002")
+	otherEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uidOther)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get other department employee star check setting: %v", err)}
 	}
@@ -170,7 +190,7 @@ func testStarCheckSettingPriorityAndInheritance(ctx *TestContext) TestResult {
 
 	// Default employee sync config for compatibility
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -195,13 +215,19 @@ func testStarCheckSettingPriorityAndInheritance(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set department star check setting: %v", err)}
 	}
 
-	// Set user setting to enabled (should override department)
-	if err := starCheckPermissionService.SetUserStarCheckSetting("202003", true); err != nil {
+	// Create auth mapping and use UUID for user-level operations
+	uid, errUID := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID)}
+	}
+
+	// Set user setting to enabled (should override department) using UUID
+	if err := starCheckPermissionService.SetUserStarCheckSetting(uid, true); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user star check setting: %v", err)}
 	}
 
 	// Get effective setting - should be user setting (higher priority)
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("202003")
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective star check setting: %v", err)}
 	}
@@ -225,7 +251,7 @@ func testStarCheckPermissionDistribution(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -244,11 +270,17 @@ func testStarCheckPermissionDistribution(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
+	// Create auth mapping for UUID-based user-level ops
+	uidDist, errUIDDist := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUIDDist != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUIDDist)}
+	}
+
 	// Clear previous star check calls
 	mockStore.ClearStarCheckCalls()
 
-	// Set user star check setting
-	if err := starCheckPermissionService.SetUserStarCheckSetting("203001", false); err != nil {
+	// Set user star check setting using UUID while EmployeeSync=true
+	if err := starCheckPermissionService.SetUserStarCheckSetting(uidDist, false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user star check setting: %v", err)}
 	}
 
@@ -282,7 +314,7 @@ func testUnifiedPermissionQueries(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -304,18 +336,23 @@ func testUnifiedPermissionQueries(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
+	// Create auth mapping and set model permissions using UUID
+	uid, errUID := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID)}
+	}
 	// Set model permissions
-	if err := permissionService.SetUserWhitelist("204001", []string{"gpt-4", "claude-3-opus"}); err != nil {
+	if err := permissionService.SetUserWhitelist(uid, []string{"gpt-4", "claude-3-opus"}); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set model permissions: %v", err)}
 	}
 
 	// Set star check setting
-	if err := starCheckPermissionService.SetUserStarCheckSetting("204001", false); err != nil {
+	if err := starCheckPermissionService.SetUserStarCheckSetting(uid, false); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set star check setting: %v", err)}
 	}
 
 	// Test unified model permission query
-	models, err := unifiedPermissionService.GetModelEffectivePermissions("user", "204001")
+	models, err := unifiedPermissionService.GetModelEffectivePermissions("user", uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get model permissions via unified service: %v", err)}
 	}
@@ -325,7 +362,7 @@ func testUnifiedPermissionQueries(ctx *TestContext) TestResult {
 	}
 
 	// Test unified star check permission query
-	enabled, err := unifiedPermissionService.GetStarCheckEffectivePermissions("user", "204001")
+	enabled, err := unifiedPermissionService.GetStarCheckEffectivePermissions("user", uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get star check permissions via unified service: %v", err)}
 	}
@@ -504,8 +541,14 @@ func testEmptyStarCheckSettingFallback(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set parent department star check setting: %v", err)}
 	}
 
+	// Create auth mappings and use UUID for user-level queries
+	uid1, errUID1 := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID1 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID1)}
+	}
+
 	// Get effective setting - should inherit from parent department
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("210001")
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid1)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective star check setting: %v", err)}
 	}
@@ -524,8 +567,14 @@ func testEmptyStarCheckSettingFallback(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create default employee: %v", err)}
 	}
 
+	// Create auth mapping for default employee and get setting using UUID
+	uid2, errUID2 := createAuthUserForEmployee(ctx, defaultEmployee.EmployeeNumber, defaultEmployee.Username)
+	if errUID2 != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", defaultEmployee.EmployeeNumber, errUID2)}
+	}
+
 	// Get effective setting - should get default (enabled)
-	defaultEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("210002")
+	defaultEnabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid2)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get default star check setting: %v", err)}
 	}
@@ -554,7 +603,7 @@ func testSyncWithoutStarCheckSetting(ctx *TestContext) TestResult {
 	}
 
 	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false,
+		Enabled: true,
 		HrURL:   "http://localhost:8099/api/hr/employees",
 		HrKey:   "test-hr-key",
 		DeptURL: "http://localhost:8099/api/hr/departments",
@@ -587,8 +636,12 @@ func testSyncWithoutStarCheckSetting(ctx *TestContext) TestResult {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 0 star check calls for new user with default setting, got %d", len(starCheckCalls))}
 	}
 
-	// Verify effective setting is default (enabled)
-	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting("211001")
+	// Verify effective setting is default (enabled) using UUID under EmployeeSync=true
+	uid, errUID := createAuthUserForEmployee(ctx, employee.EmployeeNumber, employee.Username)
+	if errUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", employee.EmployeeNumber, errUID)}
+	}
+	enabled, err := starCheckPermissionService.GetUserEffectiveStarCheckSetting(uid)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective star check setting: %v", err)}
 	}

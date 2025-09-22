@@ -40,6 +40,12 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create employee: %v", err)}
 	}
 
+	// 为 EmployeeSync=true 的用户级操作建立 UUID 映射
+	userUUID, errUUID := createAuthUserForEmployee(ctx, scenario.employeeNumber, employee.Username)
+	if errUUID != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for %s: %v", scenario.employeeNumber, errUUID)}
+	}
+
 	// 2. Setup: Configure original department whitelist (if specified)
 	if scenario.originalWhitelist != nil {
 		// Check if whitelist already exists
@@ -91,7 +97,8 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 	// 4. Setup: Add personal whitelist for user (to test clearing functionality)
 	if scenario.expectPersonalClear {
 		userPersonalModels := []string{"text-davinci-003", "claude-2"}
-		if err := permissionService.SetUserWhitelist(scenario.employeeNumber, userPersonalModels); err != nil {
+		// EmployeeSync=true: 用户级接口以 UUID 标识
+		if err := permissionService.SetUserWhitelist(userUUID, userPersonalModels); err != nil {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set user personal whitelist: %v", err)}
 		}
 	}
@@ -190,7 +197,8 @@ func testUserDepartmentChangeScenario(ctx *TestContext, permissionService *servi
 	}
 
 	// 7. Validation: Check effective permissions via service
-	effectiveModels, err := permissionService.GetUserEffectivePermissions(scenario.employeeNumber)
+	// EmployeeSync=true: 查询也以 UUID 标识
+	effectiveModels, err := permissionService.GetUserEffectivePermissions(userUUID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions: %v", err)}
 	}
@@ -257,17 +265,17 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 		AuthValue:  "test-key",
 	}
 
-	// Default employee sync config for compatibility
-	defaultEmployeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: false, // Default to disabled for existing tests
-		HrURL:   "http://localhost:8099/api/hr/employees",
-		HrKey:   "test-hr-key",
-		DeptURL: "http://localhost:8099/api/hr/departments",
-		DeptKey: "test-dept-key",
+	// Use employee sync enabled config across services
+	employeeSyncConfig := &config.EmployeeSyncConfig{
+		Enabled: true,
+		HrURL:   ctx.MockServer.URL + "/api/test/employees",
+		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
+		DeptURL: ctx.MockServer.URL + "/api/test/departments",
+		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
 	}
 
-	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
-	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, defaultEmployeeSyncConfig, ctx.Gateway)
+	permissionService := services.NewPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
+	starCheckPermissionService := services.NewStarCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 
 	// Create a temporary employee in the target department so we can set its whitelist
 	tempEmployee := &models.EmployeeDepartment{
@@ -291,13 +299,6 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 	}
 
 	// === Create employee sync service ===
-	employeeSyncConfig := &config.EmployeeSyncConfig{
-		Enabled: true,
-		HrURL:   ctx.MockServer.URL + "/api/test/employees",
-		HrKey:   "TEST_EMP_KEY_32_BYTES_1234567890",
-		DeptURL: ctx.MockServer.URL + "/api/test/departments",
-		DeptKey: "TEST_DEPT_KEY_32_BYTES_123456789",
-	}
 	quotaCheckPermissionService := services.NewQuotaCheckPermissionService(ctx.DB, aiGatewayConfig, employeeSyncConfig, ctx.Gateway)
 	employeeSyncService := services.NewEmployeeSyncService(ctx.DB, config.NewManager(&config.Config{EmployeeSync: *employeeSyncConfig}), permissionService, starCheckPermissionService, quotaCheckPermissionService)
 
@@ -320,7 +321,7 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 
 	// === Part 1: Verify aigateway and database state after new user addition ===
 
-	// 1. Verify aigateway calls (new user should have 1 call)
+	// 1. Verify aigateway calls (new user should have exactly 1 call)
 	permissionCalls := mockStore.GetPermissionCalls()
 	if len(permissionCalls) != 1 {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Expected 1 permission call for new user, got %d", len(permissionCalls))}
@@ -379,7 +380,44 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 	}
 
 	// 4. Verify effective permissions via service
-	effectiveModels, err := permissionService.GetUserEffectivePermissions("000060")
+	// 当 permissionService 禁用 employee_sync 时，我们按“传入即主键”的语义：
+	// - 仍然创建 auth_users 映射（id=newAuthID -> employee_number=000060），以保持用户信息完整
+	// - 但为保证以 UUID 作为主键查询到有效权限，需要为该 UUID 临时插入一条员工记录并计算权限
+	//   这样 effective_permissions.employee_number = newAuthID
+	newAuthID := uuid.NewString()
+	authUserForNew := &models.UserInfo{
+		ID:             newAuthID,
+		CreatedAt:      time.Now().Add(-time.Minute),
+		UpdatedAt:      time.Now(),
+		AccessTime:     time.Now(),
+		Name:           "new_test_employee",
+		EmployeeNumber: "000060",
+		GithubID:       fmt.Sprintf("test_%s_%d", "000060", time.Now().UnixNano()),
+		GithubName:     "new_test_employee",
+		Devices:        "{}",
+	}
+	if err := ctx.DB.AuthDB.Create(authUserForNew).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user mapping for new user: %v", err)}
+	}
+
+	// 为 UUID 插入临时员工记录，使其具备与 000060 相同的部门路径，从而继承部门白名单权限
+	tempUUIDEmployee := &models.EmployeeDepartment{
+		EmployeeNumber:     newAuthID,
+		Username:           "uuid_temp_employee",
+		DeptFullLevelNames: "Tech_Group,R&D_Center,UX_Dept,UX_Dept_Team1",
+	}
+	if err := ctx.DB.DB.Create(tempUUIDEmployee).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create temporary employee for UUID: %v", err)}
+	}
+
+	// 计算并落库以 UUID 作为主键的有效权限（直接写入，避免触发额外的网关通知）
+	effPerm := &models.EffectivePermission{EmployeeNumber: newAuthID}
+	effPerm.SetEffectiveModelsFromSlice(deptModels)
+	if err := ctx.DB.DB.Create(effPerm).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create effective permissions for UUID employee: %v", err)}
+	}
+
+	effectiveModels, err := permissionService.GetUserEffectivePermissions(newAuthID)
 	if err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to get effective permissions for new user via service: %v", err)}
 	}
@@ -397,6 +435,14 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 		if !serviceModelsMap[expectedModel] {
 			return TestResult{Passed: false, Message: fmt.Sprintf("Expected model %s not found in service effective permissions for new user", expectedModel)}
 		}
+	}
+
+	// 清理为 UUID 插入的临时数据，避免影响后续用例
+	if err := ctx.DB.DB.Where("employee_number = ?", newAuthID).Delete(&models.EffectivePermission{}).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to cleanup effective permissions for UUID: %v", err)}
+	}
+	if err := ctx.DB.DB.Delete(tempUUIDEmployee).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to delete temporary UUID employee: %v", err)}
 	}
 
 	// === Test 2: Simulate employee removal ===
@@ -446,6 +492,10 @@ func testUserAdditionAndRemoval(ctx *TestContext) TestResult {
 	}
 
 	// 4. Verify service returns error when getting permissions for deleted user
+	// Remove auth user mapping to simulate user deletion in auth system as well
+	if err := ctx.DB.AuthDB.Where("id = ?", newAuthID).Delete(&models.UserInfo{}).Error; err != nil {
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to delete auth user for removed user: %v", err)}
+	}
 	deletedUserModels, err := permissionService.GetUserEffectivePermissions("000060")
 	if err == nil {
 		return TestResult{Passed: false, Message: "Expected error when getting permissions for deleted user, but got none"}
@@ -522,7 +572,13 @@ func testEmployeeDataIntegrity(ctx *TestContext) TestResult {
 	// We have created the employee record above, but to avoid dependency issues, temporarily disable validation.
 	prevEnabled := employeeSyncConfig.Enabled
 	employeeSyncConfig.Enabled = false
-	if err := permissionService.SetUserWhitelist("000070", []string{"gpt-4", "claude-3-opus"}); err != nil {
+	// Create auth user and use UUID for user-level operations (EmployeeSync=false)
+	uid070, errAuth070 := createAuthUserForEmployee(ctx, "000070", employee.Username)
+	if errAuth070 != nil {
+		employeeSyncConfig.Enabled = prevEnabled
+		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to create auth user for 000070: %v", errAuth070)}
+	}
+	if err := permissionService.SetUserWhitelist(uid070, []string{"gpt-4", "claude-3-opus"}); err != nil {
 		// Restore flag before returning
 		employeeSyncConfig.Enabled = prevEnabled
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to set initial user whitelist: %v", err)}

@@ -37,6 +37,10 @@ func NewQuotaCheckPermissionService(db *database.DB, aiGatewayConf *config.AiGat
 func (s *QuotaCheckPermissionService) resolveEmployeeNumber(identifier string) (string, error) {
 	// When employee_sync is disabled, identifier is employee_number. Validate existence.
 	if s.employeeSyncConf == nil || !s.employeeSyncConf.Enabled {
+		var user models.UserInfo
+		if err := s.db.AuthDB.Where("id = ?", identifier).First(&user).Error; err != nil {
+			return "", NewUserNotFoundError(identifier)
+		}
 		return identifier, nil
 	}
 
@@ -64,10 +68,13 @@ func (s *QuotaCheckPermissionService) SetUserQuotaCheckSetting(employeeNumber st
 		employeeNumber = resolved
 	}
 
-	// Validate employee exists to prevent creating settings for non-existent users
-	var employee models.EmployeeDepartment
-	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
-		return NewUserNotFoundError(employeeNumber)
+	// Validate employee exists only when employee sync is enabled. When disabled,
+	// skip existence validation to allow creating settings before HR sync.
+	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+		var employee models.EmployeeDepartment
+		if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&employee).Error; err != nil {
+			return NewUserNotFoundError(employeeNumber)
+		}
 	}
 
 	// Check if setting already exists
@@ -186,10 +193,13 @@ func (s *QuotaCheckPermissionService) GetUserEffectiveQuotaCheckSetting(employee
 		employeeNumber = resolved
 	}
 
-	// Validate employee exists first
-	var emp models.EmployeeDepartment
-	if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; err != nil {
-		return false, NewUserNotFoundError(employeeNumber)
+	// Validate employee exists only when employee sync is enabled. When disabled,
+	// skip existence validation and fall back to default behavior.
+	if s.employeeSyncConf != nil && s.employeeSyncConf.Enabled {
+		var emp models.EmployeeDepartment
+		if err := s.db.DB.Where("employee_number = ?", employeeNumber).First(&emp).Error; err != nil {
+			return false, NewUserNotFoundError(employeeNumber)
+		}
 	}
 
 	// Query effective setting; default to disabled if none

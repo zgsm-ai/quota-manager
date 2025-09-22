@@ -282,6 +282,24 @@ func verifyAuditRecordCount(ctx *TestContext, userID string, expectedCount int64
 	return nil
 }
 
+// createAuthUserForEmployee 在 auth 库中创建一条用户记录，建立 UUID -> 员工号 的映射
+// 返回生成的 user_id (UUID)
+func createAuthUserForEmployee(ctx *TestContext, employeeNumber, name string) (string, error) {
+	userID := uuid.NewString()
+	authUser := &models.UserInfo{
+		ID:             userID,
+		Name:           name,
+		EmployeeNumber: employeeNumber,
+		GithubID:       fmt.Sprintf("test_%s_%d", employeeNumber, time.Now().UnixNano()),
+		GithubName:     name,
+		Devices:        "{}",
+	}
+	if err := ctx.DB.AuthDB.Create(authUser).Error; err != nil {
+		return "", fmt.Errorf("failed to create auth user for %s: %w", employeeNumber, err)
+	}
+	return userID, nil
+}
+
 // createTestUser creates a test user with new auth_users table structure
 func createTestUser(id, name string, vip int) *models.UserInfo {
 	// Generate a valid UUID for the user ID
