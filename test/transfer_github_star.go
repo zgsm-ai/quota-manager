@@ -223,7 +223,7 @@ func testTransferOutGithubStarNotSet(ctx *TestContext) TestResult {
 	transferExpiryDate := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// Add quota with the same expiry date that will be used in transfer
-	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy", nil); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to add quota: %v", err)}
 	}
 
@@ -300,7 +300,7 @@ func testTransferOutGithubStarSet(ctx *TestContext) TestResult {
 	transferExpiryDate := time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
 
 	// Add quota with the same expiry date that will be used in transfer
-	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(giver.ID, 200, 0, "test-strategy", nil); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Failed to add quota: %v", err)}
 	}
 

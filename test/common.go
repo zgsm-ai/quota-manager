@@ -388,3 +388,34 @@ func (ctx *TestContext) UseFailServer() (restoreFunc func()) {
 func (ctx *TestContext) createStrategyServiceWithEmployeeSync(employeeSyncConfig *config.EmployeeSyncConfig) *services.StrategyService {
 	return services.NewStrategyService(ctx.DB, ctx.Gateway, ctx.QuotaService, employeeSyncConfig)
 }
+
+// createTestInviterUser creates a test user with new auth_users table structure
+func createTestInviterUser(id, name string, vip int, inviterID string) *models.UserInfo {
+	// Generate a valid UUID for the user ID
+	validUUID := uuid.NewString()
+
+	// Create a unique github_id by combining the id parameter with a timestamp
+	uniqueGithubID := fmt.Sprintf("%s_%d", strings.ToLower(id), time.Now().UnixNano())
+
+	return &models.UserInfo{
+		ID:               validUUID,
+		CreatedAt:        time.Now().Add(-time.Hour * 24),
+		UpdatedAt:        time.Now().Add(-time.Hour * 1),
+		AccessTime:       time.Now().Add(-time.Hour * 1),
+		Name:             name,
+		GithubID:         uniqueGithubID,
+		GithubName:       name,
+		VIP:              vip,
+		Phone:            "13800138000",
+		Email:            fmt.Sprintf("%s@test.com", strings.ToLower(name)),
+		Password:         "",
+		Company:          "TestCompany",
+		Location:         "TestCity",
+		UserCode:         fmt.Sprintf("TC%s", id),
+		ExternalAccounts: "",
+		EmployeeNumber:   fmt.Sprintf("EMP%s", id),
+		GithubStar:       "zgsm-ai.zgsm,openai.gpt-4",
+		Devices:          "{}",
+		InviterID:        inviterID,
+	}
+}

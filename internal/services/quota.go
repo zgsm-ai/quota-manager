@@ -726,13 +726,17 @@ func (s *QuotaService) TransferIn(receiver *models.AuthUser, req *TransferInRequ
 }
 
 // AddQuotaForStrategy adds quota for strategy execution
-func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strategyID int, strategyName string) error {
-	// Calculate expiry date (end of this/next month)
+func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strategyID int, strategyName string, relatedUserID *string) error {
 	now := utils.NowInConfigTimezone(s.configManager.GetDirect()).Truncate(time.Second)
-	var expiryDate time.Time
 
-	// Always set to end of current month
-	expiryDate = time.Date(now.Year(), now.Month()+1, 0, 23, 59, 59, 0, now.Location())
+	// Get strategy information to determine expiry date
+	var strategy models.QuotaStrategy
+	if err := s.db.DB.First(&strategy, strategyID).Error; err != nil {
+		return fmt.Errorf("failed to get strategy: %w", err)
+	}
+
+	// Calculate expiry date based on strategy's ExpiryDays
+	expiryDate := utils.CalculateExpiryDate(now, strategy.ExpiryDays)
 
 	// Start transaction
 	tx := s.db.DB.Begin()
@@ -803,6 +807,10 @@ func (s *QuotaService) AddQuotaForStrategy(userID string, amount float64, strate
 		StrategyID:   &strategyID,
 		StrategyName: strategyName,
 		ExpiryDate:   expiryDate,
+	}
+	// Add related user if available
+	if relatedUserID != nil {
+		auditRecord.RelatedUser = *relatedUserID
 	}
 	if err := auditRecord.MarshalDetails(auditDetails); err != nil {
 		tx.Rollback()
