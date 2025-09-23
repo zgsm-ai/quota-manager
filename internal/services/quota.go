@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
@@ -131,6 +132,22 @@ type TransferQuotaResult struct {
 	IsExpired     bool                   `json:"is_expired"`
 	Success       bool                   `json:"success"`
 	FailureReason *TransferFailureReason `json:"failure_reason,omitempty"`
+}
+
+// MergeQuotaRequest represents merge quota request
+type MergeQuotaRequest struct {
+	MainUserID  string `json:"main_user_id" validate:"required,uuid"`  // 主用户（保留用户）
+	OtherUserID string `json:"other_user_id" validate:"required,uuid"` // 其他用户（被合并的用户）
+}
+
+// MergeQuotaResponse represents merge quota response
+type MergeQuotaResponse struct {
+	MainUserID  string  `json:"main_user_id"`
+	OtherUserID string  `json:"other_user_id"`
+	Amount      float64 `json:"amount"`
+	Operation   string  `json:"operation"`
+	Status      string  `json:"status"`
+	Message     string  `json:"message,omitempty"`
 }
 
 // GetUserQuota retrieves user quota information
@@ -1373,6 +1390,103 @@ func (s *QuotaService) DeductQuota(userID string, amount float64, reason, refere
 	}
 
 	return nil
+}
+
+// MergeUserQuota merges all quota from other user to main user
+func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaResponse, error) {
+	// Validate request
+	if req.MainUserID == req.OtherUserID {
+		return &MergeQuotaResponse{
+			MainUserID:  req.MainUserID,
+			OtherUserID: req.OtherUserID,
+			Amount:      0,
+			Operation:   "MERGE_QUOTA",
+			Status:      "FAILED",
+			Message:     "Main user and other user cannot be the same",
+		}, nil
+	}
+
+	// Start transaction
+	tx := s.db.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Get all valid quotas from other user
+	var otherUserQuotas []models.Quota
+	if err := tx.Where("user_id = ? AND status = ? AND amount > 0", req.OtherUserID, models.StatusValid).
+		Order("expiry_date ASC").Find(&otherUserQuotas).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to get other user quotas: %w", err)
+	}
+
+	// If no quotas found, return success with empty result
+	if len(otherUserQuotas) == 0 {
+		return &MergeQuotaResponse{
+			MainUserID:  req.MainUserID,
+			OtherUserID: req.OtherUserID,
+			Amount:      0,
+			Operation:   "MERGE_QUOTA",
+			Status:      "SUCCESS",
+			Message:     "No quotas found to merge",
+		}, nil
+	}
+
+	var totalAmount float64
+
+	// Calculate results from original quotas for audit and response
+	for _, quota := range otherUserQuotas {
+		totalAmount += quota.Amount
+	}
+
+	// Process each quota individually to handle potential conflicts
+	for _, quota := range otherUserQuotas {
+		// Check if main user already has a quota with same expiry_date and status
+		var existingQuota models.Quota
+		err := tx.Where("user_id = ? AND expiry_date = ? AND status = ?",
+			req.MainUserID, quota.ExpiryDate, quota.Status).First(&existingQuota).Error
+
+		if err == nil {
+			// Main user already has a quota with same expiry_date and status
+			// Merge the amounts by adding to existing quota
+			newAmount := existingQuota.Amount + quota.Amount
+			if err := tx.Model(&existingQuota).Update("amount", newAmount).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to merge quota amount for user %s, expiry %s: %w",
+					req.MainUserID, quota.ExpiryDate.Format("2006-01-02"), err)
+			}
+
+			// Delete the original quota from other user to avoid duplication
+			if err := tx.Delete(&quota).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to delete original quota from user %s: %w", req.OtherUserID, err)
+			}
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			// No conflict found, safely update user_id
+			if err := tx.Model(&quota).Update("user_id", req.MainUserID).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to transfer quota from user %s to user %s: %w",
+					req.OtherUserID, req.MainUserID, err)
+			}
+		} else {
+			// Unexpected error occurred during checking
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to check existing quota for user %s: %w", req.MainUserID, err)
+		}
+	}
+
+	tx.Commit()
+
+	return &MergeQuotaResponse{
+		MainUserID:  req.MainUserID,
+		OtherUserID: req.OtherUserID,
+		Amount:      totalAmount,
+		Operation:   "MERGE_QUOTA",
+		Status:      "SUCCESS",
+		Message:     "Quota merged successfully",
+	}, nil
 }
 
 // min returns the minimum of two float64 values
