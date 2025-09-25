@@ -1,7 +1,6 @@
 package services
 
 import (
-	"errors"
 	"fmt"
 	"quota-manager/internal/config"
 	"quota-manager/internal/database"
@@ -1394,13 +1393,24 @@ func (s *QuotaService) DeductQuota(userID string, amount float64, reason, refere
 
 // MergeUserQuota merges all quota from other user to main user
 func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaResponse, error) {
+	mainUserID := req.MainUserID
+	otherUserID := req.OtherUserID
 	// Validate request
-	if req.MainUserID == req.OtherUserID {
+	if mainUserID == "" || otherUserID == "" {
 		return &MergeQuotaResponse{
-			MainUserID:  req.MainUserID,
-			OtherUserID: req.OtherUserID,
+			MainUserID:  mainUserID,
+			OtherUserID: otherUserID,
 			Amount:      0,
-			Operation:   "MERGE_QUOTA",
+			Operation:   models.OperationMergeIn,
+			Status:      "FAILED",
+			Message:     "Main user or other user cannot be empty",
+		}, nil
+	} else if mainUserID == otherUserID {
+		return &MergeQuotaResponse{
+			MainUserID:  mainUserID,
+			OtherUserID: otherUserID,
+			Amount:      0,
+			Operation:   models.OperationMergeIn,
 			Status:      "FAILED",
 			Message:     "Main user and other user cannot be the same",
 		}, nil
@@ -1416,7 +1426,7 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 
 	// Get all valid quotas from other user
 	var otherUserQuotas []models.Quota
-	if err := tx.Where("user_id = ? AND status = ? AND amount > 0", req.OtherUserID, models.StatusValid).
+	if err := tx.Where("user_id = ? AND status = ? AND amount > 0", otherUserID, models.StatusValid).
 		Order("expiry_date ASC").Find(&otherUserQuotas).Error; err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to get other user quotas: %w", err)
@@ -1425,65 +1435,135 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 	// If no quotas found, return success with empty result
 	if len(otherUserQuotas) == 0 {
 		return &MergeQuotaResponse{
-			MainUserID:  req.MainUserID,
-			OtherUserID: req.OtherUserID,
+			MainUserID:  mainUserID,
+			OtherUserID: otherUserID,
 			Amount:      0,
-			Operation:   "MERGE_QUOTA",
+			Operation:   models.OperationMergeIn,
 			Status:      "SUCCESS",
 			Message:     "No quotas found to merge",
 		}, nil
 	}
 
-	var totalAmount float64
-
-	// Calculate results from original quotas for audit and response
-	for _, quota := range otherUserQuotas {
-		totalAmount += quota.Amount
+	// Pre-query all main user's valid quotas to create a memory map for efficient lookup
+	var mainUserQuotas []models.Quota
+	if err := tx.Where("user_id = ? AND status = ?", mainUserID, models.StatusValid).
+		Find(&mainUserQuotas).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to get main user quotas: %w", err)
 	}
 
-	// Process each quota individually to handle potential conflicts
-	for _, quota := range otherUserQuotas {
-		// Check if main user already has a quota with same expiry_date and status
-		var existingQuota models.Quota
-		err := tx.Where("user_id = ? AND expiry_date = ? AND status = ?",
-			req.MainUserID, quota.ExpiryDate, quota.Status).First(&existingQuota).Error
+	// Create a map for quick lookup: key is "expiry_date_status", value is pointer to quota
+	mainUserQuotaMap := make(map[string]*models.Quota)
+	for i := range mainUserQuotas {
+		key := fmt.Sprintf("%s_%s", mainUserQuotas[i].ExpiryDate.Format("2006-01-02"), mainUserQuotas[i].Status)
+		mainUserQuotaMap[key] = &mainUserQuotas[i]
+	}
 
-		if err == nil {
+	var totalAmount float64
+	// Process each quota individually using the pre-built map for efficient conflict detection
+	for _, quota := range otherUserQuotas {
+		// Calculate results from original quotas for audit and response
+		totalAmount += quota.Amount
+
+		// Check if main user already has a quota with same expiry_date and status using the map
+		key := fmt.Sprintf("%s_%s", quota.ExpiryDate.Format("2006-01-02"), quota.Status)
+		if existingQuota, exists := mainUserQuotaMap[key]; exists {
 			// Main user already has a quota with same expiry_date and status
 			// Merge the amounts by adding to existing quota
 			newAmount := existingQuota.Amount + quota.Amount
-			if err := tx.Model(&existingQuota).Update("amount", newAmount).Error; err != nil {
+			if err := tx.Model(existingQuota).Update("amount", newAmount).Error; err != nil {
 				tx.Rollback()
 				return nil, fmt.Errorf("failed to merge quota amount for user %s, expiry %s: %w",
-					req.MainUserID, quota.ExpiryDate.Format("2006-01-02"), err)
+					mainUserID, quota.ExpiryDate.Format("2006-01-02"), err)
 			}
 
 			// Delete the original quota from other user to avoid duplication
 			if err := tx.Delete(&quota).Error; err != nil {
 				tx.Rollback()
-				return nil, fmt.Errorf("failed to delete original quota from user %s: %w", req.OtherUserID, err)
-			}
-		} else if errors.Is(err, gorm.ErrRecordNotFound) {
-			// No conflict found, safely update user_id
-			if err := tx.Model(&quota).Update("user_id", req.MainUserID).Error; err != nil {
-				tx.Rollback()
-				return nil, fmt.Errorf("failed to transfer quota from user %s to user %s: %w",
-					req.OtherUserID, req.MainUserID, err)
+				return nil, fmt.Errorf("failed to delete original quota from user %s: %w", otherUserID, err)
 			}
 		} else {
-			// Unexpected error occurred during checking
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to check existing quota for user %s: %w", req.MainUserID, err)
+			// No conflict found, safely update user_id
+			if err := tx.Model(&quota).Update("user_id", mainUserID).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to transfer quota from user %s to user %s: %w",
+					otherUserID, mainUserID, err)
+			}
 		}
 	}
 
-	tx.Commit()
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit transaction, for user quota merged: %w", err)
+	}
+
+	// Log the merge operation
+	logger.Info("User quota merged",
+		zap.String("from_user", otherUserID),
+		zap.String("to_user", mainUserID),
+		zap.Float64("amount", totalAmount),
+		zap.Int("quota_items", len(otherUserQuotas)))
+
+	// Create audit record asynchronously without blocking main program
+	go func() {
+		// Get the latest expiry date (since ordered by expiry_date ASC, last element has the latest expiry)
+		var latestExpiryDate time.Time
+		if len(otherUserQuotas) > 0 {
+			latestExpiryDate = otherUserQuotas[len(otherUserQuotas)-1].ExpiryDate
+		}
+
+		// Prepare audit details
+		auditDetails := &models.QuotaAuditDetails{
+			Operation: models.OperationMergeIn,
+			Summary: models.QuotaAuditSummary{
+				TotalAmount:        totalAmount,
+				TotalItems:         len(otherUserQuotas),
+				SuccessfulItems:    len(otherUserQuotas),
+				EarliestExpiryDate: latestExpiryDate.Format(time.RFC3339),
+			},
+			Items: make([]models.QuotaAuditDetailItem, len(otherUserQuotas)),
+		}
+
+		// Fill audit detail items
+		for i, quota := range otherUserQuotas {
+			auditDetails.Items[i] = models.QuotaAuditDetailItem{
+				Amount:     quota.Amount,
+				ExpiryDate: quota.ExpiryDate.Format(time.RFC3339),
+				Status:     models.AuditStatusSuccess,
+			}
+		}
+
+		// Create quota audit record
+		auditRecord := &models.QuotaAudit{
+			UserID:      mainUserID,
+			Amount:      totalAmount,
+			Operation:   models.OperationMergeIn,
+			RelatedUser: otherUserID,
+			ExpiryDate:  latestExpiryDate,
+		}
+
+		// Create audit record using new database connection
+		if err := auditRecord.MarshalDetails(auditDetails); err != nil {
+			logger.Error("Failed to marshal audit details for quota merge",
+				zap.Error(err),
+				zap.String("user_id", mainUserID),
+				zap.String("related_user", otherUserID))
+			return
+		}
+
+		if err := s.db.DB.Create(auditRecord).Error; err != nil {
+			logger.Error("Failed to create audit record for quota merge",
+				zap.Error(err),
+				zap.String("user_id", mainUserID),
+				zap.String("related_user", otherUserID))
+		}
+	}()
 
 	return &MergeQuotaResponse{
-		MainUserID:  req.MainUserID,
-		OtherUserID: req.OtherUserID,
+		MainUserID:  mainUserID,
+		OtherUserID: otherUserID,
 		Amount:      totalAmount,
-		Operation:   "MERGE_QUOTA",
+		Operation:   models.OperationMergeIn,
 		Status:      "SUCCESS",
 		Message:     "Quota merged successfully",
 	}, nil

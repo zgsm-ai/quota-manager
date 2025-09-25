@@ -422,6 +422,7 @@ const (
 	OperationTransferIn  = "TRANSFER_IN"
 	OperationTransferOut = "TRANSFER_OUT"
 	OperationDeduct      = "DEDUCT"
+	OperationMergeIn     = "MERGE_IN"
 )
 
 // Status constants for quota audit detail items
