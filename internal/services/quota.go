@@ -1504,12 +1504,23 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 		zap.Float64("amount", totalAmount),
 		zap.Int("quota_items", len(otherUserQuotas)))
 
-	// Create audit record asynchronously without blocking main program
+	// Create audit record and update QuotaExecute records asynchronously without blocking main program
 	go func() {
 		// Get the latest expiry date (since ordered by expiry_date ASC, last element has the latest expiry)
 		var latestExpiryDate time.Time
 		if len(otherUserQuotas) > 0 {
 			latestExpiryDate = otherUserQuotas[len(otherUserQuotas)-1].ExpiryDate
+		}
+
+		// Update QuotaExecute records to maintain strategy execution consistency
+		// This prevents duplicate invitation rewards after user ID changes
+		if err := s.db.Model(&models.QuotaExecute{}).
+			Where("user_id = ?", otherUserID).
+			Update("user_id", mainUserID).Error; err != nil {
+			logger.Error("Failed to update quota execute records asynchronously",
+				zap.String("from_user", otherUserID),
+				zap.String("to_user", mainUserID),
+				zap.Error(err))
 		}
 
 		// Prepare audit details
