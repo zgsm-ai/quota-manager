@@ -213,6 +213,13 @@ func (f *FalseExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (boo
 	return false, nil
 }
 
+// HasInviterExpr checks if user has an inviter (inviter_id is not null and not empty)
+type HasInviterExpr struct{}
+
+func (h *HasInviterExpr) Evaluate(user *models.UserInfo, ctx *EvaluationContext) (bool, error) {
+	return user.InviterID != "", nil
+}
+
 // RechargeExpr already recharged expression
 type RechargeExpr struct {
 	StrategyName string
@@ -520,6 +527,12 @@ func (p *Parser) buildFunction(funcName string, args []string) (Evaluator, error
 			return nil, fmt.Errorf("false expects 0 arguments, got %d", len(args))
 		}
 		return &FalseExpr{}, nil
+
+	case "has-inviter":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("has-inviter expects 0 arguments, got %d", len(args))
+		}
+		return &HasInviterExpr{}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown function: %s", funcName)

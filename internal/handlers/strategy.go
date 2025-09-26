@@ -135,6 +135,7 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 		Condition      *string  `json:"condition" validate:"omitempty"`
 		Status         *bool    `json:"status"`
 		MaxExecPerUser *int     `json:"max_exec_per_user" validate:"omitempty,gte=0"`
+		ExpiryDays     *int     `json:"expiry_days" validate:"omitempty,gte=1"`
 	}
 
 	var req UpdateStrategyRequest
@@ -196,6 +197,12 @@ func (h *StrategyHandler) UpdateStrategy(c *gin.Context) {
 	}
 	if req.MaxExecPerUser != nil {
 		updates["max_exec_per_user"] = *req.MaxExecPerUser
+	}
+	if req.ExpiryDays != nil {
+		updates["expiry_days"] = *req.ExpiryDays
+	} else {
+		// if expiry_days is not set, set it to nil
+		updates["expiry_days"] = nil
 	}
 
 	if err := h.service.UpdateStrategy(id, updates); err != nil {

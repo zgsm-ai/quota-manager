@@ -28,7 +28,9 @@ CREATE TABLE "public"."auth_users" (
   "external_accounts" varchar(100) COLLATE "pg_catalog"."default",
   "employee_number" varchar(100) COLLATE "pg_catalog"."default",
   "github_star" text COLLATE "pg_catalog"."default",
-  "devices" jsonb
+  "devices" jsonb,
+  "invite_code" varchar(10) COLLATE "pg_catalog"."default",
+  "inviter_id" varchar(100) COLLATE "pg_catalog"."default"
 );
 
 -- ----------------------------
@@ -42,6 +44,9 @@ CREATE UNIQUE INDEX "idx_auth_users_github_id" ON "public"."auth_users" USING bt
 );
 CREATE INDEX "idx_auth_users_name" ON "public"."auth_users" USING btree (
   "name" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_auth_users_inviter_id" ON "public"."auth_users" USING btree (
+  "inviter_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
 );
 
 -- ----------------------------
@@ -63,6 +68,7 @@ CREATE TABLE IF NOT EXISTS quota_strategy (
     periodic_expr VARCHAR(255),
     condition TEXT,
     max_exec_per_user INTEGER NOT NULL DEFAULT 0,
+    expiry_days INTEGER,  -- 有效天数，可为空
     status BOOLEAN DEFAULT true NOT NULL,  -- Status field: true=enabled, false=disabled
     create_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMPTZ(0) DEFAULT CURRENT_TIMESTAMP

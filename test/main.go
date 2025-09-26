@@ -258,6 +258,14 @@ func runAllTests(ctx *TestContext) []TestResult {
 		{"Non-existent User and Department Quota Check Test", testNonExistentUserAndDepartmentQuotaCheck},
 		{"Quota Check Employee Data Integrity Test", testQuotaCheckEmployeeDataIntegrity},
 		{"Quota Check Employee Sync Test", testQuotaCheckEmployeeSync},
+
+		// ExpiryDays Strategy Tests
+		{"ExpiryDays Strategy Test", testExpiryDaysStrategy},
+
+		// Invitation Reward Strategy Tests
+		{"Invite Register Reward Test", testStrategyInviteRegister},
+		{"Invite Star Reward Test", testStrategyInviteStar},
+		{"Invitee Star Reward Test", testStrategyInviteUserStar},
 	}
 
 	for _, tc := range testCases {

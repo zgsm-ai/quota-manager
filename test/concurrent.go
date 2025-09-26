@@ -25,7 +25,7 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 	}
 
 	// Add initial quota for user1 (no need to set mock quota since AddQuotaForStrategy will handle AiGateway)
-	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 500, 0, "concurrent-test-strategy"); err != nil {
+	if err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 500, 0, "concurrent-test-strategy", nil); err != nil {
 		return TestResult{Passed: false, Message: fmt.Sprintf("Add initial quota failed: %v", err)}
 	}
 
@@ -67,7 +67,7 @@ func testConcurrentOperations(ctx *TestContext) TestResult {
 	go func() {
 		<-startChan
 		for i := 0; i < 2; i++ {
-			err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 25, 0, fmt.Sprintf("concurrent-strategy-%d", i))
+			err := ctx.QuotaService.AddQuotaForStrategy(user1.ID, 25, 0, fmt.Sprintf("concurrent-strategy-%d", i), nil)
 			resultChan <- err
 		}
 	}()
