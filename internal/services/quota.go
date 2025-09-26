@@ -1459,7 +1459,7 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 		mainUserQuotaMap[key] = &mainUserQuotas[i]
 	}
 
-	var totalAmount float64
+	var totalAmount float64 // merged quota amount
 	// Process each quota individually using the pre-built map for efficient conflict detection
 	for _, quota := range otherUserQuotas {
 		// Calculate results from original quotas for audit and response
@@ -1489,6 +1489,14 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 				return nil, fmt.Errorf("failed to transfer quota from user %s to user %s: %w",
 					otherUserID, mainUserID, err)
 			}
+		}
+	}
+
+	// update aigateway
+	if totalAmount > 0 {
+		if err := s.aiGatewayClient.DeltaQuota(mainUserID, totalAmount); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update AiGateway quota for main user %s: %w", mainUserID, err)
 		}
 	}
 
