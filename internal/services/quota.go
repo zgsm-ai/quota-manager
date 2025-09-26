@@ -135,8 +135,8 @@ type TransferQuotaResult struct {
 
 // MergeQuotaRequest represents merge quota request
 type MergeQuotaRequest struct {
-	MainUserID  string `json:"main_user_id" validate:"required,uuid"`  // 主用户（保留用户）
-	OtherUserID string `json:"other_user_id" validate:"required,uuid"` // 其他用户（被合并的用户）
+	MainUserID  string `json:"main_user_id" validate:"required,uuid"`  // The user who will receive the merged quota
+	OtherUserID string `json:"other_user_id" validate:"required,uuid"` // The user who willbe merged into the main user
 }
 
 // MergeQuotaResponse represents merge quota response
