@@ -1397,6 +1397,9 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 	otherUserID := req.OtherUserID
 	// Validate request
 	if mainUserID == "" || otherUserID == "" {
+		logger.Warn("User quota merge: Failed - empty user IDs",
+			zap.String("main_user", mainUserID),
+			zap.String("other_user", otherUserID))
 		return &MergeQuotaResponse{
 			MainUserID:  mainUserID,
 			OtherUserID: otherUserID,
@@ -1406,6 +1409,8 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 			Message:     "Main user or other user cannot be empty",
 		}, nil
 	} else if mainUserID == otherUserID {
+		logger.Warn("User quota merge: Failed - same user IDs",
+			zap.String("user_id", mainUserID))
 		return &MergeQuotaResponse{
 			MainUserID:  mainUserID,
 			OtherUserID: otherUserID,
@@ -1418,8 +1423,16 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 
 	// Start transaction
 	tx := s.db.DB.Begin()
+	logger.Info("User quota merge: Starting",
+		zap.String("main_user", mainUserID),
+		zap.String("other_user", otherUserID))
+
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Error("User quota merge: Panic occurred, rolling back transaction",
+				zap.String("main_user", mainUserID),
+				zap.String("other_user", otherUserID),
+				zap.Any("panic", r))
 			tx.Rollback()
 		}
 	}()
@@ -1428,12 +1441,17 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 	var otherUserQuotas []models.Quota
 	if err := tx.Where("user_id = ? AND status = ? AND amount > 0", otherUserID, models.StatusValid).
 		Order("expiry_date ASC").Find(&otherUserQuotas).Error; err != nil {
+		logger.Error("User quota merge: Failed to get other user quotas",
+			zap.String("other_user", otherUserID),
+			zap.Error(err))
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to get other user quotas: %w", err)
 	}
 
 	// If no quotas found, return success with empty result
 	if len(otherUserQuotas) == 0 {
+		logger.Info("User quota merge: No quotas found to merge",
+			zap.String("other_user", otherUserID))
 		return &MergeQuotaResponse{
 			MainUserID:  mainUserID,
 			OtherUserID: otherUserID,
@@ -1448,6 +1466,9 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 	var mainUserQuotas []models.Quota
 	if err := tx.Where("user_id = ? AND status = ?", mainUserID, models.StatusValid).
 		Find(&mainUserQuotas).Error; err != nil {
+		logger.Error("User quota merge: failed to get main user quotas",
+			zap.String("main_user", mainUserID),
+			zap.Error(err))
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to get main user quotas: %w", err)
 	}
@@ -1495,6 +1516,10 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 	// update aigateway
 	if totalAmount > 0 {
 		if err := s.aiGatewayClient.DeltaQuota(mainUserID, totalAmount); err != nil {
+			logger.Error("User quota merge: Failed to update AiGateway quota",
+				zap.String("main_user", mainUserID),
+				zap.Float64("amount", totalAmount),
+				zap.Error(err))
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update AiGateway quota for main user %s: %w", mainUserID, err)
 		}
@@ -1502,13 +1527,17 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 
 	// Commit transaction
 	if err := tx.Commit().Error; err != nil {
+		logger.Error("User quota merge: Failed to commit transaction",
+			zap.String("main_user", mainUserID),
+			zap.String("other_user", otherUserID),
+			zap.Error(err))
 		return nil, fmt.Errorf("failed to commit transaction, for user quota merged: %w", err)
 	}
 
 	// Log the merge operation
-	logger.Info("User quota merged",
-		zap.String("from_user", otherUserID),
-		zap.String("to_user", mainUserID),
+	logger.Info("User quota merge: Completed successfully",
+		zap.String("main_user", mainUserID),
+		zap.String("other_user", otherUserID),
 		zap.Float64("amount", totalAmount),
 		zap.Int("quota_items", len(otherUserQuotas)))
 
@@ -1525,9 +1554,9 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 		if err := s.db.Model(&models.QuotaExecute{}).
 			Where("user_id = ?", otherUserID).
 			Update("user_id", mainUserID).Error; err != nil {
-			logger.Error("Failed to update quota execute records asynchronously",
-				zap.String("from_user", otherUserID),
-				zap.String("to_user", mainUserID),
+			logger.Error("User quota merge: failed to update quota execute records asynchronously",
+				zap.String("main_user", mainUserID),
+				zap.String("other_user", otherUserID),
 				zap.Error(err))
 		}
 
@@ -1563,7 +1592,7 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 
 		// Create audit record using new database connection
 		if err := auditRecord.MarshalDetails(auditDetails); err != nil {
-			logger.Error("Failed to marshal audit details for quota merge",
+			logger.Error("User quota merge: Failed to marshal audit details",
 				zap.Error(err),
 				zap.String("user_id", mainUserID),
 				zap.String("related_user", otherUserID))
@@ -1571,7 +1600,7 @@ func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaRespon
 		}
 
 		if err := s.db.DB.Create(auditRecord).Error; err != nil {
-			logger.Error("Failed to create audit record for quota merge",
+			logger.Error("User quota merge: Failed to create audit record",
 				zap.Error(err),
 				zap.String("user_id", mainUserID),
 				zap.String("related_user", otherUserID))

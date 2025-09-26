@@ -218,8 +218,12 @@ func (h *QuotaHandler) TransferIn(c *gin.Context) {
 
 // MergeUserQuota handles POST /quota-manager/api/v1/quota/merge
 func (h *QuotaHandler) MergeUserQuota(c *gin.Context) {
-	// Only admin can perform merge operation
-	// TODO: Add admin authentication check here
+	_, err := h.getUserFromToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
+			"Failed to extract user from token: "+err.Error()))
+		return
+	}
 
 	var req services.MergeQuotaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
