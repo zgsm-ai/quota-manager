@@ -74,6 +74,8 @@ quota-manager/
 - `model`: Model name (optional)
 - `periodic_expr`: Cron expression for periodic strategies
 - `condition`: Condition expression
+- `max_exec_per_user`: Maximum execution times per user (0 means unlimited)
+- `expiry_days`: Valid days for the quota (optional, specifies how many days the quota will be valid from creation)
 - `status`: Strategy status (BOOLEAN: true=enabled, false=disabled)
 - `create_time`: Creation time
 - `update_time`: Update time
@@ -788,6 +790,48 @@ This interface will synchronize employee data and update model permissions, star
 - `amount`: Total successfully transferred amount
 - `status`: Transfer status (SUCCESS/PARTIAL_SUCCESS/FAILED/ALREADY_REDEEMED)
 - `message`: Status description
+
+#### Merge User Quota
+- **POST** `/quota-manager/api/v1/quota/merge`
+- **Request Body**:
+```json
+{
+  "main_user_id": "user123",
+  "other_user_id": "user456"
+}
+```
+- **Response**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "Quota merged successfully",
+  "success": true,
+  "data": {
+    "main_user_id": "user123",
+    "other_user_id": "user456",
+    "amount": 30,
+    "operation": "MERGE_QUOTA",
+    "status": "SUCCESS",
+    "message": "Quota merged successfully"
+  }
+}
+```
+
+**Field Descriptions**:
+- `main_user_id`: Main user ID (user who will receive the merged quota)
+- `other_user_id`: Other user ID (user whose quota will be merged)
+- `amount`: Total amount of quota merged
+- `operation`: Operation type (always "MERGE_QUOTA")
+- `status`: Operation status (SUCCESS/FAILED)
+- `message`: Status message
+
+**Important Notes**:
+- This operation merges all valid quotas from the other user to the main user
+- The main user and other user cannot be the same
+- Only valid quotas (status = VALID and amount > 0) will be merged
+- If the main user already has quotas with the same expiry date and status, the amounts will be added together
+- The original quotas from the other user will be deleted after successful merge
+- This operation is performed within a database transaction for data consistency
 
 ### Health Check
 - **GET** `/quota-manager/health`

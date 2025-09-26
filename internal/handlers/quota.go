@@ -216,6 +216,45 @@ func (h *QuotaHandler) TransferIn(c *gin.Context) {
 	c.JSON(http.StatusOK, response.NewSuccessResponse(resp, "Quota transferred in successfully"))
 }
 
+// MergeUserQuota handles POST /quota-manager/api/v1/quota/merge
+func (h *QuotaHandler) MergeUserQuota(c *gin.Context) {
+	_, err := h.getUserFromToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, response.NewErrorResponse(response.TokenInvalidCode,
+			"Failed to extract user from token: "+err.Error()))
+		return
+	}
+
+	var req services.MergeQuotaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
+			"Invalid request body: "+err.Error()))
+		return
+	}
+
+	if err := validation.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, err.Error()))
+		return
+	}
+
+	resp, err := h.quotaService.MergeUserQuota(&req)
+	if err != nil {
+		// Database/system errors
+		c.JSON(http.StatusInternalServerError, response.NewErrorResponse(response.InternalErrorCode,
+			"Failed to merge quota: "+err.Error()))
+		return
+	}
+
+	// Check if the merge had business logic issues
+	if resp.Status == "FAILED" {
+		// Business logic failures, should return 400
+		c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode, resp.Message))
+		return
+	}
+
+	c.JSON(http.StatusOK, response.NewSuccessResponse(resp, "Quota merged successfully"))
+}
+
 // GetUserQuotaAuditRecordsAdminEmptyID handles the case when user_id is empty
 func (h *QuotaHandler) GetUserQuotaAuditRecordsAdminEmptyID(c *gin.Context) {
 	c.JSON(http.StatusBadRequest, response.NewErrorResponse(response.BadRequestCode,
@@ -273,6 +312,7 @@ func RegisterQuotaRoutes(r *gin.RouterGroup, quotaHandler *QuotaHandler) {
 		quota.GET("/audit", quotaHandler.GetQuotaAuditRecords)
 		quota.POST("/transfer-out", quotaHandler.TransferOut)
 		quota.POST("/transfer-in", quotaHandler.TransferIn)
+		quota.POST("/merge", quotaHandler.MergeUserQuota)
 		// Handle empty user_id case (must be before parameterized route)
 		quota.GET("/audit/", quotaHandler.GetUserQuotaAuditRecordsAdminEmptyID)
 		quota.GET("/audit/:user_id", quotaHandler.GetUserQuotaAuditRecordsAdmin)

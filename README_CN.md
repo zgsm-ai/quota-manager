@@ -74,6 +74,8 @@ quota-manager/
 - `model`: 模型名称（可选）
 - `periodic_expr`: 周期性策略的 Cron 表达式
 - `condition`: 条件表达式
+- `max_exec_per_user`: 每个用户最大执行次数（0表示无限制）
+- `expiry_days`: 配额有效天数（可选，指定配额从创建起多少天内有效）
 - `status`: 策略状态（布尔值：true=启用，false=禁用）
 - `create_time`: 创建时间
 - `update_time`: 更新时间
@@ -753,6 +755,48 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   }
 }
 ```
+
+#### 合并用户配额
+- **POST** `/quota-manager/api/v1/quota/merge`
+- **请求体**:
+```json
+{
+  "main_user_id": "user123",
+  "other_user_id": "user456"
+}
+```
+- **响应**:
+```json
+{
+  "code": "quota-manager.success",
+  "message": "配额合并成功",
+  "success": true,
+  "data": {
+    "main_user_id": "user123",
+    "other_user_id": "user456",
+    "amount": 30,
+    "operation": "MERGE_QUOTA",
+    "status": "SUCCESS",
+    "message": "配额合并成功"
+  }
+}
+```
+
+**字段描述**:
+- `main_user_id`: 主用户 ID（接收合并配额的用户）
+- `other_user_id`: 其他用户 ID（被合并配额的用户）
+- `amount`: 合并的配额总数量
+- `operation`: 操作类型（始终为 "MERGE_QUOTA"）
+- `status`: 操作状态（SUCCESS/FAILED）
+- `message`: 状态消息
+
+**重要说明**:
+- 此操作将其他用户的所有有效配额合并到主用户中
+- 主用户和其他用户不能是同一个用户
+- 只有有效配额（状态 = VALID 且数量 > 0）才会被合并
+- 如果主用户已有相同过期日期和状态的配额，数量将相加合并
+- 成功合并后，其他用户的原始配额将被删除
+- 此操作在数据库事务中执行，确保数据一致性
 
 ### 健康检查
 - **GET** `/quota-manager/health`

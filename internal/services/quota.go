@@ -133,6 +133,22 @@ type TransferQuotaResult struct {
 	FailureReason *TransferFailureReason `json:"failure_reason,omitempty"`
 }
 
+// MergeQuotaRequest represents merge quota request
+type MergeQuotaRequest struct {
+	MainUserID  string `json:"main_user_id" validate:"required,uuid"`  // 主用户（保留用户）
+	OtherUserID string `json:"other_user_id" validate:"required,uuid"` // 其他用户（被合并的用户）
+}
+
+// MergeQuotaResponse represents merge quota response
+type MergeQuotaResponse struct {
+	MainUserID  string  `json:"main_user_id"`
+	OtherUserID string  `json:"other_user_id"`
+	Amount      float64 `json:"amount"`
+	Operation   string  `json:"operation"`
+	Status      string  `json:"status"`
+	Message     string  `json:"message,omitempty"`
+}
+
 // GetUserQuota retrieves user quota information
 func (s *QuotaService) GetUserQuota(userID string) (*QuotaInfo, error) {
 	// Get total quota from AiGateway
@@ -1373,6 +1389,232 @@ func (s *QuotaService) DeductQuota(userID string, amount float64, reason, refere
 	}
 
 	return nil
+}
+
+// MergeUserQuota merges all quota from other user to main user
+func (s *QuotaService) MergeUserQuota(req *MergeQuotaRequest) (*MergeQuotaResponse, error) {
+	mainUserID := req.MainUserID
+	otherUserID := req.OtherUserID
+	// Validate request
+	if mainUserID == "" || otherUserID == "" {
+		logger.Warn("User quota merge: Failed - empty user IDs",
+			zap.String("main_user", mainUserID),
+			zap.String("other_user", otherUserID))
+		return &MergeQuotaResponse{
+			MainUserID:  mainUserID,
+			OtherUserID: otherUserID,
+			Amount:      0,
+			Operation:   models.OperationMergeIn,
+			Status:      "FAILED",
+			Message:     "Main user or other user cannot be empty",
+		}, nil
+	} else if mainUserID == otherUserID {
+		logger.Warn("User quota merge: Failed - same user IDs",
+			zap.String("user_id", mainUserID))
+		return &MergeQuotaResponse{
+			MainUserID:  mainUserID,
+			OtherUserID: otherUserID,
+			Amount:      0,
+			Operation:   models.OperationMergeIn,
+			Status:      "FAILED",
+			Message:     "Main user and other user cannot be the same",
+		}, nil
+	}
+
+	// Start transaction
+	tx := s.db.DB.Begin()
+	logger.Info("User quota merge: Starting",
+		zap.String("main_user", mainUserID),
+		zap.String("other_user", otherUserID))
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("User quota merge: Panic occurred, rolling back transaction",
+				zap.String("main_user", mainUserID),
+				zap.String("other_user", otherUserID),
+				zap.Any("panic", r))
+			tx.Rollback()
+		}
+	}()
+
+	// Get all valid quotas from other user
+	var otherUserQuotas []models.Quota
+	if err := tx.Where("user_id = ? AND status = ? AND amount > 0", otherUserID, models.StatusValid).
+		Order("expiry_date ASC").Find(&otherUserQuotas).Error; err != nil {
+		logger.Error("User quota merge: Failed to get other user quotas",
+			zap.String("other_user", otherUserID),
+			zap.Error(err))
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to get other user quotas: %w", err)
+	}
+
+	// If no quotas found, return success with empty result
+	if len(otherUserQuotas) == 0 {
+		logger.Info("User quota merge: No quotas found to merge",
+			zap.String("other_user", otherUserID))
+		return &MergeQuotaResponse{
+			MainUserID:  mainUserID,
+			OtherUserID: otherUserID,
+			Amount:      0,
+			Operation:   models.OperationMergeIn,
+			Status:      "SUCCESS",
+			Message:     "No quotas found to merge",
+		}, nil
+	}
+
+	// Pre-query all main user's valid quotas to create a memory map for efficient lookup
+	var mainUserQuotas []models.Quota
+	if err := tx.Where("user_id = ? AND status = ?", mainUserID, models.StatusValid).
+		Find(&mainUserQuotas).Error; err != nil {
+		logger.Error("User quota merge: failed to get main user quotas",
+			zap.String("main_user", mainUserID),
+			zap.Error(err))
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to get main user quotas: %w", err)
+	}
+
+	// Create a map for quick lookup: key is "expiry_date_status", value is pointer to quota
+	mainUserQuotaMap := make(map[string]*models.Quota)
+	for i := range mainUserQuotas {
+		key := fmt.Sprintf("%s_%s", mainUserQuotas[i].ExpiryDate.Format("2006-01-02"), mainUserQuotas[i].Status)
+		mainUserQuotaMap[key] = &mainUserQuotas[i]
+	}
+
+	var totalAmount float64 // merged quota amount
+	// Process each quota individually using the pre-built map for efficient conflict detection
+	for _, quota := range otherUserQuotas {
+		// Calculate results from original quotas for audit and response
+		totalAmount += quota.Amount
+
+		// Check if main user already has a quota with same expiry_date and status using the map
+		key := fmt.Sprintf("%s_%s", quota.ExpiryDate.Format("2006-01-02"), quota.Status)
+		if existingQuota, exists := mainUserQuotaMap[key]; exists {
+			// Main user already has a quota with same expiry_date and status
+			// Merge the amounts by adding to existing quota
+			newAmount := existingQuota.Amount + quota.Amount
+			if err := tx.Model(existingQuota).Update("amount", newAmount).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to merge quota amount for user %s, expiry %s: %w",
+					mainUserID, quota.ExpiryDate.Format("2006-01-02"), err)
+			}
+
+			// Delete the original quota from other user to avoid duplication
+			if err := tx.Delete(&quota).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to delete original quota from user %s: %w", otherUserID, err)
+			}
+		} else {
+			// No conflict found, safely update user_id
+			if err := tx.Model(&quota).Update("user_id", mainUserID).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to transfer quota from user %s to user %s: %w",
+					otherUserID, mainUserID, err)
+			}
+		}
+	}
+
+	// update aigateway
+	if totalAmount > 0 {
+		if err := s.aiGatewayClient.DeltaQuota(mainUserID, totalAmount); err != nil {
+			logger.Error("User quota merge: Failed to update AiGateway quota",
+				zap.String("main_user", mainUserID),
+				zap.Float64("amount", totalAmount),
+				zap.Error(err))
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update AiGateway quota for main user %s: %w", mainUserID, err)
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		logger.Error("User quota merge: Failed to commit transaction",
+			zap.String("main_user", mainUserID),
+			zap.String("other_user", otherUserID),
+			zap.Error(err))
+		return nil, fmt.Errorf("failed to commit transaction, for user quota merged: %w", err)
+	}
+
+	// Log the merge operation
+	logger.Info("User quota merge: Completed successfully",
+		zap.String("main_user", mainUserID),
+		zap.String("other_user", otherUserID),
+		zap.Float64("amount", totalAmount),
+		zap.Int("quota_items", len(otherUserQuotas)))
+
+	// Create audit record and update QuotaExecute records asynchronously without blocking main program
+	go func() {
+		// Get the latest expiry date (since ordered by expiry_date ASC, last element has the latest expiry)
+		var latestExpiryDate time.Time
+		if len(otherUserQuotas) > 0 {
+			latestExpiryDate = otherUserQuotas[len(otherUserQuotas)-1].ExpiryDate
+		}
+
+		// Update QuotaExecute records to maintain strategy execution consistency
+		// This prevents duplicate invitation rewards after user ID changes
+		if err := s.db.Model(&models.QuotaExecute{}).
+			Where("user_id = ?", otherUserID).
+			Update("user_id", mainUserID).Error; err != nil {
+			logger.Error("User quota merge: failed to update quota execute records asynchronously",
+				zap.String("main_user", mainUserID),
+				zap.String("other_user", otherUserID),
+				zap.Error(err))
+		}
+
+		// Prepare audit details
+		auditDetails := &models.QuotaAuditDetails{
+			Operation: models.OperationMergeIn,
+			Summary: models.QuotaAuditSummary{
+				TotalAmount:        totalAmount,
+				TotalItems:         len(otherUserQuotas),
+				SuccessfulItems:    len(otherUserQuotas),
+				EarliestExpiryDate: latestExpiryDate.Format(time.RFC3339),
+			},
+			Items: make([]models.QuotaAuditDetailItem, len(otherUserQuotas)),
+		}
+
+		// Fill audit detail items
+		for i, quota := range otherUserQuotas {
+			auditDetails.Items[i] = models.QuotaAuditDetailItem{
+				Amount:     quota.Amount,
+				ExpiryDate: quota.ExpiryDate.Format(time.RFC3339),
+				Status:     models.AuditStatusSuccess,
+			}
+		}
+
+		// Create quota audit record
+		auditRecord := &models.QuotaAudit{
+			UserID:      mainUserID,
+			Amount:      totalAmount,
+			Operation:   models.OperationMergeIn,
+			RelatedUser: otherUserID,
+			ExpiryDate:  latestExpiryDate,
+		}
+
+		// Create audit record using new database connection
+		if err := auditRecord.MarshalDetails(auditDetails); err != nil {
+			logger.Error("User quota merge: Failed to marshal audit details",
+				zap.Error(err),
+				zap.String("user_id", mainUserID),
+				zap.String("related_user", otherUserID))
+			return
+		}
+
+		if err := s.db.DB.Create(auditRecord).Error; err != nil {
+			logger.Error("User quota merge: Failed to create audit record",
+				zap.Error(err),
+				zap.String("user_id", mainUserID),
+				zap.String("related_user", otherUserID))
+		}
+	}()
+
+	return &MergeQuotaResponse{
+		MainUserID:  mainUserID,
+		OtherUserID: otherUserID,
+		Amount:      totalAmount,
+		Operation:   models.OperationMergeIn,
+		Status:      "SUCCESS",
+		Message:     "Quota merged successfully",
+	}, nil
 }
 
 // min returns the minimum of two float64 values
